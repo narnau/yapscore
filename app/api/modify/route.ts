@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractParts, extractSelectedMeasures, reconstructMusicXml, spliceMeasuresBack } from "@/lib/musicxml";
 import { modifyXml } from "@/lib/llm";
+import { addAccidentals } from "@/lib/accidentals";
 
 export const maxDuration = 300;
 
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
       : reconstructMusicXml(skeleton, modified);
 
     console.log(`[modify] success on attempt ${attempt}`);
-    return NextResponse.json({ musicXml: result });
+    return NextResponse.json({ musicXml: addAccidentals(result) });
   }
 
   return NextResponse.json({ error: `Failed after ${MAX_ATTEMPTS} attempts` }, { status: 422 });

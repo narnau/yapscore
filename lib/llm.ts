@@ -9,11 +9,18 @@ Instruction: "${instruction}"
 RULES:
 1. Return ONLY the modified <part> element(s). No explanations, no markdown fences.
 2. Keep the same part IDs and measure numbers.
-3. Pitch format: <pitch><step>C</step><octave>4</octave></pitch>  (use <alter>1</alter> for sharp, <alter>-1</alter> for flat)
-4. Every <note> needs: <pitch> (or <rest/>), <duration>, <type>.
-5. Duration values (assuming <divisions>1</divisions>): whole=4, half=2, quarter=1, eighth=0.5.
+3. Pitch: use <alter>1</alter> for sharp, <alter>-1</alter> for flat, INSIDE <pitch>.
+4. Accidentals: whenever a note carries an accidental sign (#, b, ♮), add the matching
+   element AFTER </pitch> inside the same <note>:
+     <accidental>sharp</accidental>   for #
+     <accidental>flat</accidental>    for b
+     <accidental>natural</accidental> for ♮
+   Notes that are sharp/flat only because of the key signature do NOT need <accidental>.
+   Notes that restore a previously altered note DO need <accidental>natural</accidental>.
+5. Every <note> needs: <pitch> (or <rest/>), <duration>, <type>.
+6. Duration values (assuming <divisions>1</divisions>): whole=4, half=2, quarter=1, eighth=0.5.
    If divisions differ, scale accordingly.
-6. Remove trailing empty measures that are not needed.
+7. Remove trailing empty measures that are not needed.
 
 CURRENT PARTS:
 ${parts}`;
@@ -91,6 +98,36 @@ async function callOpenRouter(prompt: string): Promise<string> {
   console.log("─────────────────────────────────────────");
 
   return stripMarkdownFences(content);
+}
+
+function buildGeneratePrompt(description: string): string {
+  return `You are a music notation expert. Generate a complete, valid MusicXML 3.1 file for the following:
+
+"${description}"
+
+RULES:
+1. Return ONLY the raw MusicXML. No explanations, no markdown fences.
+2. Start with: <?xml version="1.0" encoding="UTF-8"?>
+3. Use <score-partwise version="3.1"> as root element.
+4. Include proper <part-list> with <score-part> and <part-name>.
+5. Every <note> must have: <pitch> (or <rest/>), <duration>, <type>.
+6. Use <divisions>1</divisions> per measure where quarter = 1.
+7. Include correct <key>, <time>, <clef> in the first measure attributes.
+8. Accidentals: use <alter>1</alter>/<alter>-1</alter> inside <pitch> for sharp/flat.
+   Also add the display element AFTER </pitch> in the same <note>:
+     <accidental>sharp</accidental>   for #
+     <accidental>flat</accidental>    for b
+     <accidental>natural</accidental> for ♮
+   Notes already covered by the key signature do NOT need <accidental>.
+   Notes that cancel a previous accidental DO need <accidental>natural</accidental>.
+9. Write the complete melody — do not truncate.`;
+}
+
+export async function generateXml(description: string): Promise<string> {
+  const prompt = buildGeneratePrompt(description);
+  const raw = await callOpenRouter(prompt);
+  // Strip any accidental markdown fences
+  return stripMarkdownFences(raw);
 }
 
 export async function modifyXml(

@@ -1,56 +1,97 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type Message = {
   role: "user" | "system";
   text: string;
 };
 
-type Props = {
-  currentMusicXml: string | null;
-  selectedMeasures: Set<number>;
-  onClearSelection: () => void;
-  onScoreReady: (musicXml: string) => void;
+type LibraryItem = {
+  id: string;
+  name: string;
+  description: string;
 };
 
-export default function ChatPanel({ currentMusicXml, selectedMeasures, onClearSelection, onScoreReady }: Props) {
+type Props = {
+  currentMusicXml: string | null;
+  scoreName: string | null;
+  selectedMeasures: Set<number>;
+  onClearSelection: () => void;
+  onScoreReady: (musicXml: string, name?: string) => void;
+  onOpenLibrary: () => void;
+};
+
+export default function ChatPanel({
+  currentMusicXml,
+  scoreName,
+  selectedMeasures,
+  onClearSelection,
+  onScoreReady,
+  onOpenLibrary,
+}: Props) {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "system", text: "Upload a .mscz file and type an instruction to modify it." },
+    { role: "system", text: "Upload a .mscz file or load one from the library, then type an instruction." },
   ]);
   const [instruction, setInstruction] = useState("");
   const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [library, setLibrary] = useState<LibraryItem[]>([]);
+
+  useEffect(() => {
+    fetch("/api/library")
+      .then((r) => r.json())
+      .then((d) => setLibrary(d.scores ?? []));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!currentMusicXml || !instruction.trim()) return;
+    if (!instruction.trim()) return;
 
     const text = instruction;
-    const selectionNote = selectedMeasures.size > 0
-      ? ` [measures ${[...selectedMeasures].sort((a, b) => a - b).join(", ")}]`
-      : "";
+    const selectionNote =
+      selectedMeasures.size > 0
+        ? ` [measures ${[...selectedMeasures].sort((a, b) => a - b).join(", ")}]`
+        : "";
     setMessages((m) => [...m, { role: "user", text: text + selectionNote }]);
     setInstruction("");
     setLoading(true);
 
     try {
       const form = new FormData();
-      form.append("musicXml", currentMusicXml);
-      form.append("instruction", text);
+      form.append("message", text);
+      if (currentMusicXml) form.append("musicXml", currentMusicXml);
       if (selectedMeasures.size > 0) {
-        form.append("selectedMeasures", JSON.stringify([...selectedMeasures].sort((a, b) => a - b)));
+        form.append(
+          "selectedMeasures",
+          JSON.stringify([...selectedMeasures].sort((a, b) => a - b))
+        );
       }
+      form.append("library", JSON.stringify(library));
 
-      const res = await fetch("/api/modify", { method: "POST", body: form });
+      const res = await fetch("/api/agent", { method: "POST", body: form });
       const data = await res.json();
 
       if (data.error) {
         setMessages((m) => [...m, { role: "system", text: `Error: ${data.error}` }]);
-      } else {
+      } else if (data.type === "chat") {
+        setMessages((m) => [...m, { role: "system", text: data.message }]);
+      } else if (data.type === "load") {
+        setMessages((m) => [
+          ...m,
+          { role: "system", text: `Loaded: ${data.name ?? "score"}` },
+        ]);
+        onScoreReady(data.musicXml, data.name);
+        onClearSelection();
+        // Refresh library list
+        fetch("/api/library")
+          .then((r) => r.json())
+          .then((d) => setLibrary(d.scores ?? []));
+      } else if (data.type === "modify") {
         setMessages((m) => [...m, { role: "system", text: "Score updated." }]);
         onScoreReady(data.musicXml);
+        onClearSelection();
       }
     } catch {
       setMessages((m) => [...m, { role: "system", text: "Network error." }]);
@@ -62,7 +103,18 @@ export default function ChatPanel({ currentMusicXml, selectedMeasures, onClearSe
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 border-b border-gray-800">
-        <h1 className="text-lg font-semibold tracking-tight">score-ai</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold tracking-tight">score-ai</h1>
+          <button
+            onClick={onOpenLibrary}
+            className="text-xs px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
+          >
+            Library
+          </button>
+        </div>
+        {scoreName && (
+          <p className="text-xs text-gray-400 mt-0.5 truncate">{scoreName}</p>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
@@ -112,7 +164,7 @@ export default function ChatPanel({ currentMusicXml, selectedMeasures, onClearSe
                 form.append("file", f);
                 const res = await fetch("/api/load", { method: "POST", body: form });
                 const data = await res.json();
-                if (data.musicXml) onScoreReady(data.musicXml);
+                if (data.musicXml) onScoreReady(data.musicXml, f.name.replace(/\.mscz$/, ""));
               } finally {
                 setLoading(false);
               }
@@ -142,13 +194,17 @@ export default function ChatPanel({ currentMusicXml, selectedMeasures, onClearSe
             type="text"
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
-            placeholder={currentMusicXml ? "Type an instruction…" : "Upload a score first…"}
-            disabled={!currentMusicXml || loading}
+            placeholder={
+              currentMusicXml
+                ? "Type an instruction or ask for a score…"
+                : "Upload a score or ask for one from the library…"
+            }
+            disabled={loading}
             className="flex-1 bg-gray-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-40"
           />
           <button
             type="submit"
-            disabled={loading || !instruction.trim() || !currentMusicXml}
+            disabled={loading || !instruction.trim()}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 rounded-lg text-sm font-medium transition"
           >
             Send
