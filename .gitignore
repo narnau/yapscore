@@ -2,3 +2,7 @@ node_modules/
 .next/
 .env
 *.tsbuildinfo
+
+# Score library — ignore uploaded files, but keep the directory and metadata
+score-library/files/*
+!score-library/files/.gitkeep
