@@ -65,7 +65,7 @@ export default function LibraryModal({ onClose, onScoreReady }: Props) {
         ) : scores.length === 0 ? (
           <p className="text-sm text-gray-500 py-4 text-center">
             No scores yet.{" "}
-            <Link href="/library" className="text-indigo-400 hover:text-indigo-300">
+            <Link href="/editor/library" className="text-indigo-400 hover:text-indigo-300">
               Add some →
             </Link>
           </p>
@@ -94,7 +94,7 @@ export default function LibraryModal({ onClose, onScoreReady }: Props) {
         {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
 
         <div className="mt-4 pt-3 border-t border-gray-700">
-          <Link href="/library" className="text-xs text-indigo-400 hover:text-indigo-300 transition">
+          <Link href="/editor/library" className="text-xs text-indigo-400 hover:text-indigo-300 transition">
             Manage library →
           </Link>
         </div>

@@ -1,75 +1,127 @@
-import fs from "fs";
-import path from "path";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
-
-const LIBRARY_DIR = path.join(process.cwd(), "score-library");
-const FILES_DIR = path.join(LIBRARY_DIR, "files");
-const METADATA_PATH = path.join(LIBRARY_DIR, "metadata.json");
 
 export type ScoreEntry = {
   id: string;
   name: string;
   description: string;
-  filename: string;
   uploadedAt: string;
 };
 
-function ensureDirs() {
-  fs.mkdirSync(FILES_DIR, { recursive: true });
-  if (!fs.existsSync(METADATA_PATH)) {
-    fs.writeFileSync(METADATA_PATH, "[]", "utf-8");
-  }
+export async function listScores(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<ScoreEntry[]> {
+  const { data, error } = await supabase
+    .from("scores")
+    .select("id, name, description, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    description: row.description ?? "",
+    uploadedAt: row.created_at,
+  }));
 }
 
-export function listScores(): ScoreEntry[] {
-  ensureDirs();
-  return JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8")) as ScoreEntry[];
-}
-
-function saveMetadata(scores: ScoreEntry[]) {
-  fs.writeFileSync(METADATA_PATH, JSON.stringify(scores, null, 2), "utf-8");
-}
-
-export function addScore(name: string, description: string, msczBuffer: Buffer): ScoreEntry {
-  ensureDirs();
+export async function addScore(
+  supabase: SupabaseClient,
+  userId: string,
+  name: string,
+  description: string,
+  msczBuffer: Buffer
+): Promise<ScoreEntry> {
   const id = randomUUID();
-  const filename = `${id}.mscz`;
-  fs.writeFileSync(path.join(FILES_DIR, filename), msczBuffer);
+  const filePath = `${userId}/${id}.mscz`;
 
-  const entry: ScoreEntry = {
+  // Upload to Storage
+  const { error: storageError } = await supabase.storage
+    .from("scores")
+    .upload(filePath, msczBuffer, {
+      contentType: "application/octet-stream",
+      upsert: false,
+    });
+
+  if (storageError) throw new Error(`Storage upload failed: ${storageError.message}`);
+
+  // Insert DB row
+  const { error: dbError } = await supabase.from("scores").insert({
+    id,
+    user_id: userId,
+    name,
+    description,
+    file_path: filePath,
+  });
+
+  if (dbError) {
+    // Clean up storage on DB failure
+    await supabase.storage.from("scores").remove([filePath]);
+    throw new Error(`Database insert failed: ${dbError.message}`);
+  }
+
+  return {
     id,
     name,
     description,
-    filename,
     uploadedAt: new Date().toISOString(),
   };
-
-  const scores = listScores();
-  scores.push(entry);
-  saveMetadata(scores);
-  return entry;
 }
 
-export function deleteScore(id: string): boolean {
-  ensureDirs();
-  const scores = listScores();
-  const idx = scores.findIndex((s) => s.id === id);
-  if (idx === -1) return false;
+export async function deleteScore(
+  supabase: SupabaseClient,
+  userId: string,
+  id: string
+): Promise<boolean> {
+  // Get file path first
+  const { data: row } = await supabase
+    .from("scores")
+    .select("file_path")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .single();
 
-  const entry = scores[idx];
-  const filePath = path.join(FILES_DIR, entry.filename);
-  if (fs.existsSync(filePath)) fs.rmSync(filePath);
+  if (!row) return false;
 
-  scores.splice(idx, 1);
-  saveMetadata(scores);
-  return true;
+  // Delete from Storage
+  await supabase.storage.from("scores").remove([row.file_path]);
+
+  // Delete DB row
+  const { error } = await supabase
+    .from("scores")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);
+
+  return !error;
 }
 
-export function getScorePath(id: string): string | null {
-  ensureDirs();
-  const scores = listScores();
-  const entry = scores.find((s) => s.id === id);
-  if (!entry) return null;
-  const filePath = path.join(FILES_DIR, entry.filename);
-  return fs.existsSync(filePath) ? filePath : null;
+export async function getScoreBuffer(
+  supabase: SupabaseClient,
+  userId: string,
+  id: string
+): Promise<{ buffer: Buffer; name: string } | null> {
+  const { data: row } = await supabase
+    .from("scores")
+    .select("file_path, name")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .single();
+
+  if (!row) return null;
+
+  const { data, error } = await supabase.storage
+    .from("scores")
+    .download(row.file_path);
+
+  if (error || !data) return null;
+
+  const arrayBuffer = await data.arrayBuffer();
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    name: row.name,
+  };
 }

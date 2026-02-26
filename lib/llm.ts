@@ -8,7 +8,12 @@ Instruction: "${instruction}"
 
 RULES:
 1. Return ONLY the modified <part> element(s). No explanations, no markdown fences.
-2. Keep the same part IDs and measure numbers.
+2. Keep the same part IDs. Keep measure numbers unless deleting measures.
+   - DELETE a measure (remove entirely, score gets shorter): omit it from the output.
+     The system will remove it and renumber all subsequent measures automatically.
+   - CLEAR a measure (keep the measure but empty its content): replace all notes with
+     a whole rest: <note><rest/><duration>WHOLE</duration><type>whole</type></note>
+     where WHOLE = divisions * beats (e.g. divisions=4, 4/4 time → duration=16).
 3. Pitch: use <alter>1</alter> for sharp, <alter>-1</alter> for flat, INSIDE <pitch>.
 4. Accidentals: whenever a note carries an accidental sign (#, b, ♮), add the matching
    element AFTER </pitch> inside the same <note>:
@@ -18,9 +23,20 @@ RULES:
    Notes that are sharp/flat only because of the key signature do NOT need <accidental>.
    Notes that restore a previously altered note DO need <accidental>natural</accidental>.
 5. Every <note> needs: <pitch> (or <rest/>), <duration>, <type>.
-6. Duration values (assuming <divisions>1</divisions>): whole=4, half=2, quarter=1, eighth=0.5.
-   If divisions differ, scale accordingly.
+6. Use the <divisions> already present in the score. Duration values are INTEGER ticks:
+   divisions=1 → quarter=1 (avoid eighths!); divisions=2 → eighth=1, quarter=2;
+   divisions=4 → 16th=1, eighth=2, quarter=4, half=8, whole=16 (preferred).
 7. Remove trailing empty measures that are not needed.
+8. Chord symbols: if using <harmony>, put ONLY the quality in <kind text="...">, never
+   repeat the root note. E.g., <kind text="maj7"> not <kind text="Dmaj7">.
+9. Multiple staves within one part (piano, organ, etc.):
+   - In <attributes>: <staves>N</staves> and one <clef number="k"> per staff k=1..N.
+   - For each measure: write all notes for staff 1 with <staff>1</staff>, then
+     <backup><duration>TICKS</duration></backup> (TICKS = total ticks in measure),
+     then all notes for staff 2 with <staff>2</staff>, then another <backup> and
+     staff 3, etc. Repeat the <backup> pattern for every additional staff.
+10. Adding a new instrument (new part): add a new <part id="P2"> block; the system
+    will auto-add the matching <score-part> entry to <part-list>.
 
 CURRENT PARTS:
 ${parts}`;
@@ -111,7 +127,8 @@ RULES:
 3. Use <score-partwise version="3.1"> as root element.
 4. Include proper <part-list> with <score-part> and <part-name>.
 5. Every <note> must have: <pitch> (or <rest/>), <duration>, <type>.
-6. Use <divisions>1</divisions> per measure where quarter = 1.
+6. Use <divisions>4</divisions>. Duration values (integer ticks):
+   16th=1, eighth=2, dotted-eighth=3, quarter=4, dotted-quarter=6, half=8, dotted-half=12, whole=16.
 7. Include correct <key>, <time>, <clef> in the first measure attributes.
 8. Accidentals: use <alter>1</alter>/<alter>-1</alter> inside <pitch> for sharp/flat.
    Also add the display element AFTER </pitch> in the same <note>:
@@ -120,7 +137,12 @@ RULES:
      <accidental>natural</accidental> for ♮
    Notes already covered by the key signature do NOT need <accidental>.
    Notes that cancel a previous accidental DO need <accidental>natural</accidental>.
-9. Write the complete melody — do not truncate.`;
+9. Chord symbols: put ONLY the quality in <kind text="...">, not the root letter.
+10. Multi-staff parts (piano, organ, etc.): add <staves>N</staves> and one
+    <clef number="k"> per staff in <attributes>. Write staff 1 notes with <staff>1</staff>,
+    then <backup><duration>TICKS</duration></backup>, then staff 2 with <staff>2</staff>,
+    then another <backup> for each additional staff. TICKS = total ticks in the measure.
+11. Write the complete score — do not truncate.`;
 }
 
 export async function generateXml(description: string): Promise<string> {

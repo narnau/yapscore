@@ -5,16 +5,31 @@ import MidiPlayer from "./MidiPlayer";
 
 type Props = {
   musicXml: string | null;
+  scoreName: string | null;
   selectedMeasures: Set<number>;
   onMeasureClick: (measureNumber: number, addToSelection: boolean) => void;
+  // History controls
+  canUndo?: boolean;
+  canRedo?: boolean;
+  historyIndex?: number;
+  historyLength?: number;
+  historyNames?: string[];
+  onUndo?: () => void;
+  onRedo?: () => void;
+  onJumpTo?: (index: number) => void;
 };
 
-export default function ScoreViewer({ musicXml, selectedMeasures, onMeasureClick }: Props) {
+export default function ScoreViewer({
+  musicXml, scoreName, selectedMeasures, onMeasureClick,
+  canUndo, canRedo, historyIndex = -1, historyLength = 0,
+  historyNames = [], onUndo, onRedo, onJumpTo,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onClickRef = useRef(onMeasureClick);
   onClickRef.current = onMeasureClick;
   const [midiSrc, setMidiSrc] = useState<string | null>(null);
   const [playingMeasure, setPlayingMeasure] = useState<number | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // Parse time signature from MusicXML to calculate ticks per measure
   const beats = parseInt(musicXml?.match(/<beats>(\d+)<\/beats>/)?.[1] ?? "4");
@@ -66,13 +81,9 @@ export default function ScoreViewer({ musicXml, selectedMeasures, onMeasureClick
           idx++;
           const measureNum = idx;
 
-          // pointer-events: bounding-box → clicking anywhere in the measure area works,
-          // not just on notes/staff lines
           measureEl.style.pointerEvents = "bounding-box";
           measureEl.style.cursor = "pointer";
 
-          // Add highlight rect as FIRST CHILD so it renders behind notes.
-          // Being inside the group means it shares the same coordinate system — no CTM math.
           const bbox = measureEl.getBBox();
           const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
           rect.setAttribute("x",      String(bbox.x));
@@ -103,9 +114,9 @@ export default function ScoreViewer({ musicXml, selectedMeasures, onMeasureClick
     container.querySelectorAll<SVGRectElement>("[data-hl]").forEach((rect) => {
       const num = parseInt(rect.getAttribute("data-hl") ?? "0");
       if (num === playingMeasure) {
-        rect.setAttribute("fill", "rgba(34,197,94,0.35)");       // green — playing
+        rect.setAttribute("fill", "rgba(34,197,94,0.35)");
       } else if (selectedMeasures.has(num)) {
-        rect.setAttribute("fill", "rgba(99,102,241,0.25)");       // blue — selected
+        rect.setAttribute("fill", "rgba(99,102,241,0.25)");
       } else {
         rect.setAttribute("fill", "rgba(0,0,0,0)");
       }
@@ -123,16 +134,95 @@ export default function ScoreViewer({ musicXml, selectedMeasures, onMeasureClick
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center px-4 py-2 border-b border-gray-800 bg-gray-900 min-h-[48px]">
-        {midiSrc ? (
-          <MidiPlayer
-            src={midiSrc}
-            quarterNotesPerMeasure={quarterNotesPerMeasure}
-            onMeasureChange={setPlayingMeasure}
-          />
-        ) : (
-          <span className="text-xs text-gray-500">Rendering…</span>
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 bg-gray-900 min-h-[48px]">
+        {/* Undo / Redo */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            title="Undo (Ctrl+Z)"
+            className="px-2 py-1 rounded text-sm bg-gray-800 hover:bg-gray-700 disabled:opacity-30 transition"
+          >
+            ↩
+          </button>
+          <button
+            onClick={onRedo}
+            disabled={!canRedo}
+            title="Redo (Ctrl+Y)"
+            className="px-2 py-1 rounded text-sm bg-gray-800 hover:bg-gray-700 disabled:opacity-30 transition"
+          >
+            ↪
+          </button>
+        </div>
+
+        {/* History dropdown */}
+        {historyLength > 0 && (
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setHistoryOpen((o) => !o)}
+              title="Version history"
+              className="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
+            >
+              v{historyIndex + 1}/{historyLength}
+            </button>
+            {historyOpen && (
+              <>
+                {/* backdrop */}
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setHistoryOpen(false)}
+                />
+                <div className="absolute left-0 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl min-w-[280px] max-h-64 overflow-y-auto">
+                  {historyNames.map((name, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { onJumpTo?.(i); setHistoryOpen(false); }}
+                      className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-800 transition flex items-center gap-2 ${
+                        i === historyIndex ? "text-indigo-400 font-semibold" : "text-gray-300"
+                      }`}
+                    >
+                      <span className="text-gray-500 tabular-nums w-5 shrink-0">{i + 1}.</span>
+                      <span className="truncate">{name}</span>
+                      {i === historyIndex && <span className="ml-auto text-indigo-400">←</span>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
+
+        {/* MIDI player */}
+        <div className="flex-1 min-w-0">
+          {midiSrc ? (
+            <MidiPlayer
+              src={midiSrc}
+              quarterNotesPerMeasure={quarterNotesPerMeasure}
+              selectedMeasures={selectedMeasures}
+              onMeasureChange={setPlayingMeasure}
+            />
+          ) : (
+            <span className="text-xs text-gray-500">Rendering…</span>
+          )}
+        </div>
+
+        {/* Download MusicXML */}
+        <button
+          onClick={() => {
+            if (!musicXml) return;
+            const blob = new Blob([musicXml], { type: "application/xml" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${scoreName ?? "score"}.musicxml`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition shrink-0"
+          title="Download as MusicXML"
+        >
+          ⬇ MusicXML
+        </button>
       </div>
 
       {/* Score */}

@@ -1,32 +1,72 @@
-import { spawnSync } from "child_process";
+/**
+ * Converts .mscz data to MusicXML using webmscore (MuseScore compiled to WASM).
+ *
+ * webmscore's Node.js CJS build uses fetch() to load its WASM binary, passing an
+ * absolute filesystem path. Node.js 18+ fetch doesn't support absolute paths or
+ * file:// URLs, so we patch global.fetch to handle them via fs.readFileSync.
+ */
+
 import fs from "fs";
 
-function mscoreCmd(): string {
-  return process.env.MSCORE_PATH ?? "mscore";
+let _webmscore: { load: Function; ready: Promise<void> } | null = null;
+let _fetchPatched = false;
+
+function patchFetch() {
+  if (_fetchPatched || typeof globalThis.fetch !== "function") return;
+  _fetchPatched = true;
+
+  const orig = globalThis.fetch.bind(globalThis);
+  (globalThis as Record<string, unknown>).fetch = function (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ) {
+    // Resolve the path string
+    let filePath: string | null = null;
+    if (typeof input === "string" && /^\/[^/]/.test(input)) {
+      filePath = input;
+    } else if (input instanceof URL && input.protocol === "file:") {
+      filePath = input.pathname;
+    }
+
+    if (filePath) {
+      try {
+        const data = fs.readFileSync(filePath);
+        return Promise.resolve(new Response(data.buffer as ArrayBuffer));
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+    return orig(input as RequestInfo, init);
+  };
 }
 
-function filterMscoreErrors(stderr: string): string {
-  return stderr
-    .split("\n")
-    .filter((line) => !line.startsWith("qt.qml.typeregistration:"))
-    .join("\n")
-    .trim();
+async function getWebMscore(): Promise<{ load: Function; ready: Promise<void> }> {
+  if (_webmscore) return _webmscore;
+  patchFetch();
+  // Use require() so the module loads AFTER the fetch patch is in place
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  let mod = require("webmscore");
+  if (mod?.default) mod = mod.default;
+  await (mod.ready as Promise<void>);
+  _webmscore = mod;
+  return mod;
 }
 
 /**
- * Converts a .mscz to MusicXML using mscore.
+ * Converts a .mscz buffer to MusicXML.
  * Returns { ok: true, content } on success, { ok: false, error } on failure.
- * This doubles as validation: if mscore can export it, the file is valid.
  */
-export function toMusicXml(
-  msczPath: string,
-  outputPath: string
-): { ok: true; content: string } | { ok: false; error: string } {
-  const result = spawnSync(mscoreCmd(), ["-o", outputPath, msczPath], { encoding: "utf-8" });
-
-  if (result.error) return { ok: false, error: result.error.message };
-  if (!fs.existsSync(outputPath)) {
-    return { ok: false, error: filterMscoreErrors(result.stderr ?? "") };
+export async function toMusicXml(
+  input: Buffer | Uint8Array
+): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
+  try {
+    const WebMscore = await getWebMscore();
+    const data = input instanceof Buffer ? new Uint8Array(input) : input;
+    const score = await WebMscore.load("mscz", data);
+    const xml = (await score.saveXml()) as string;
+    score.destroy();
+    return { ok: true, content: xml };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-  return { ok: true, content: fs.readFileSync(outputPath, "utf-8") };
 }

@@ -74,6 +74,30 @@ function processMeasure(measureXml: string, keyAcc: Map<string, number>): string
 }
 
 /**
+ * Fixes chord symbol duplication where the LLM puts the root note inside
+ * <kind text="Dmaj7"> instead of <kind text="maj7">.
+ * Verovio renders <root-step> + kind text, causing "DDmaj7".
+ */
+export function fixChordSymbols(musicXml: string): string {
+  // Match each <harmony> block (may have attributes like default-x)
+  return musicXml.replace(/<harmony\b[^>]*>[\s\S]*?<\/harmony>/g, (block) => {
+    const rootStep = block.match(/<root-step>([A-G])<\/root-step>/)?.[1];
+    if (!rootStep) return block;
+
+    // Strip leading root letter (and optional flat/sharp) from kind text attribute
+    return block.replace(
+      /(<kind\b[^>]*\btext=")([A-G][b#♭♯]?)/,
+      (_m, prefix, kindPrefix) => {
+        if (kindPrefix[0] !== rootStep) return _m;
+        // Strip the root letter and any immediately following accidental sign
+        const remainder = kindPrefix.slice(1).replace(/^[b#♭♯]/, '');
+        return prefix + remainder;
+      }
+    );
+  });
+}
+
+/**
  * Adds missing <accidental> elements to a MusicXML string.
  * Safe to call on already-correct XML: existing <accidental> elements are preserved.
  */

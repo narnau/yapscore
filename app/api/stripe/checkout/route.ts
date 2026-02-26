@@ -1,0 +1,26 @@
+import { NextResponse } from "next/server";
+import { getAuthUser } from "@/lib/auth";
+import { stripe, createOrGetCustomer } from "@/lib/stripe";
+
+export async function POST() {
+  const auth = await getAuthUser();
+  if (!auth.ok) return auth.response;
+
+  const { data: { user } } = await auth.supabase.auth.getUser();
+  if (!user?.email) {
+    return NextResponse.json({ error: "No email found" }, { status: 400 });
+  }
+
+  const customerId = await createOrGetCustomer(auth.userId, user.email);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    mode: "subscription",
+    line_items: [{ price: process.env.STRIPE_PRICE_ID!, quantity: 1 }],
+    success_url: `${appUrl}/editor?upgraded=true`,
+    cancel_url: `${appUrl}/editor`,
+  });
+
+  return NextResponse.json({ url: session.url });
+}

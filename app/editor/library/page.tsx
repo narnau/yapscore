@@ -65,7 +65,7 @@ export default function LibraryPage() {
   return (
     <main className="min-h-screen bg-gray-950 text-gray-100 p-8 max-w-2xl mx-auto">
       <div className="mb-6 flex items-center gap-4">
-        <Link href="/" className="text-sm text-indigo-400 hover:text-indigo-300 transition">
+        <Link href="/editor" className="text-sm text-indigo-400 hover:text-indigo-300 transition">
           ← Back to editor
         </Link>
         <h1 className="text-xl font-semibold tracking-tight">Score Library</h1>

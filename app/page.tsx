@@ -1,63 +1,28 @@
-"use client";
+import Link from "next/link";
 
-import { useState, useCallback } from "react";
-import ChatPanel from "@/components/ChatPanel";
-import ScoreViewer from "@/components/ScoreViewer";
-import LibraryModal from "@/components/LibraryModal";
-
-export default function Home() {
-  const [musicXml, setMusicXml] = useState<string | null>(null);
-  const [scoreName, setScoreName] = useState<string | null>(null);
-  const [selectedMeasures, setSelectedMeasures] = useState<Set<number>>(new Set());
-  const [libraryOpen, setLibraryOpen] = useState(false);
-
-  const handleMeasureClick = useCallback((measureNumber: number, addToSelection: boolean) => {
-    setSelectedMeasures((prev) => {
-      const next = addToSelection ? new Set(prev) : new Set<number>();
-      if (next.has(measureNumber)) {
-        next.delete(measureNumber);
-      } else {
-        next.add(measureNumber);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleScoreReady = useCallback((xml: string, name?: string) => {
-    setMusicXml(xml);
-    setSelectedMeasures(new Set());
-    if (name !== undefined) setScoreName(name);
-  }, []);
-
+export default function LandingPage() {
   return (
-    <main className="flex h-full">
-      {/* Chat — 34% */}
-      <div className="w-[34%] min-w-[280px] border-r border-gray-800 flex flex-col">
-        <ChatPanel
-          currentMusicXml={musicXml}
-          scoreName={scoreName}
-          selectedMeasures={selectedMeasures}
-          onClearSelection={() => setSelectedMeasures(new Set())}
-          onScoreReady={handleScoreReady}
-          onOpenLibrary={() => setLibraryOpen(true)}
-        />
+    <main className="min-h-screen flex flex-col items-center justify-center px-6">
+      <div className="max-w-lg text-center space-y-6">
+        <h1 className="text-4xl font-bold tracking-tight">score-ai</h1>
+        <p className="text-lg text-gray-400">
+          Edit music scores with natural language. Upload a MuseScore file, describe your changes, and let AI do the rest.
+        </p>
+        <div className="flex items-center justify-center gap-4">
+          <Link
+            href="/editor"
+            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-medium transition"
+          >
+            Open Editor
+          </Link>
+          <Link
+            href="/docs"
+            className="px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm font-medium transition"
+          >
+            Documentation
+          </Link>
+        </div>
       </div>
-
-      {/* Score viewer — 66% */}
-      <div className="flex-1 flex flex-col">
-        <ScoreViewer
-          musicXml={musicXml}
-          selectedMeasures={selectedMeasures}
-          onMeasureClick={handleMeasureClick}
-        />
-      </div>
-
-      {libraryOpen && (
-        <LibraryModal
-          onClose={() => setLibraryOpen(false)}
-          onScoreReady={(xml, name) => handleScoreReady(xml, name)}
-        />
-      )}
     </main>
   );
 }

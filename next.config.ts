@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // adm-zip and child_process are Node-only — keep them out of the browser bundle
-  serverExternalPackages: ["adm-zip"],
+  // Keep heavy Node-only packages out of the browser bundle
+  serverExternalPackages: ["adm-zip", "webmscore"],
   webpack: (config, { isServer, webpack }) => {
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
 

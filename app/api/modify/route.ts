@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractParts, extractSelectedMeasures, reconstructMusicXml, spliceMeasuresBack } from "@/lib/musicxml";
 import { modifyXml } from "@/lib/llm";
-import { addAccidentals } from "@/lib/accidentals";
+import { addAccidentals, fixChordSymbols } from "@/lib/accidentals";
+import { addBeams } from "@/lib/beams";
+import { getAuthUser } from "@/lib/auth";
 
 export const maxDuration = 300;
 
 const MAX_ATTEMPTS = 3;
 
 export async function POST(req: NextRequest) {
+  const auth = await getAuthUser();
+  if (!auth.ok) return auth.response;
+
   const formData = await req.formData();
   const musicXml = formData.get("musicXml") as string | null;
   const instruction = formData.get("instruction") as string | null;
@@ -60,8 +65,8 @@ export async function POST(req: NextRequest) {
 
     console.log(`[modify] LLM responded in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
-    // Validate: must contain at least one measure element
-    if (!modified.includes("<measure")) {
+    // Validate: must contain at least one measure element (unless deleting)
+    if (!modified.includes("<measure") && !isPartialEdit) {
       errorMsg = "Response did not contain any <measure> elements";
       console.log(`[modify] validation failed: ${errorMsg}`);
       continue;
@@ -69,11 +74,11 @@ export async function POST(req: NextRequest) {
 
     // Reconstruct the full MusicXML
     const result = isPartialEdit
-      ? spliceMeasuresBack(musicXml, modified)
+      ? spliceMeasuresBack(musicXml, modified, selectedMeasures ?? undefined)
       : reconstructMusicXml(skeleton, modified);
 
     console.log(`[modify] success on attempt ${attempt}`);
-    return NextResponse.json({ musicXml: addAccidentals(result) });
+    return NextResponse.json({ musicXml: addBeams(fixChordSymbols(addAccidentals(result))) });
   }
 
   return NextResponse.json({ error: `Failed after ${MAX_ATTEMPTS} attempts` }, { status: 422 });

@@ -1,82 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { detectIntent, LibraryItem } from "@/lib/agent";
-import { getScorePath, listScores } from "@/lib/library";
-import { toMusicXml } from "@/lib/mscore";
-import { extractParts, extractSelectedMeasures, reconstructMusicXml, spliceMeasuresBack } from "@/lib/musicxml";
-import { modifyXml, generateXml } from "@/lib/llm";
-import { addAccidentals } from "@/lib/accidentals";
-import fs from "fs";
-import os from "os";
-import path from "path";
+import { runAgent, LibraryItem } from "@/lib/agent";
+import { getAuthUser } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const maxDuration = 300;
 
-const MAX_ATTEMPTS = 3;
-
-async function loadScoreById(id: string): Promise<{ musicXml: string; name: string } | { error: string }> {
-  const scorePath = getScorePath(id);
-  if (!scorePath) return { error: `Score with id "${id}" not found in library` };
-
-  const scores = listScores();
-  const entry = scores.find((s) => s.id === id);
-  const name = entry?.name ?? "Untitled";
-
-  const tmpXml = path.join(os.tmpdir(), `score-ai-agent-${Date.now()}.xml`);
-  try {
-    const result = toMusicXml(scorePath, tmpXml);
-    if (!result.ok) return { error: result.error };
-    return { musicXml: result.content, name };
-  } finally {
-    if (fs.existsSync(tmpXml)) fs.rmSync(tmpXml);
-  }
-}
-
-async function applyModification(
-  musicXml: string,
-  instruction: string,
-  selectedMeasures: number[] | null
-): Promise<{ musicXml: string } | { error: string }> {
-  let skeleton: string;
-  let partsToSend: string;
-  let context: string;
-  const isPartialEdit = selectedMeasures && selectedMeasures.length > 0;
-
-  try {
-    if (isPartialEdit) {
-      ({ skeleton, selectedMeasures: partsToSend, context } = extractSelectedMeasures(musicXml, selectedMeasures));
-    } else {
-      ({ skeleton, parts: partsToSend, context } = extractParts(musicXml));
-    }
-  } catch (err) {
-    return { error: `Failed to parse MusicXML: ${err instanceof Error ? err.message : String(err)}` };
-  }
-
-  let errorMsg: string | undefined;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    console.log(`[agent] modify attempt ${attempt}/${MAX_ATTEMPTS}`);
-    let modified: string;
-    try {
-      modified = await modifyXml(partsToSend, context, instruction, errorMsg);
-    } catch (err) {
-      return { error: `LLM error: ${err instanceof Error ? err.message : String(err)}` };
-    }
-
-    if (!modified.includes("<measure")) {
-      errorMsg = "Response did not contain any <measure> elements";
-      continue;
-    }
-
-    const result = isPartialEdit
-      ? spliceMeasuresBack(musicXml, modified)
-      : reconstructMusicXml(skeleton, modified);
-
-    return { musicXml: addAccidentals(result) };
-  }
-
-  return { error: `Failed after ${MAX_ATTEMPTS} attempts` };
-}
+const FREE_LIMIT = 5;
 
 export async function POST(req: NextRequest) {
+  const auth = await getAuthUser();
+  if (!auth.ok) return auth.response;
+
+  // Check usage limits
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("plan, interactions_used")
+    .eq("id", auth.userId)
+    .single();
+
+  const plan = profile?.plan ?? "free";
+  const used = profile?.interactions_used ?? 0;
+
+  if (plan === "free" && used >= FREE_LIMIT) {
+    return NextResponse.json(
+      {
+        error: "limit_reached",
+        usage: { used, limit: FREE_LIMIT },
+      },
+      { status: 402 }
+    );
+  }
+
   const formData = await req.formData();
   const message = formData.get("message") as string | null;
   const currentMusicXml = formData.get("musicXml") as string | null;
@@ -90,70 +45,19 @@ export async function POST(req: NextRequest) {
   const selectedMeasures = selectedRaw ? (JSON.parse(selectedRaw) as number[]) : null;
   const library: LibraryItem[] = libraryRaw ? (JSON.parse(libraryRaw) as LibraryItem[]) : [];
 
-  // Step 1: detect intent
-  let intent;
   try {
-    intent = await detectIntent(message, library, !!currentMusicXml);
+    const result = await runAgent(message, library, currentMusicXml, selectedMeasures, auth.supabase, auth.userId);
+
+    // Increment usage atomically after successful response
+    await admin.rpc("increment_interactions", { user_id: auth.userId });
+
+    if (result.type === "chat")   return NextResponse.json({ type: "chat",   message: result.message });
+    if (result.type === "load")   return NextResponse.json({ type: "load",   musicXml: result.musicXml, name: result.name });
+    if (result.type === "modify") return NextResponse.json({ type: "modify", musicXml: result.musicXml });
+
+    return NextResponse.json({ error: "Unknown result type" }, { status: 500 });
   } catch (err) {
-    return NextResponse.json(
-      { error: `Intent detection failed: ${err instanceof Error ? err.message : String(err)}` },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  console.log(`[agent] intent: ${JSON.stringify(intent)}`);
-
-  // Step 2: execute intent
-  if (intent.action === "chat") {
-    return NextResponse.json({ type: "chat", message: intent.response });
-  }
-
-  if (intent.action === "load") {
-    const loaded = await loadScoreById(intent.scoreId);
-    if ("error" in loaded) return NextResponse.json({ error: loaded.error }, { status: 404 });
-    return NextResponse.json({ type: "load", musicXml: loaded.musicXml, name: loaded.name });
-  }
-
-  if (intent.action === "load_and_modify") {
-    const loaded = await loadScoreById(intent.scoreId);
-    if ("error" in loaded) return NextResponse.json({ error: loaded.error }, { status: 404 });
-
-    const modified = await applyModification(loaded.musicXml, intent.instruction, null);
-    if ("error" in modified) return NextResponse.json({ error: modified.error }, { status: 422 });
-
-    return NextResponse.json({ type: "load", musicXml: modified.musicXml, name: loaded.name });
-  }
-
-  if (intent.action === "generate") {
-    console.log(`[agent] generating from scratch: ${intent.description}`);
-    let musicXml: string;
-    try {
-      musicXml = await generateXml(intent.description);
-    } catch (err) {
-      return NextResponse.json(
-        { error: `Generation failed: ${err instanceof Error ? err.message : String(err)}` },
-        { status: 500 }
-      );
-    }
-
-    if (!musicXml.includes("<measure")) {
-      return NextResponse.json({ error: "Generated XML has no measures" }, { status: 422 });
-    }
-
-    // Extract a short name from the description
-    const name = intent.description.split(",")[0].trim();
-    return NextResponse.json({ type: "load", musicXml: addAccidentals(musicXml), name });
-  }
-
-  if (intent.action === "modify") {
-    if (!currentMusicXml) {
-      return NextResponse.json({ error: "No score is currently loaded" }, { status: 400 });
-    }
-    const modified = await applyModification(currentMusicXml, intent.instruction, selectedMeasures);
-    if ("error" in modified) return NextResponse.json({ error: modified.error }, { status: 422 });
-
-    return NextResponse.json({ type: "modify", musicXml: modified.musicXml });
-  }
-
-  return NextResponse.json({ error: "Unknown intent action" }, { status: 400 });
 }
