@@ -25,8 +25,35 @@ export default function MidiPlayerComponent({ src, quarterNotesPerMeasure, selec
   const activeNotesRef = useRef<Map<string, SfNode>>(new Map());
   const onMeasureChangeRef = useRef(onMeasureChange);
   onMeasureChangeRef.current = onMeasureChange;
-  const activeRef   = useRef(false);
-  const minTickRef  = useRef(0); // ignore events below this tick (prevents glitch after skipToTick)
+  const activeRef      = useRef(false);
+  const minTickRef     = useRef(0); // ignore events below this tick (prevents glitch after skipToTick)
+  const rafRef         = useRef<number>(0);
+  const lastMeasureRef = useRef(-1);
+
+  function startMeasureTracking() {
+    function tick() {
+      const player = playerRef.current;
+      if (!player || !activeRef.current) return;
+      // midi-player-js exposes currentTick as a property; getCurrentTick() wraps it
+      const currentTick: number = (player as any).getCurrentTick?.() ?? (player as any).currentTick ?? 0;
+      if (currentTick >= minTickRef.current) {
+        const division = (player as any).division || 480;
+        const ticksPerMeasure = division * quarterNotesPerMeasure;
+        const measureNum = Math.floor(currentTick / ticksPerMeasure) + 1;
+        if (measureNum !== lastMeasureRef.current) {
+          lastMeasureRef.current = measureNum;
+          onMeasureChangeRef.current(measureNum);
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick);
+  }
+
+  function stopMeasureTracking() {
+    cancelAnimationFrame(rafRef.current);
+    lastMeasureRef.current = -1;
+  }
 
   function stopAllNotes(immediate = false) {
     const ctx = audioCtxRef.current;
@@ -52,21 +79,8 @@ export default function MidiPlayerComponent({ src, quarterNotesPerMeasure, selec
       if (cancelled) return;
       instrumentRef.current = instrument;
 
-      let lastMeasure = -1;
-
       const player = new MidiPlayer.Player((event: MidiPlayer.Event) => {
         if (!activeRef.current) return;
-
-        // ── measure tracking ──────────────────────────────────────────────
-        if (event.tick >= minTickRef.current) {
-          const division = player.division || 480;
-          const ticksPerMeasure = division * quarterNotesPerMeasure;
-          const measureNum = Math.floor(event.tick / ticksPerMeasure) + 1;
-          if (measureNum !== lastMeasure) {
-            lastMeasure = measureNum;
-            onMeasureChangeRef.current(measureNum);
-          }
-        }
 
         const noteName = event.noteName;
         const ctx = audioCtxRef.current;
@@ -100,6 +114,7 @@ export default function MidiPlayerComponent({ src, quarterNotesPerMeasure, selec
       player.loadDataUri(src);
       player.on("endOfFile", () => {
         activeRef.current = false;
+        stopMeasureTracking();
         stopAllNotes();
         onMeasureChangeRef.current(null);
         setState("stopped");
@@ -113,6 +128,7 @@ export default function MidiPlayerComponent({ src, quarterNotesPerMeasure, selec
 
     return () => {
       cancelled = true;
+      stopMeasureTracking();
       playerRef.current?.stop();
       stopAllNotes(true);
       audioCtxRef.current?.close();
@@ -158,11 +174,13 @@ export default function MidiPlayerComponent({ src, quarterNotesPerMeasure, selec
     }
 
     player.play();
+    startMeasureTracking();
     setState("playing");
   }
 
   function handleStop() {
     activeRef.current = false;
+    stopMeasureTracking();
     playerRef.current?.stop();
     stopAllNotes();
     onMeasureChangeRef.current(null);

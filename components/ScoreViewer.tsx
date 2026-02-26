@@ -225,10 +225,58 @@ export default function ScoreViewer({
         </button>
       </div>
 
+      {/* Score info bar */}
+      <ScoreInfoBar musicXml={musicXml} />
+
       {/* Score */}
       <div className="flex-1 overflow-y-auto bg-white">
         <div className="p-6" ref={containerRef} />
       </div>
+    </div>
+  );
+}
+
+// ─── Score info bar ─────────────────────────────────────────────────────────
+
+const FIFTHS_KEYS = ["Cb","Gb","Db","Ab","Eb","Bb","F","C","G","D","A","E","B","F#","C#"];
+
+function ScoreInfoBar({ musicXml }: { musicXml: string }) {
+  const instruments = [...musicXml.matchAll(/<part-name>([^<]+)<\/part-name>/g)]
+    .map((m) => m[1].trim())
+    .filter(Boolean)
+    .join(", ");
+
+  const fifths = parseInt(musicXml.match(/<fifths>(-?\d+)<\/fifths>/)?.[1] ?? "0");
+  const key = FIFTHS_KEYS[fifths + 7] ?? "C";
+
+  const beatsStr = musicXml.match(/<beats>(\d+)<\/beats>/)?.[1] ?? "4";
+  const beatTypeStr = musicXml.match(/<beat-type>(\d+)<\/beat-type>/)?.[1] ?? "4";
+
+  const tempoMatch = musicXml.match(/<sound\b[^>]*tempo="(\d+(?:\.\d+)?)"/);
+  const tempoExplicit = tempoMatch ? Math.round(parseFloat(tempoMatch[1])) : null;
+  const tempo = tempoExplicit ?? 120;
+
+  // Count measures in first part only
+  const firstPart = musicXml.match(/<part\b[^>]*>[\s\S]*?<\/part>/);
+  const measureCount = firstPart
+    ? (firstPart[0].match(/<measure\b/g) ?? []).length
+    : 0;
+
+  const items: Array<{ label: string; dim?: boolean }> = [];
+  if (instruments) items.push({ label: instruments });
+  items.push({ label: key });
+  items.push({ label: `${beatsStr}/${beatTypeStr}` });
+  items.push({ label: `♩ = ${tempo}`, dim: !tempoExplicit });
+  items.push({ label: `${measureCount} bars` });
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-1 border-b border-gray-800 bg-gray-850 text-[11px] text-gray-400">
+      {items.map((item, i) => (
+        <span key={i} className={`flex items-center gap-3${item.dim ? " opacity-40" : ""}`}>
+          {i > 0 && <span className="text-gray-700">·</span>}
+          {item.label}
+        </span>
+      ))}
     </div>
   );
 }

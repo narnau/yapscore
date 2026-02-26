@@ -37,6 +37,8 @@ RULES:
      staff 3, etc. Repeat the <backup> pattern for every additional staff.
 10. Adding a new instrument (new part): add a new <part id="P2"> block; the system
     will auto-add the matching <score-part> entry to <part-list>.
+11. Preserve all <direction> elements (tempo markings, dynamics, etc.) unless the
+    instruction specifically asks to change them.
 
 CURRENT PARTS:
 ${parts}`;
@@ -142,7 +144,14 @@ RULES:
     <clef number="k"> per staff in <attributes>. Write staff 1 notes with <staff>1</staff>,
     then <backup><duration>TICKS</duration></backup>, then staff 2 with <staff>2</staff>,
     then another <backup> for each additional staff. TICKS = total ticks in the measure.
-11. Write the complete score — do not truncate.`;
+11. Tempo: in the FIRST measure, add a <direction> with both a visual metronome marking
+    and a playback tempo BEFORE the first <note>:
+      <direction placement="above">
+        <direction-type><metronome parentheses="no"><beat-unit>quarter</beat-unit><per-minute>BPM</per-minute></metronome></direction-type>
+        <sound tempo="BPM"/>
+      </direction>
+    Choose an appropriate BPM for the style (e.g. Ballad=70, Andante=90, Allegro=130).
+12. Write the complete score — do not truncate.`;
 }
 
 export async function generateXml(description: string): Promise<string> {

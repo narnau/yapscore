@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runAgent, LibraryItem } from "@/lib/agent";
+import { runAgent } from "@/lib/agent";
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -24,10 +24,7 @@ export async function POST(req: NextRequest) {
 
   if (plan === "free" && used >= FREE_LIMIT) {
     return NextResponse.json(
-      {
-        error: "limit_reached",
-        usage: { used, limit: FREE_LIMIT },
-      },
+      { error: "limit_reached", usage: { used, limit: FREE_LIMIT } },
       { status: 402 }
     );
   }
@@ -36,19 +33,16 @@ export async function POST(req: NextRequest) {
   const message = formData.get("message") as string | null;
   const currentMusicXml = formData.get("musicXml") as string | null;
   const selectedRaw = formData.get("selectedMeasures") as string | null;
-  const libraryRaw = formData.get("library") as string | null;
 
   if (!message) {
     return NextResponse.json({ error: "Missing message" }, { status: 400 });
   }
 
   const selectedMeasures = selectedRaw ? (JSON.parse(selectedRaw) as number[]) : null;
-  const library: LibraryItem[] = libraryRaw ? (JSON.parse(libraryRaw) as LibraryItem[]) : [];
 
   try {
-    const result = await runAgent(message, library, currentMusicXml, selectedMeasures, auth.supabase, auth.userId);
+    const result = await runAgent(message, currentMusicXml, selectedMeasures);
 
-    // Increment usage atomically after successful response
     await admin.rpc("increment_interactions", { user_id: auth.userId });
 
     if (result.type === "chat")   return NextResponse.json({ type: "chat",   message: result.message });
@@ -57,7 +51,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Unknown result type" }, { status: 500 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[agent] fatal error:", msg);
+    // Never surface raw errors to the user — return as a chat message
+    return NextResponse.json({
+      type: "chat",
+      message: "Sorry, something went wrong. Please try again.",
+    });
   }
 }

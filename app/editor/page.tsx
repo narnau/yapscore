@@ -1,171 +1,180 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useState } from "react";
-import ChatPanel from "@/components/ChatPanel";
-import ScoreViewer from "@/components/ScoreViewer";
-import LibraryModal from "@/components/LibraryModal";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-// ── history ───────────────────────────────────────────────────────────────────
+type FileEntry = {
+  id: string;
+  name: string;
+  updated_at: string;
+};
 
-type HistoryEntry = { musicXml: string; name: string | null };
-type HistoryState = { entries: HistoryEntry[]; index: number };
-type HistoryAction =
-  | { type: "push"; entry: HistoryEntry }
-  | { type: "undo" }
-  | { type: "redo" }
-  | { type: "restore"; entries: HistoryEntry[]; index: number };
-
-function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
-  switch (action.type) {
-    case "push": {
-      // Always append — never discard future versions when editing from a past version
-      const entries = [...state.entries, action.entry];
-      return { entries, index: entries.length - 1 };
-    }
-    case "undo":
-      if (state.index <= 0) return state;
-      return { ...state, index: state.index - 1 };
-    case "redo":
-      if (state.index >= state.entries.length - 1) return state;
-      return { ...state, index: state.index + 1 };
-    case "restore":
-      return { entries: action.entries, index: action.index };
-  }
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1)  return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
 }
 
-const STORAGE_KEY = "score-ai-history";
+export default function FilesPage() {
+  const router = useRouter();
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-// ── component ─────────────────────────────────────────────────────────────────
-
-export default function Home() {
-  const [hs, dispatch] = useReducer(historyReducer, { entries: [], index: -1 });
-  const [selectedMeasures, setSelectedMeasures] = useState<Set<number>>(new Set());
-  const [libraryOpen, setLibraryOpen] = useState(false);
-
-  // Derived from history
-  const currentEntry = hs.index >= 0 ? hs.entries[hs.index] : null;
-  const musicXml  = currentEntry?.musicXml  ?? null;
-  const scoreName = currentEntry?.name ?? null;
-  const canUndo = hs.index > 0;
-  const canRedo = hs.index < hs.entries.length - 1;
-
-  // ── restore from localStorage on mount ─────────────────────────────────────
   useEffect(() => {
+    fetch("/api/files")
+      .then((r) => r.json())
+      .then((d) => setFiles(d.files ?? []))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function createBlank() {
+    setCreating(true);
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const { entries, index } = JSON.parse(raw) as HistoryState;
-      if (Array.isArray(entries) && entries.length > 0) {
-        dispatch({ type: "restore", entries, index });
-      }
-    } catch {
-      // ignore corrupted data
-    }
-  }, []);
-
-  // ── persist to localStorage whenever history changes ────────────────────────
-  useEffect(() => {
-    if (hs.entries.length === 0) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ entries: hs.entries, index: hs.index }));
-    } catch {
-      // ignore quota errors
-    }
-  }, [hs]);
-
-  // ── keyboard shortcuts ──────────────────────────────────────────────────────
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      const ctrl = e.ctrlKey || e.metaKey;
-      if (!ctrl) return;
-      if (e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        dispatch({ type: "undo" });
-        setSelectedMeasures(new Set());
-      } else if (e.key === "y" || (e.key === "z" && e.shiftKey)) {
-        e.preventDefault();
-        dispatch({ type: "redo" });
-        setSelectedMeasures(new Set());
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  // ── handlers ────────────────────────────────────────────────────────────────
-  const handleMeasureClick = useCallback((measureNumber: number, addToSelection: boolean) => {
-    setSelectedMeasures((prev) => {
-      const next = addToSelection ? new Set(prev) : new Set<number>();
-      if (next.has(measureNumber)) {
-        next.delete(measureNumber);
-      } else {
-        next.add(measureNumber);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleNew = useCallback(() => {
-    dispatch({ type: "restore", entries: [], index: -1 });
-    setSelectedMeasures(new Set());
-    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
-  }, []);
-
-  const handleScoreReady = useCallback(
-    (xml: string, name?: string) => {
-      dispatch({
-        type: "push",
-        entry: { musicXml: xml, name: name ?? scoreName },
+      const res = await fetch("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Untitled" }),
       });
-      setSelectedMeasures(new Set());
-    },
-    [scoreName]
-  );
+      const data = await res.json();
+      router.push(`/editor/${data.id}`);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleUpload(file: File) {
+    setCreating(true);
+    try {
+      const name = file.name.replace(/\.(mscz|musicxml|xml)$/i, "");
+
+      // Convert .mscz if needed
+      let musicXml: string;
+      if (file.name.endsWith(".mscz")) {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/api/load", { method: "POST", body: form });
+        const data = await res.json();
+        if (!data.musicXml) throw new Error("Conversion failed");
+        musicXml = data.musicXml;
+      } else {
+        musicXml = await file.text();
+      }
+
+      // Create a new file in DB with the XML as current_xml
+      const res = await fetch("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const { id } = await res.json();
+
+      // Save the XML immediately
+      await fetch(`/api/files/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_xml: musicXml,
+          history: [{ musicXml, name, timestamp: new Date().toISOString() }],
+          messages: [],
+        }),
+      });
+
+      router.push(`/editor/${id}`);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function deleteFile(id: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("Delete this file?")) return;
+    await fetch(`/api/files/${id}`, { method: "DELETE" });
+    setFiles((f) => f.filter((x) => x.id !== id));
+  }
 
   return (
-    <main className="flex h-full">
-      {/* Chat — 34% */}
-      <div className="w-[34%] min-w-[280px] border-r border-gray-800 flex flex-col">
-        <ChatPanel
-          currentMusicXml={musicXml}
-          scoreName={scoreName}
-          selectedMeasures={selectedMeasures}
-          onClearSelection={() => setSelectedMeasures(new Set())}
-          onScoreReady={handleScoreReady}
-          onOpenLibrary={() => setLibraryOpen(true)}
-          onNew={handleNew}
-        />
-      </div>
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
+      {/* Header */}
+      <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+        <h1 className="text-xl font-semibold tracking-tight">score-ai</h1>
+        <button
+          onClick={createBlank}
+          disabled={creating}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium transition"
+        >
+          + New file
+        </button>
+      </header>
 
-      {/* Score viewer — 66% */}
-      <div className="flex-1 flex flex-col">
-        <ScoreViewer
-          musicXml={musicXml}
-          scoreName={scoreName}
-          selectedMeasures={selectedMeasures}
-          onMeasureClick={handleMeasureClick}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          historyIndex={hs.index}
-          historyLength={hs.entries.length}
-          onUndo={() => { dispatch({ type: "undo" }); setSelectedMeasures(new Set()); }}
-          onRedo={() => { dispatch({ type: "redo" }); setSelectedMeasures(new Set()); }}
-          onJumpTo={(idx) => {
-            dispatch({ type: "restore", entries: hs.entries, index: idx });
-            setSelectedMeasures(new Set());
-          }}
-          historyNames={hs.entries.map((e, i) =>
-            e.name ?? (i === 0 ? "Original" : `Edit ${i}`)
-          )}
-        />
-      </div>
+      <main className="flex-1 max-w-2xl w-full mx-auto px-6 py-8">
+        {/* Upload drop zone */}
+        <div
+          onClick={() => fileRef.current?.click()}
+          className="mb-8 border-2 border-dashed border-gray-700 hover:border-indigo-500 rounded-xl px-6 py-8 text-center cursor-pointer transition group"
+        >
+          <p className="text-gray-400 group-hover:text-gray-200 transition text-sm">
+            Drop a <strong>.mscz</strong> or <strong>.musicxml</strong> file here, or click to upload
+          </p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".mscz,.musicxml,.xml"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleUpload(f);
+            }}
+          />
+        </div>
 
-      {libraryOpen && (
-        <LibraryModal
-          onClose={() => setLibraryOpen(false)}
-          onScoreReady={(xml, name) => handleScoreReady(xml, name)}
-        />
+        {/* File list */}
+        {loading ? (
+          <p className="text-sm text-gray-500 animate-pulse">Loading…</p>
+        ) : files.length === 0 ? (
+          <div className="text-center py-16 space-y-2">
+            <p className="text-gray-400">No files yet.</p>
+            <p className="text-sm text-gray-600">Upload a score or create a blank file to get started.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-600 uppercase tracking-wider mb-3">Recent files</p>
+            {files.map((f) => (
+              <Link
+                key={f.id}
+                href={`/editor/${f.id}`}
+                className="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 transition group"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{f.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{timeAgo(f.updated_at)}</p>
+                </div>
+                <button
+                  onClick={(e) => deleteFile(f.id, e)}
+                  className="ml-4 text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition text-xs px-2 py-1 rounded"
+                  title="Delete"
+                >
+                  Delete
+                </button>
+              </Link>
+            ))}
+          </div>
+        )}
+      </main>
+
+      {creating && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <p className="text-sm text-gray-300 animate-pulse">Creating…</p>
+        </div>
       )}
-    </main>
+    </div>
   );
 }

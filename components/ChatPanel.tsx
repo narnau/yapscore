@@ -1,16 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 export type Message = {
   role: "user" | "system";
   text: string;
-};
-
-type LibraryItem = {
-  id: string;
-  name: string;
-  description: string;
 };
 
 type Usage = {
@@ -23,49 +17,35 @@ type Props = {
   currentMusicXml: string | null;
   scoreName: string | null;
   selectedMeasures: Set<number>;
+  messages: Message[];
+  onMessagesChange: (messages: Message[]) => void;
   onClearSelection: () => void;
   onScoreReady: (musicXml: string, name?: string) => void;
-  onOpenLibrary: () => void;
   onNew: () => void;
+  usage: Usage | null;
+  onUsageRefresh: () => void;
 };
 
 export default function ChatPanel({
   currentMusicXml,
   scoreName,
   selectedMeasures,
+  messages,
+  onMessagesChange,
   onClearSelection,
   onScoreReady,
-  onOpenLibrary,
   onNew,
+  usage,
+  onUsageRefresh,
 }: Props) {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "system", text: "Upload a score (.mscz or .musicxml), load one from the library, or just ask me to create one from scratch!" },
-  ]);
   const [instruction, setInstruction] = useState("");
   const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [library, setLibrary] = useState<LibraryItem[]>([]);
-  const [usage, setUsage] = useState<Usage | null>(null);
   const [paywallHit, setPaywallHit] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/library")
-      .then((r) => r.json())
-      .then((d) => setLibrary(d.scores ?? []));
-    fetch("/api/usage")
-      .then((r) => r.json())
-      .then((d) => setUsage(d));
-  }, []);
-
-  async function refreshUsage() {
-    try {
-      const res = await fetch("/api/usage");
-      const data = await res.json();
-      setUsage(data);
-    } catch {
-      // ignore
-    }
+  function addMessage(msg: Message) {
+    onMessagesChange([...messages, msg]);
   }
 
   async function handleUpgrade() {
@@ -74,7 +54,7 @@ export default function ChatPanel({
       const data = await res.json();
       if (data.url) window.location.href = data.url;
     } catch {
-      setMessages((m) => [...m, { role: "system", text: "Failed to start checkout." }]);
+      addMessage({ role: "system", text: "Failed to start checkout." });
     }
   }
 
@@ -87,7 +67,9 @@ export default function ChatPanel({
       selectedMeasures.size > 0
         ? ` [measures ${[...selectedMeasures].sort((a, b) => a - b).join(", ")}]`
         : "";
-    setMessages((m) => [...m, { role: "user", text: text + selectionNote }]);
+
+    const next: Message[] = [...messages, { role: "user", text: text + selectionNote }];
+    onMessagesChange(next);
     setInstruction("");
     setLoading(true);
 
@@ -101,42 +83,34 @@ export default function ChatPanel({
           JSON.stringify([...selectedMeasures].sort((a, b) => a - b))
         );
       }
-      form.append("library", JSON.stringify(library));
 
       const res = await fetch("/api/agent", { method: "POST", body: form });
       const data = await res.json();
 
       if (res.status === 402) {
         setPaywallHit(true);
-        setMessages((m) => [
-          ...m,
+        onMessagesChange([
+          ...next,
           { role: "system", text: "You've used all your free interactions. Upgrade to Pro for unlimited access." },
         ]);
       } else if (data.error) {
-        setMessages((m) => [...m, { role: "system", text: `Error: ${data.error}` }]);
+        onMessagesChange([...next, { role: "system", text: `Error: ${data.error}` }]);
       } else if (data.type === "chat") {
-        setMessages((m) => [...m, { role: "system", text: data.message }]);
-        await refreshUsage();
+        onMessagesChange([...next, { role: "system", text: data.message }]);
+        onUsageRefresh();
       } else if (data.type === "load") {
-        setMessages((m) => [
-          ...m,
-          { role: "system", text: `Loaded: ${data.name ?? "score"}` },
-        ]);
+        onMessagesChange([...next, { role: "system", text: `Loaded: ${data.name ?? "score"}` }]);
         onScoreReady(data.musicXml, data.name);
         onClearSelection();
-        await refreshUsage();
-        // Refresh library list
-        fetch("/api/library")
-          .then((r) => r.json())
-          .then((d) => setLibrary(d.scores ?? []));
+        onUsageRefresh();
       } else if (data.type === "modify") {
-        setMessages((m) => [...m, { role: "system", text: "Score updated." }]);
+        onMessagesChange([...next, { role: "system", text: "Score updated." }]);
         onScoreReady(data.musicXml, text);
         onClearSelection();
-        await refreshUsage();
+        onUsageRefresh();
       }
     } catch {
-      setMessages((m) => [...m, { role: "system", text: "Network error." }]);
+      onMessagesChange([...next, { role: "system", text: "Network error." }]);
     } finally {
       setLoading(false);
     }
@@ -160,19 +134,13 @@ export default function ChatPanel({
             )}
             {currentMusicXml && (
               <button
-                onClick={onNew}
+                onClick={() => { onMessagesChange([]); onNew(); }}
                 className="text-xs px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-red-900 text-gray-400 hover:text-red-300 transition"
                 title="Clear score and start fresh"
               >
                 New
               </button>
             )}
-            <button
-              onClick={onOpenLibrary}
-              className="text-xs px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
-            >
-              Library
-            </button>
           </div>
         </div>
         {scoreName && (
@@ -236,14 +204,12 @@ export default function ChatPanel({
               try {
                 const name = f.name.replace(/\.(mscz|musicxml|xml)$/i, "");
                 if (f.name.endsWith(".mscz")) {
-                  // .mscz → convert server-side via mscore
                   const form = new FormData();
                   form.append("file", f);
                   const res = await fetch("/api/load", { method: "POST", body: form });
                   const data = await res.json();
                   if (data.musicXml) onScoreReady(data.musicXml, name);
                 } else {
-                  // .musicxml / .xml → read directly, no conversion needed
                   const text = await f.text();
                   onScoreReady(text, name);
                 }
@@ -289,7 +255,7 @@ export default function ChatPanel({
             disabled={loading || !instruction.trim() || paywallHit}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 rounded-lg text-sm font-medium transition"
           >
-            Create
+            Send
           </button>
         </div>
       </form>
