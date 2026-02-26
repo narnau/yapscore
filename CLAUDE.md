@@ -1,0 +1,69 @@
+# score-ai-web
+
+LLM-powered MuseScore editor. Upload .mscz → edit with natural language → download modified .mscz.
+
+## Tech Stack
+- **Next.js 15** (App Router) + React 19 + TypeScript 5
+- **Bun** as package manager and runtime
+- **Tailwind CSS 3** for styling
+- **Supabase** — Auth (Google OAuth), Postgres DB, Storage
+- **Stripe** — Subscriptions (free/pro tiers)
+- **Verovio** — Score rendering (SVG)
+- **OpenRouter** — LLM API (default: Gemini 2.5 Flash)
+
+## Commands
+- `bun install` — install dependencies
+- `bun run dev` — start dev server
+- `bun run build` — production build
+- `bun run tsc --noEmit` — type check (must pass before PR)
+- `supabase start` — local Supabase (requires Docker)
+- `supabase db reset` — reset local DB and re-run migrations
+
+## Project Structure
+```
+app/
+  page.tsx              — Landing page (public)
+  login/page.tsx        — Google OAuth login (public)
+  docs/page.tsx         — Documentation (public)
+  editor/page.tsx       — Main editor (protected)
+  editor/library/       — Score library management (protected)
+  api/agent/            — Multi-turn AI agent
+  api/modify/           — Direct MusicXML modification
+  api/load/             — .mscz → MusicXML conversion
+  api/library/          — Score CRUD (Supabase Storage + DB)
+  api/auth/             — OAuth callback + logout
+  api/stripe/           — Checkout, webhook, portal
+  api/usage/            — Usage stats
+components/
+  ChatPanel.tsx         — Chat UI + file upload + paywall
+  ScoreViewer.tsx       — Verovio rendering + measure selection
+  MidiPlayer.tsx        — MIDI playback
+  LibraryModal.tsx      — Quick-load modal
+lib/
+  supabase/             — Client utilities (client, server, middleware, admin)
+  auth.ts               — getAuthUser() helper for API routes
+  stripe.ts             — Stripe instance + customer helper
+  library.ts            — Supabase-backed score storage
+  agent.ts              — AI agent with tools (load/modify/generate)
+  llm.ts                — OpenRouter API calls
+  mscore.ts             — .mscz → MusicXML via webmscore
+  musicxml.ts           — MusicXML parsing/reconstruction
+  accidentals.ts        — Post-process accidentals
+  beams.ts              — Post-process beam elements
+supabase/
+  migrations/           — Database migrations (auto-deployed on push to main)
+```
+
+## Architecture
+- Auth: Supabase Auth with Google OAuth. Middleware redirects `/editor/*` to `/login` if unauthenticated.
+- All API routes use `getAuthUser()` guard (returns 401 if not authenticated).
+- Library: Files stored in Supabase Storage as `{user_id}/{score_id}.mscz`. Metadata in `scores` table.
+- Paywall: Free tier = 5 agent interactions. After limit → 402 response. Stripe checkout for Pro upgrade.
+- Score editing: MusicXML sent to LLM (only `<part>` elements for token optimization). Selected measures for partial edits.
+- RLS enabled on all tables. Service-role client used only in webhooks and server-side admin operations.
+
+## Conventions
+- All new database changes go in `supabase/migrations/` (create with `supabase migration new <name>`)
+- Use `@/` import alias for all project imports
+- API routes return `NextResponse.json()` — errors include `{ error: string }` with appropriate status codes
+- No markdown/README files unless explicitly requested
