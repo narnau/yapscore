@@ -10,6 +10,7 @@ type SfNode = { stop: (when?: number) => void };
 
 type Props = {
   src: string;
+  channelInstruments?: Record<number, string>; // MIDI channel → soundfont name
   quarterNotesPerMeasure: number;
   selectedMeasures: Set<number>;
   onMeasureChange: (measure: number | null) => void;
@@ -17,10 +18,10 @@ type Props = {
 
 const RELEASE_S = 0.15; // fade-out time when stopping a note early (seconds)
 
-export default function MidiPlayerComponent({ src, quarterNotesPerMeasure, selectedMeasures, onMeasureChange }: Props) {
+export default function MidiPlayerComponent({ src, channelInstruments = {}, quarterNotesPerMeasure, selectedMeasures, onMeasureChange }: Props) {
   const [state, setState] = useState<State>("loading");
   const playerRef   = useRef<MidiPlayer.Player | null>(null);
-  const instrumentRef = useRef<any>(null);
+  const instrumentsRef = useRef<Map<number, any>>(new Map()); // channel → soundfont instance
   const audioCtxRef = useRef<AudioContext | null>(null);
   const activeNotesRef = useRef<Map<string, SfNode>>(new Map());
   const onMeasureChangeRef = useRef(onMeasureChange);
@@ -75,9 +76,23 @@ export default function MidiPlayerComponent({ src, quarterNotesPerMeasure, selec
       const audioCtx = new AudioContext();
       audioCtxRef.current = audioCtx;
 
-      const instrument = await Soundfont.instrument(audioCtx, "acoustic_grand_piano");
+      // Load one soundfont per unique instrument name (deduplicated)
+      const uniqueNames = [...new Set(Object.values(channelInstruments).length > 0
+        ? Object.values(channelInstruments)
+        : ["acoustic_grand_piano"]
+      )];
+      const loaded = await Promise.all(
+        uniqueNames.map((name) => Soundfont.instrument(audioCtx, name as any).then((sf) => [name, sf] as const))
+      );
       if (cancelled) return;
-      instrumentRef.current = instrument;
+      const nameToSf = new Map(loaded);
+      // Build channel → sf map; fallback to first loaded instrument
+      const fallback = loaded[0][1];
+      const channelMap = new Map<number, any>();
+      for (const [ch, name] of Object.entries(channelInstruments)) {
+        channelMap.set(Number(ch), nameToSf.get(name) ?? fallback);
+      }
+      instrumentsRef.current = channelMap;
 
       const player = new MidiPlayer.Player((event: MidiPlayer.Event) => {
         if (!activeRef.current) return;
@@ -87,15 +102,17 @@ export default function MidiPlayerComponent({ src, quarterNotesPerMeasure, selec
 
         // ── note on ───────────────────────────────────────────────────────
         if (event.name === "Note on" && event.velocity && event.velocity > 0 && noteName && ctx) {
+          const sf = instrumentsRef.current.get(event.channel ?? 1)
+            ?? instrumentsRef.current.values().next().value;
+          if (!sf) return;
           // Stop any still-ringing previous instance of this pitch
-          const prev = activeNotesRef.current.get(noteName);
+          const key = `${event.channel}:${noteName}`;
+          const prev = activeNotesRef.current.get(key);
           if (prev) {
             try { prev.stop(ctx.currentTime + RELEASE_S); } catch { /* ok */ }
           }
-          const node: SfNode = instrumentRef.current.play(noteName, ctx.currentTime, {
-            gain: event.velocity / 127,
-          });
-          activeNotesRef.current.set(noteName, node);
+          const node: SfNode = sf.play(noteName, ctx.currentTime, { gain: event.velocity / 127 });
+          activeNotesRef.current.set(key, node);
         }
 
         // ── note off (also handles Note on with velocity 0) ───────────────
@@ -103,10 +120,11 @@ export default function MidiPlayerComponent({ src, quarterNotesPerMeasure, selec
           (event.name === "Note off" || (event.name === "Note on" && (!event.velocity || event.velocity === 0))) &&
           noteName && ctx
         ) {
-          const node = activeNotesRef.current.get(noteName);
+          const key = `${event.channel}:${noteName}`;
+          const node = activeNotesRef.current.get(key);
           if (node) {
             try { node.stop(ctx.currentTime + RELEASE_S); } catch { /* ok */ }
-            activeNotesRef.current.delete(noteName);
+            activeNotesRef.current.delete(key);
           }
         }
       });
@@ -133,12 +151,12 @@ export default function MidiPlayerComponent({ src, quarterNotesPerMeasure, selec
       stopAllNotes(true);
       audioCtxRef.current?.close();
       onMeasureChangeRef.current(null);
-      playerRef.current   = null;
-      instrumentRef.current = null;
-      audioCtxRef.current = null;
+      playerRef.current    = null;
+      instrumentsRef.current = new Map();
+      audioCtxRef.current  = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src]);
+  }, [src, JSON.stringify(channelInstruments)]);
 
   // Keep latest handlers in refs so the Space keydown listener never goes stale
   const handlePlayRef = useRef<() => void>(() => {});

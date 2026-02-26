@@ -1,0 +1,66 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getAuthUser } from "@/lib/auth";
+import OpenAI from "openai";
+
+export async function POST(req: NextRequest) {
+  const auth = await getAuthUser();
+  if (!auth.ok) return auth.response;
+
+  const formData = await req.formData();
+  const audio = formData.get("audio") as File | null;
+  if (!audio) return NextResponse.json({ error: "Missing audio" }, { status: 400 });
+
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: "OPENROUTER_API_KEY not set" }, { status: 500 });
+
+  const buffer = Buffer.from(await audio.arrayBuffer());
+  const base64 = buffer.toString("base64");
+
+  // Map MIME type to a format string Gemini understands
+  const mime = audio.type.split(";")[0]; // strip codecs suffix
+  const formatMap: Record<string, string> = {
+    "audio/webm": "webm",
+    "audio/ogg":  "ogg",
+    "audio/mp4":  "mp4",
+    "audio/m4a":  "mp4",
+    "audio/wav":  "wav",
+    "audio/flac": "flac",
+    "audio/mpeg": "mp3",
+  };
+  const format = formatMap[mime] ?? "webm";
+
+  const client = new OpenAI({
+    apiKey,
+    baseURL: "https://openrouter.ai/api/v1",
+  });
+
+  const model = process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash-preview";
+
+  console.log(`[transcribe] format=${format} size=${buffer.length}b model=${model}`);
+
+  const response = await client.chat.completions.create({
+    model,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_audio",
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            input_audio: { data: base64, format },
+          } as any,
+          {
+            type: "text",
+            text: "Transcribe this audio exactly as spoken. Return only the transcribed text, nothing else.",
+          },
+        ],
+      },
+    ],
+    max_tokens: 1024,
+  });
+
+  const transcript = response.choices[0]?.message?.content?.trim() ?? "";
+  console.log(`[transcribe] → "${transcript.slice(0, 100)}${transcript.length > 100 ? "…" : ""}"`);
+
+  return NextResponse.json({ transcript });
+}

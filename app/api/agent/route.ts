@@ -40,14 +40,19 @@ export async function POST(req: NextRequest) {
 
   const selectedMeasures = selectedRaw ? (JSON.parse(selectedRaw) as number[]) : null;
 
+  const historyRaw = formData.get("history") as string | null;
+  const history: { role: "user" | "assistant"; content: string }[] = historyRaw
+    ? JSON.parse(historyRaw)
+    : [];
+
   try {
-    const result = await runAgent(message, currentMusicXml, selectedMeasures);
+    const result = await runAgent(message, currentMusicXml, selectedMeasures, history);
 
     await admin.rpc("increment_interactions", { user_id: auth.userId });
 
     if (result.type === "chat")   return NextResponse.json({ type: "chat",   message: result.message });
     if (result.type === "load")   return NextResponse.json({ type: "load",   musicXml: result.musicXml, name: result.name });
-    if (result.type === "modify") return NextResponse.json({ type: "modify", musicXml: result.musicXml });
+    if (result.type === "modify") return NextResponse.json({ type: "modify", musicXml: result.musicXml, message: result.message });
 
     return NextResponse.json({ error: "Unknown result type" }, { status: 500 });
   } catch (err) {

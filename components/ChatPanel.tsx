@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type Message = {
   role: "user" | "system";
@@ -15,7 +15,8 @@ type Usage = {
 
 type Props = {
   currentMusicXml: string | null;
-  scoreName: string | null;
+  fileName: string;
+  onFileNameChange: (name: string) => void;
   selectedMeasures: Set<number>;
   messages: Message[];
   onMessagesChange: (messages: Message[]) => void;
@@ -28,7 +29,8 @@ type Props = {
 
 export default function ChatPanel({
   currentMusicXml,
-  scoreName,
+  fileName,
+  onFileNameChange,
   selectedMeasures,
   messages,
   onMessagesChange,
@@ -40,13 +42,76 @@ export default function ChatPanel({
 }: Props) {
   const [instruction, setInstruction] = useState("");
   const [loading, setLoading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
   const [paywallHit, setPaywallHit] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [micSupported, setMicSupported] = useState(false);
+
+  useEffect(() => {
+    setMicSupported(!!navigator.mediaDevices?.getUserMedia);
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   function addMessage(msg: Message) {
     onMessagesChange([...messages, msg]);
   }
+
+  const toggleRecording = useCallback(async () => {
+    // Stop recording
+    if (recording) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    // Start recording
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setRecording(false);
+
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
+        if (blob.size === 0) return;
+
+        setTranscribing(true);
+        try {
+          const form = new FormData();
+          form.append("audio", blob, "recording");
+          const res = await fetch("/api/transcribe", { method: "POST", body: form });
+          const data = await res.json();
+          if (data.transcript) {
+            setInstruction(data.transcript);
+            setTimeout(() => formRef.current?.requestSubmit(), 100);
+          }
+        } catch {
+          // silently ignore transcription errors
+        } finally {
+          setTranscribing(false);
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      // microphone permission denied or unavailable
+    }
+  }, [recording]);
 
   async function handleUpgrade() {
     try {
@@ -71,6 +136,7 @@ export default function ChatPanel({
     const next: Message[] = [...messages, { role: "user", text: text + selectionNote }];
     onMessagesChange(next);
     setInstruction("");
+    onClearSelection();
     setLoading(true);
 
     try {
@@ -82,6 +148,16 @@ export default function ChatPanel({
           "selectedMeasures",
           JSON.stringify([...selectedMeasures].sort((a, b) => a - b))
         );
+      }
+      // Send chat history (user messages without [measures] suffix, system→assistant)
+      if (messages.length > 0) {
+        const history = messages.map((m) => ({
+          role: m.role === "user" ? "user" as const : "assistant" as const,
+          content: m.role === "user"
+            ? m.text.replace(/\s*\[measures\s[\d,\s]+\]$/, "")
+            : m.text,
+        }));
+        form.append("history", JSON.stringify(history));
       }
 
       const res = await fetch("/api/agent", { method: "POST", body: form });
@@ -104,7 +180,7 @@ export default function ChatPanel({
         onClearSelection();
         onUsageRefresh();
       } else if (data.type === "modify") {
-        onMessagesChange([...next, { role: "system", text: "Score updated." }]);
+        onMessagesChange([...next, { role: "system", text: data.message || "Score updated." }]);
         onScoreReady(data.musicXml, text);
         onClearSelection();
         onUsageRefresh();
@@ -143,12 +219,29 @@ export default function ChatPanel({
             )}
           </div>
         </div>
-        {scoreName && (
-          <p className="text-xs text-gray-400 mt-0.5 truncate">{scoreName}</p>
+        {/* Inline-editable file name */}
+        {editingName ? (
+          <input
+            autoFocus
+            type="text"
+            value={fileName}
+            onChange={(e) => onFileNameChange(e.target.value)}
+            onBlur={() => setEditingName(false)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingName(false); }}
+            className="mt-0.5 w-full bg-gray-800 text-xs text-gray-200 px-1.5 py-0.5 rounded outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        ) : (
+          <button
+            onClick={() => setEditingName(true)}
+            className="mt-0.5 text-xs text-gray-400 hover:text-gray-200 truncate max-w-full text-left transition"
+            title="Click to rename"
+          >
+            {fileName}
+          </button>
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-hide" style={{ scrollbarWidth: "none" }}>
         {messages.map((m, i) => (
           <div
             key={i}
@@ -177,54 +270,15 @@ export default function ChatPanel({
             </button>
           </div>
         )}
+        <div ref={chatEndRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-gray-800 p-3 space-y-2">
-        {/* File picker */}
-        <div className="block">
-          <span className="text-xs text-gray-400">Score file (.mscz or .musicxml)</span>
-          <div
-            className="mt-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 cursor-pointer hover:bg-gray-700 transition"
-            onClick={() => fileRef.current?.click()}
-          >
-            <span className="text-xs text-gray-300 truncate">
-              {fileName ?? "Click to upload…"}
-            </span>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".mscz,.musicxml,.xml"
-            className="hidden"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              setFileName(f.name);
-              setLoading(true);
-              try {
-                const name = f.name.replace(/\.(mscz|musicxml|xml)$/i, "");
-                if (f.name.endsWith(".mscz")) {
-                  const form = new FormData();
-                  form.append("file", f);
-                  const res = await fetch("/api/load", { method: "POST", body: form });
-                  const data = await res.json();
-                  if (data.musicXml) onScoreReady(data.musicXml, name);
-                } else {
-                  const text = await f.text();
-                  onScoreReady(text, name);
-                }
-              } finally {
-                setLoading(false);
-              }
-            }}
-          />
-        </div>
-
+      <form ref={formRef} onSubmit={handleSubmit} className="border-t border-gray-800 p-3 space-y-2">
         {/* Selection badge */}
         {selectedMeasures.size > 0 && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-900/50 border border-indigo-700 text-xs text-indigo-300">
             <span>
-              Measures {[...selectedMeasures].sort((a, b) => a - b).join(", ")} selected
+              {selectedMeasures.size === 1 ? "Measure" : "Measures"} {[...selectedMeasures].sort((a, b) => a - b).join(", ")} selected
             </span>
             <button
               type="button"
@@ -236,27 +290,64 @@ export default function ChatPanel({
           </div>
         )}
 
-        {/* Instruction input */}
-        <div className="flex gap-2">
-          <input
-            type="text"
+        {/* Instruction input — ChatGPT-style container */}
+        <div className="relative bg-gray-800 rounded-xl border border-gray-700 focus-within:border-indigo-500 transition">
+          <textarea
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                formRef.current?.requestSubmit();
+              }
+            }}
             placeholder={
               currentMusicXml
                 ? "Modify, transpose, ask anything…"
                 : "Ask me to create a score, or upload one above…"
             }
             disabled={loading || paywallHit}
-            className="flex-1 bg-gray-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-40"
+            rows={3}
+            className="w-full bg-transparent rounded-xl px-3 pt-3 pb-12 text-sm outline-none disabled:opacity-40 resize-none"
           />
-          <button
-            type="submit"
-            disabled={loading || !instruction.trim() || paywallHit}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 rounded-lg text-sm font-medium transition"
-          >
-            Send
-          </button>
+          <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+            {micSupported && (
+              <button
+                type="button"
+                onClick={toggleRecording}
+                disabled={loading || paywallHit || transcribing}
+                className={`p-1.5 rounded-lg transition disabled:opacity-40 ${
+                  recording
+                    ? "bg-red-600 hover:bg-red-500 text-white animate-pulse"
+                    : transcribing
+                    ? "text-indigo-400 animate-pulse"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-gray-700"
+                }`}
+                title={recording ? "Stop recording" : transcribing ? "Transcribing…" : "Voice input"}
+              >
+                {recording ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                    <rect x="5" y="5" width="10" height="10" rx="1" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                    <path d="M7 4a3 3 0 0 1 6 0v4a3 3 0 1 1-6 0V4Z" />
+                    <path d="M5.5 9.643a.75.75 0 0 0-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-1.5v-1.546A6.001 6.001 0 0 0 16 10v-.357a.75.75 0 0 0-1.5 0V10a4.5 4.5 0 0 1-9 0v-.357Z" />
+                  </svg>
+                )}
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={loading || !instruction.trim() || paywallHit}
+              className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition"
+              title="Send"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95l14.095-5.637a.75.75 0 0 0 0-1.4L3.105 2.288Z" />
+              </svg>
+            </button>
+          </div>
         </div>
       </form>
     </div>

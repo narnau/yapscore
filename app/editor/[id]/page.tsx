@@ -5,6 +5,7 @@ import { use } from "react";
 import { useRouter } from "next/navigation";
 import ChatPanel, { type Message } from "@/components/ChatPanel";
 import ScoreViewer from "@/components/ScoreViewer";
+import SingModal from "@/components/SingModal";
 import type { HistoryEntry } from "@/lib/files";
 
 // ── history ───────────────────────────────────────────────────────────────────
@@ -45,38 +46,48 @@ type Usage = { plan: "free" | "pro"; used: number; limit: number | null };
 
 export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const isNew = id === "new";
   const router = useRouter();
 
   const [hs, dispatch] = useReducer(historyReducer, { entries: [], index: -1 });
   const [messages, setMessages] = useState<Message[]>([]);
+  const [fileName, setFileName] = useState("Untitled");
   const [selectedMeasures, setSelectedMeasures] = useState<Set<number>>(new Set());
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(isNew); // "new" files are immediately ready
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [singOpen, setSingOpen] = useState(false);
+
+  // For "new" files: the DB record doesn't exist yet. We create it lazily on first save.
+  // After creation we get a real ID and replace the URL — the component remounts with the real ID.
+  const creatingDbRef = useRef(false);
 
   // Derived from history
   const currentEntry  = hs.index >= 0 ? hs.entries[hs.index] : null;
   const musicXml      = currentEntry?.musicXml ?? null;
-  const scoreName     = currentEntry?.name ?? null;
   const canUndo       = hs.index > 0;
   const canRedo       = hs.index < hs.entries.length - 1;
 
   // Ref to always have latest state for the debounced save
-  const savePayloadRef = useRef({ hs, messages });
-  savePayloadRef.current = { hs, messages };
+  const savePayloadRef = useRef({ hs, messages, fileName });
+  savePayloadRef.current = { hs, messages, fileName };
 
   // ── load file on mount ──────────────────────────────────────────────────────
   useEffect(() => {
+    // "new" files have no DB record yet — start fresh
+    if (isNew) return;
+
     async function load() {
       // 1. Try localStorage cache first (instant)
       try {
         const cached = localStorage.getItem(localKey(id));
         if (cached) {
-          const { history, index, messages: msgs } = JSON.parse(cached);
+          const { history, index, messages: msgs, fileName: name } = JSON.parse(cached);
           if (Array.isArray(history) && history.length > 0) {
             dispatch({ type: "restore", entries: history, index });
-            setMessages(msgs ?? []);
           }
+          if (msgs) setMessages(msgs);
+          if (name) setFileName(name);
         }
       } catch { /* ignore */ }
 
@@ -87,20 +98,21 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         if (!res.ok) return;
         const { file } = await res.json();
         const history: HistoryEntry[] = file.history ?? [];
-        const msgs: Message[] = file.messages ?? [];
         const index = history.length > 0 ? history.length - 1 : -1;
+
+        setFileName(file.name ?? "Untitled");
+        if (file.messages) setMessages(file.messages);
 
         // Seed with current_xml if history is empty (e.g. file just created with upload)
         if (history.length === 0 && file.current_xml) {
           dispatch({
             type: "restore",
-            entries: [{ musicXml: file.current_xml, name: file.name, timestamp: file.updated_at }],
+            entries: [{ musicXml: file.current_xml, name: file.name, timestamp: file.updated_at, messages: [] }],
             index: 0,
           });
         } else {
           dispatch({ type: "restore", entries: history, index });
         }
-        setMessages(msgs);
       } catch { /* ignore, use cache */ }
 
       setLoaded(true);
@@ -119,44 +131,83 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
   useEffect(() => {
     if (!loaded) return;
-    const { hs: h, messages: msgs } = savePayloadRef.current;
-    if (h.entries.length === 0) return;
+    const { hs: h, messages: msgs, fileName: name } = savePayloadRef.current;
+    if (h.entries.length === 0 && msgs.length === 0) return; // nothing to save
+    if (isNew && h.entries.length === 0) return; // don't create DB record until score exists
 
     setSaveStatus("unsaved");
 
-    // Write to localStorage immediately
+    // Write to localStorage immediately (use "new" key for unsaved files)
     try {
       localStorage.setItem(localKey(id), JSON.stringify({
         history: h.entries,
         index: h.index,
         messages: msgs,
+        fileName: name,
       }));
     } catch { /* quota */ }
 
-    // Debounce Supabase write
+    // Debounce DB write
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setSaveStatus("saving");
-      const { hs: latest, messages: latestMsgs } = savePayloadRef.current;
+      const { hs: latest, messages: latestMsgs, fileName: latestName } = savePayloadRef.current;
       const current = latest.index >= 0 ? latest.entries[latest.index] : null;
+      const body = {
+        name: latestName || "Untitled",
+        current_xml: current?.musicXml ?? null,
+        history: latest.entries,
+        messages: latestMsgs,
+      };
+
       try {
-        await fetch(`/api/files/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: current?.name ?? "Untitled",
-            current_xml: current?.musicXml ?? null,
-            history: latest.entries,
-            messages: latestMsgs,
-          }),
-        });
-        setSaveStatus("saved");
+        if (isNew) {
+          // Lazy creation: first time we have content, create the DB record
+          if (creatingDbRef.current) return;
+          creatingDbRef.current = true;
+
+          const createRes = await fetch("/api/files", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: latestName || "Untitled" }),
+          });
+          const { id: realId } = await createRes.json();
+
+          // Save content to the new record
+          await fetch(`/api/files/${realId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+
+          // Pre-write localStorage under the real key so the remount finds data instantly
+          try {
+            localStorage.setItem(localKey(realId), JSON.stringify({
+              history: latest.entries,
+              index: latest.index,
+              messages: latestMsgs,
+              fileName: latestName,
+            }));
+            localStorage.removeItem(localKey("new"));
+          } catch { /* quota */ }
+
+          setSaveStatus("saved");
+          router.replace(`/editor/${realId}`);
+        } else {
+          await fetch(`/api/files/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          setSaveStatus("saved");
+        }
       } catch {
         setSaveStatus("unsaved");
+        if (isNew) creatingDbRef.current = false; // allow retry
       }
     }, DEBOUNCE_MS);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hs, messages, loaded]);
+  }, [hs, messages, fileName, loaded]);
 
   // ── keyboard shortcuts ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -187,26 +238,19 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     });
   }, []);
 
-  const handleNew = useCallback(async () => {
-    // Create a fresh file and navigate to it
-    const res = await fetch("/api/files", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Untitled" }),
-    });
-    const data = await res.json();
-    router.push(`/editor/${data.id}`);
+  const handleNew = useCallback(() => {
+    router.push("/editor/new");
   }, [router]);
 
   const handleScoreReady = useCallback(
-    (xml: string, name?: string) => {
+    (xml: string, label?: string) => {
       dispatch({
         type: "push",
-        entry: { musicXml: xml, name: name ?? scoreName ?? "Untitled", timestamp: new Date().toISOString() },
+        entry: { musicXml: xml, name: label ?? null, timestamp: new Date().toISOString() },
       });
       setSelectedMeasures(new Set());
     },
-    [scoreName]
+    []
   );
 
   return (
@@ -221,7 +265,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       <div className="w-[34%] min-w-[280px] border-r border-gray-800 flex flex-col">
         <ChatPanel
           currentMusicXml={musicXml}
-          scoreName={scoreName}
+          fileName={fileName}
+          onFileNameChange={setFileName}
           selectedMeasures={selectedMeasures}
           messages={messages}
           onMessagesChange={setMessages}
@@ -237,7 +282,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       <div className="flex-1 flex flex-col">
         <ScoreViewer
           musicXml={musicXml}
-          scoreName={scoreName}
+          scoreName={fileName}
           selectedMeasures={selectedMeasures}
           onMeasureClick={handleMeasureClick}
           canUndo={canUndo}
@@ -250,11 +295,35 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             dispatch({ type: "restore", entries: hs.entries, index: idx });
             setSelectedMeasures(new Set());
           }}
-          historyNames={hs.entries.map((e, i) =>
-            e.name ?? (i === 0 ? "Original" : `Edit ${i}`)
-          )}
+          historyEntries={hs.entries.map((e, i) => ({
+            name: e.name ?? (i === 0 ? "Original" : `Edit ${i}`),
+            timestamp: e.timestamp,
+          }))}
+          onPlaybackStop={() => setSelectedMeasures(new Set())}
+          onSingClick={musicXml ? () => setSingOpen(true) : undefined}
         />
       </div>
+      {singOpen && musicXml && (
+        <SingModal
+          bpm={(() => {
+            const m = musicXml.match(/<sound\b[^>]*tempo="(\d+(?:\.\d+)?)"/);
+            return m ? Math.round(parseFloat(m[1])) : 120;
+          })()}
+          beats={parseInt(musicXml.match(/<beats>(\d+)<\/beats>/)?.[1] ?? "4")}
+          beatType={parseInt(musicXml.match(/<beat-type>(\d+)<\/beat-type>/)?.[1] ?? "4")}
+          totalMeasures={(() => {
+            const fp = musicXml.match(/<part\b[^>]*>[\s\S]*?<\/part>/);
+            return fp ? (fp[0].match(/<measure\b/g) ?? []).length : 0;
+          })()}
+          selectedMeasures={selectedMeasures}
+          musicXml={musicXml}
+          onInsert={(updatedXml, label) => {
+            handleScoreReady(updatedXml, label);
+            setSingOpen(false);
+          }}
+          onClose={() => setSingOpen(false)}
+        />
+      )}
     </main>
   );
 }

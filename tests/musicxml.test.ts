@@ -1125,6 +1125,48 @@ describe("setMeasureNotes", () => {
     expect(m2).toContain("<alter>1</alter>");
     expect(m2).toContain("<alter>-1</alter>");
   });
+
+  test("auto-inserts measures when writing beyond the last measure", () => {
+    // FIXTURE has 4 measures — write to measure 7 (gap of 3)
+    const notes: NoteSpec[] = [
+      { step: "G", octave: 5, duration: "half" },
+      { step: "E", octave: 5, duration: "half" },
+    ];
+    const result = setMeasureNotes(FIXTURE, 7, notes);
+
+    // Score should now have 7 measures
+    const firstPart = result.match(/<part\b[^>]*>[\s\S]*?<\/part>/)?.[0] ?? "";
+    const measureCount = (firstPart.match(/<measure\b/g) ?? []).length;
+    expect(measureCount).toBe(7);
+
+    // The target measure should contain the written notes
+    const m7 = getMeasureContent(result, 7);
+    expect(m7).toContain("<step>G</step>");
+    expect(m7).toContain("<step>E</step>");
+  });
+
+  test("auto-inserts exactly one measure when writing to next measure", () => {
+    // FIXTURE has 4 measures — write to measure 5
+    const notes: NoteSpec[] = [{ step: "C", octave: 5, duration: "whole" }];
+    const result = setMeasureNotes(FIXTURE, 5, notes);
+
+    const firstPart = result.match(/<part\b[^>]*>[\s\S]*?<\/part>/)?.[0] ?? "";
+    const measureCount = (firstPart.match(/<measure\b/g) ?? []).length;
+    expect(measureCount).toBe(5);
+
+    const m5 = getMeasureContent(result, 5);
+    expect(m5).toContain("<step>C</step>");
+  });
+
+  test("does not insert extra measures when writing to an existing measure", () => {
+    // FIXTURE has 4 measures — writing to measure 3 should not change count
+    const notes: NoteSpec[] = [{ step: "A", octave: 4, duration: "whole" }];
+    const result = setMeasureNotes(FIXTURE, 3, notes);
+
+    const firstPart = result.match(/<part\b[^>]*>[\s\S]*?<\/part>/)?.[0] ?? "";
+    const measureCount = (firstPart.match(/<measure\b/g) ?? []).length;
+    expect(measureCount).toBe(4);
+  });
 });
 
 // ─── setTimeSignature ────────────────────────────────────────────────────────

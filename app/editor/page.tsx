@@ -35,29 +35,18 @@ export default function FilesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function createBlank() {
-    setCreating(true);
-    try {
-      const res = await fetch("/api/files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Untitled" }),
-      });
-      const data = await res.json();
-      router.push(`/editor/${data.id}`);
-    } finally {
-      setCreating(false);
-    }
+  function createBlank() {
+    router.push("/editor/new");
   }
 
   async function handleUpload(file: File) {
     setCreating(true);
     try {
-      const name = file.name.replace(/\.(mscz|musicxml|xml)$/i, "");
+      const name = file.name.replace(/\.(mscz|mxl|musicxml|xml)$/i, "");
 
-      // Convert .mscz if needed
+      // .mscz and .mxl need server-side conversion; .musicxml/.xml are plain text
       let musicXml: string;
-      if (file.name.endsWith(".mscz")) {
+      if (/\.(mscz|mxl)$/i.test(file.name)) {
         const form = new FormData();
         form.append("file", file);
         const res = await fetch("/api/load", { method: "POST", body: form });
@@ -122,12 +111,12 @@ export default function FilesPage() {
           className="mb-8 border-2 border-dashed border-gray-700 hover:border-indigo-500 rounded-xl px-6 py-8 text-center cursor-pointer transition group"
         >
           <p className="text-gray-400 group-hover:text-gray-200 transition text-sm">
-            Drop a <strong>.mscz</strong> or <strong>.musicxml</strong> file here, or click to upload
+            Drop a <strong>.mscz</strong>, <strong>.mxl</strong> or <strong>.musicxml</strong> file here, or click to upload
           </p>
           <input
             ref={fileRef}
             type="file"
-            accept=".mscz,.musicxml,.xml"
+            accept=".mscz,.mxl,.musicxml,.xml"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -159,7 +148,7 @@ export default function FilesPage() {
                 </div>
                 <button
                   onClick={(e) => deleteFile(f.id, e)}
-                  className="ml-4 text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition text-xs px-2 py-1 rounded"
+                  className="ml-4 text-gray-600 hover:text-red-400 transition text-xs px-2 py-1 rounded"
                   title="Delete"
                 >
                   Delete

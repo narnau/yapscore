@@ -5,6 +5,7 @@ export type HistoryEntry = {
   musicXml: string;
   name: string | null;
   timestamp: string;
+  messages?: Message[];
 };
 
 export type FileEntry = {

@@ -5,3 +5,7 @@
 html, body {
   height: 100%;
 }
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

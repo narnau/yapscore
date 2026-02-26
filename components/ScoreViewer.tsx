@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import MidiPlayer from "./MidiPlayer";
 
 type Props = {
@@ -13,18 +14,59 @@ type Props = {
   canRedo?: boolean;
   historyIndex?: number;
   historyLength?: number;
-  historyNames?: string[];
+  historyEntries?: { name: string; timestamp: string }[];
   onUndo?: () => void;
   onRedo?: () => void;
   onJumpTo?: (index: number) => void;
+  onPlaybackStop?: () => void;
+  onSingClick?: () => void;
 };
+
+// General MIDI program → soundfont-player instrument name (programs 1–128)
+const GM_INSTRUMENTS: string[] = [
+  "acoustic_grand_piano","bright_acoustic_piano","electric_grand_piano","honkytonk_piano",
+  "electric_piano_1","electric_piano_2","harpsichord","clavinet",
+  "celesta","glockenspiel","music_box","vibraphone","marimba","xylophone","tubular_bells","dulcimer",
+  "drawbar_organ","percussive_organ","rock_organ","church_organ","reed_organ","accordion","harmonica","tango_accordion",
+  "acoustic_guitar_nylon","acoustic_guitar_steel","electric_guitar_jazz","electric_guitar_clean",
+  "electric_guitar_muted","overdriven_guitar","distortion_guitar","guitar_harmonics",
+  "acoustic_bass","electric_bass_finger","electric_bass_pick","fretless_bass",
+  "slap_bass_1","slap_bass_2","synth_bass_1","synth_bass_2",
+  "violin","viola","cello","contrabass","tremolo_strings","pizzicato_strings","orchestral_harp","timpani",
+  "string_ensemble_1","string_ensemble_2","synth_strings_1","synth_strings_2",
+  "choir_aahs","voice_oohs","synth_voice","orchestra_hit",
+  "trumpet","trombone","tuba","muted_trumpet","french_horn","brass_section","synth_brass_1","synth_brass_2",
+  "soprano_sax","alto_sax","tenor_sax","baritone_sax","oboe","english_horn","bassoon","clarinet",
+  "piccolo","flute","recorder","pan_flute","blown_bottle","shakuhachi","whistle","ocarina",
+  "lead_1_square","lead_2_sawtooth","lead_3_calliope","lead_4_chiff","lead_5_charang",
+  "lead_6_voice","lead_7_fifths","lead_8_bass_lead",
+  "pad_1_new_age","pad_2_warm","pad_3_polysynth","pad_4_choir","pad_5_bowed",
+  "pad_6_metallic","pad_7_halo","pad_8_sweep",
+  "fx_1_rain","fx_2_soundtrack","fx_3_crystal","fx_4_atmosphere","fx_5_brightness",
+  "fx_6_goblins","fx_7_echoes","fx_8_scifi",
+  "sitar","banjo","shamisen","koto","kalimba","bag_pipe","fiddle","shanai",
+  "tinkle_bell","agogo","steel_drums","woodblock","taiko_drum","melodic_tom","synth_drum","reverse_cymbal",
+  "guitar_fret_noise","breath_noise","seashore","bird_tweet","telephone_ring","helicopter","applause","gunshot",
+];
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1)  return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
 export default function ScoreViewer({
   musicXml, scoreName, selectedMeasures, onMeasureClick,
   canUndo, canRedo, historyIndex = -1, historyLength = 0,
-  historyNames = [], onUndo, onRedo, onJumpTo,
+  historyEntries = [], onUndo, onRedo, onJumpTo, onPlaybackStop, onSingClick,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const onClickRef = useRef(onMeasureClick);
   onClickRef.current = onMeasureClick;
   const [midiSrc, setMidiSrc] = useState<string | null>(null);
@@ -35,6 +77,17 @@ export default function ScoreViewer({
   const beats = parseInt(musicXml?.match(/<beats>(\d+)<\/beats>/)?.[1] ?? "4");
   const beatType = parseInt(musicXml?.match(/<beat-type>(\d+)<\/beat-type>/)?.[1] ?? "4");
   const quarterNotesPerMeasure = beats * (4 / beatType);
+
+  // Build channel → instrument map from all <midi-instrument> blocks in MusicXML
+  const channelInstruments: Record<number, string> = {};
+  if (musicXml) {
+    const blockRe = /<midi-instrument[\s\S]*?<\/midi-instrument>/g;
+    for (const block of musicXml.matchAll(blockRe)) {
+      const channel = parseInt(block[0].match(/<midi-channel>(\d+)<\/midi-channel>/)?.[1] ?? "0");
+      const program = parseInt(block[0].match(/<midi-program>(\d+)<\/midi-program>/)?.[1] ?? "1");
+      if (channel > 0) channelInstruments[channel] = GM_INSTRUMENTS[program - 1] ?? "acoustic_grand_piano";
+    }
+  }
 
   // ── render with Verovio ───────────────────────────────────────────────────
   useEffect(() => {
@@ -123,10 +176,50 @@ export default function ScoreViewer({
     });
   }, [selectedMeasures, playingMeasure]);
 
+  // ── auto-scroll to playing measure + deselect on stop ───────────────────
+  const prevPlayingMeasureRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (playingMeasure === null && prevPlayingMeasureRef.current !== null) {
+      onPlaybackStop?.();
+    }
+    prevPlayingMeasureRef.current = playingMeasure;
+    if (playingMeasure === null) return;
+    const container = containerRef.current;
+    const scrollEl = scrollContainerRef.current;
+    if (!container || !scrollEl) return;
+
+    const rect = container.querySelector<SVGRectElement>(`[data-hl="${playingMeasure}"]`);
+    if (!rect) return;
+
+    const rectBounds = rect.getBoundingClientRect();
+    const scrollBounds = scrollEl.getBoundingClientRect();
+
+    const topInScroll    = rectBounds.top  - scrollBounds.top  + scrollEl.scrollTop;
+    const bottomInScroll = rectBounds.bottom - scrollBounds.top + scrollEl.scrollTop;
+    const alreadyVisible = topInScroll >= scrollEl.scrollTop &&
+                           bottomInScroll <= scrollEl.scrollTop + scrollEl.clientHeight;
+
+    if (!alreadyVisible) {
+      const target = topInScroll - scrollEl.clientHeight / 2 + rectBounds.height / 2;
+      scrollEl.scrollTo({ top: target, behavior: "smooth" });
+    }
+  }, [playingMeasure]);
+
   if (!musicXml) {
     return (
-      <div className="flex h-full items-center justify-center text-gray-500 text-sm">
-        Upload a score and send an instruction to see it here.
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 bg-gray-900 min-h-[48px]">
+          <Link
+            href="/editor"
+            className="text-gray-500 hover:text-gray-300 transition text-xs px-1.5 py-1 rounded hover:bg-gray-800"
+            title="All files"
+          >
+            ← Files
+          </Link>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+          Upload a score and send an instruction to see it here.
+        </div>
       </div>
     );
   }
@@ -135,6 +228,15 @@ export default function ScoreViewer({
     <div className="flex flex-col h-full">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 bg-gray-900 min-h-[48px]">
+        {/* Back to files */}
+        <Link
+          href="/editor"
+          className="text-gray-500 hover:text-gray-300 transition text-xs px-1.5 py-1 rounded hover:bg-gray-800 shrink-0"
+          title="All files"
+        >
+          ← Files
+        </Link>
+        <span className="text-gray-700 text-xs">|</span>
         {/* Undo / Redo */}
         <div className="flex items-center gap-1 shrink-0">
           <button
@@ -172,8 +274,8 @@ export default function ScoreViewer({
                   className="fixed inset-0 z-10"
                   onClick={() => setHistoryOpen(false)}
                 />
-                <div className="absolute left-0 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl min-w-[280px] max-h-64 overflow-y-auto">
-                  {historyNames.map((name, i) => (
+                <div className="absolute left-0 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
+                  {historyEntries.map((entry, i) => (
                     <button
                       key={i}
                       onClick={() => { onJumpTo?.(i); setHistoryOpen(false); }}
@@ -182,8 +284,11 @@ export default function ScoreViewer({
                       }`}
                     >
                       <span className="text-gray-500 tabular-nums w-5 shrink-0">{i + 1}.</span>
-                      <span className="truncate">{name}</span>
-                      {i === historyIndex && <span className="ml-auto text-indigo-400">←</span>}
+                      <span className="truncate flex-1">{entry.name}</span>
+                      <span className="text-gray-600 shrink-0 tabular-nums">
+                        {timeAgo(entry.timestamp)}
+                      </span>
+                      {i === historyIndex && <span className="text-indigo-400">←</span>}
                     </button>
                   ))}
                 </div>
@@ -192,11 +297,23 @@ export default function ScoreViewer({
           </div>
         )}
 
+        {/* Sing */}
+        {onSingClick && (
+          <button
+            onClick={onSingClick}
+            title="Sing a melody"
+            className="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition shrink-0"
+          >
+            ♪ Sing
+          </button>
+        )}
+
         {/* MIDI player */}
         <div className="flex-1 min-w-0">
           {midiSrc ? (
             <MidiPlayer
               src={midiSrc}
+              channelInstruments={channelInstruments}
               quarterNotesPerMeasure={quarterNotesPerMeasure}
               selectedMeasures={selectedMeasures}
               onMeasureChange={setPlayingMeasure}
@@ -229,7 +346,7 @@ export default function ScoreViewer({
       <ScoreInfoBar musicXml={musicXml} />
 
       {/* Score */}
-      <div className="flex-1 overflow-y-auto bg-white">
+      <div className="flex-1 overflow-y-auto bg-white" ref={scrollContainerRef}>
         <div className="p-6" ref={containerRef} />
       </div>
     </div>

@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Disable Next.js DevTools (segment explorer) — crashes intermittently in 15.5.x
+  devTools: false,
   // Keep heavy Node-only packages out of the browser bundle
   serverExternalPackages: ["adm-zip", "webmscore"],
   webpack: (config, { isServer, webpack }) => {

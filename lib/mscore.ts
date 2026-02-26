@@ -48,7 +48,7 @@ async function getWebMscore(): Promise<{ load: Function; ready: Promise<void> }>
   let mod = require("webmscore");
   if (mod?.default) mod = mod.default;
   await (mod.ready as Promise<void>);
-  _webmscore = mod;
+  _webmscore = mod; // only cache after successful init
   return mod;
 }
 
@@ -67,6 +67,10 @@ export async function toMusicXml(
     score.destroy();
     return { ok: true, content: xml };
   } catch (err) {
+    // Reset the cached module so the next call gets a fresh WASM instance.
+    // A WebAssembly memory error can corrupt the heap making all subsequent
+    // calls fail if we reuse the same instance.
+    _webmscore = null;
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
