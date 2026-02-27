@@ -43,6 +43,10 @@ export default function ChatPanel({
   const [instruction, setInstruction] = useState("");
   const [loading, setLoading] = useState(false);
   const [paywallHit, setPaywallHit] = useState(false);
+
+  const isAtLimit = paywallHit || (
+    usage !== null && usage.plan === "free" && usage.limit !== null && usage.used >= usage.limit
+  );
   const [editingName, setEditingName] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [recording, setRecording] = useState(false);
@@ -259,7 +263,7 @@ export default function ChatPanel({
             Processing…
           </div>
         )}
-        {paywallHit && (
+        {isAtLimit && (
           <div className="px-3 py-3 rounded-lg bg-amber-900/30 border border-amber-700 text-center space-y-2">
             <p className="text-sm text-amber-200">Free tier limit reached</p>
             <button
@@ -306,7 +310,7 @@ export default function ChatPanel({
                 ? "Modify, transpose, ask anything…"
                 : "Ask me to create a score, or upload one above…"
             }
-            disabled={loading || paywallHit}
+            disabled={loading || isAtLimit}
             rows={3}
             className="w-full bg-transparent rounded-xl px-3 pt-3 pb-12 text-sm outline-none disabled:opacity-40 resize-none"
           />
@@ -339,7 +343,7 @@ export default function ChatPanel({
             )}
             <button
               type="submit"
-              disabled={loading || !instruction.trim() || paywallHit}
+              disabled={loading || !instruction.trim() || isAtLimit}
               className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition"
               title="Send"
             >

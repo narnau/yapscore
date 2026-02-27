@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { toMusicXml } from "@/lib/mscore";
+import { fixPercussionDisplayOctave } from "@/lib/musicxml";
 import { getAuthUser } from "@/lib/auth";
 import AdmZip from "adm-zip";
 
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
       console.error("[load] toMusicXml failed:", result.error);
       return NextResponse.json({ error: result.error }, { status: 500 });
     }
-    return NextResponse.json({ musicXml: result.content });
+    return NextResponse.json({ musicXml: fixPercussionDisplayOctave(result.content) });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

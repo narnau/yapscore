@@ -40,6 +40,19 @@ function patchFetch() {
   };
 }
 
+function resetWebMscore() {
+  _webmscore = null;
+  // Also evict from Node's require cache so the next getWebMscore() call
+  // executes the module code fresh — otherwise require() returns the same
+  // object with the same (potentially corrupted) WASM heap.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    delete (require as NodeJS.Require & { cache: Record<string, unknown> }).cache[
+      require.resolve("webmscore")
+    ];
+  } catch { /* ignore — path resolution may fail outside Node */ }
+}
+
 async function getWebMscore(): Promise<{ load: Function; ready: Promise<void> }> {
   if (_webmscore) return _webmscore;
   patchFetch();
@@ -59,18 +72,24 @@ async function getWebMscore(): Promise<{ load: Function; ready: Promise<void> }>
 export async function toMusicXml(
   input: Buffer | Uint8Array
 ): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
-  try {
-    const WebMscore = await getWebMscore();
-    const data = input instanceof Buffer ? new Uint8Array(input) : input;
-    const score = await WebMscore.load("mscz", data);
-    const xml = (await score.saveXml()) as string;
-    score.destroy();
-    return { ok: true, content: xml };
-  } catch (err) {
-    // Reset the cached module so the next call gets a fresh WASM instance.
-    // A WebAssembly memory error can corrupt the heap making all subsequent
-    // calls fail if we reuse the same instance.
-    _webmscore = null;
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  const data = input instanceof Buffer ? new Uint8Array(input) : input;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const WebMscore = await getWebMscore();
+      const score = await WebMscore.load("mscz", data);
+      const xml = (await score.saveXml()) as string;
+      score.destroy();
+      return { ok: true, content: xml };
+    } catch (err) {
+      // Reset cached module + evict require cache so the next attempt (or the
+      // next caller) gets a completely fresh WASM instance with a clean heap.
+      resetWebMscore();
+      if (attempt === 2) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+      // else: loop → retry once with a fresh WASM instance
+    }
   }
+  return { ok: false, error: "unreachable" }; // TypeScript needs this
 }

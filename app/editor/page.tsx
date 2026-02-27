@@ -35,8 +35,19 @@ export default function FilesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  function createBlank() {
-    router.push("/editor/new");
+  async function createBlank() {
+    setCreating(true);
+    try {
+      const res = await fetch("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Untitled" }),
+      });
+      const { id } = await res.json();
+      router.push(`/editor/${id}`);
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function handleUpload(file: File) {
@@ -95,19 +106,35 @@ export default function FilesPage() {
       {/* Header */}
       <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold tracking-tight">score-ai</h1>
-        <button
-          onClick={createBlank}
-          disabled={creating}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium transition"
-        >
-          + New file
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={createBlank}
+            disabled={creating}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium transition"
+          >
+            + New file
+          </button>
+          <form action="/api/auth/logout" method="POST">
+            <button
+              type="submit"
+              className="px-3 py-2 rounded-lg text-gray-400 hover:text-gray-100 hover:bg-gray-800 text-sm transition"
+            >
+              Log out
+            </button>
+          </form>
+        </div>
       </header>
 
       <main className="flex-1 max-w-2xl w-full mx-auto px-6 py-8">
         {/* Upload drop zone */}
         <div
           onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const f = e.dataTransfer.files?.[0];
+            if (f) handleUpload(f);
+          }}
           className="mb-8 border-2 border-dashed border-gray-700 hover:border-indigo-500 rounded-xl px-6 py-8 text-center cursor-pointer transition group"
         >
           <p className="text-gray-400 group-hover:text-gray-200 transition text-sm">

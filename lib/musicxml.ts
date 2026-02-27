@@ -1,4 +1,34 @@
 /**
+ * Fix percussion parts exported by webmscore: the display-octave values on
+ * <unpitched> elements are sometimes garbage (e.g. 1432), which makes Verovio
+ * render notes thousands of ledger lines above the staff.
+ * This clamps display-octave to 4 for every unpitched note in every
+ * percussion part (identified by <sign>percussion</sign> in the clef).
+ */
+export function fixPercussionDisplayOctave(musicXml: string): string {
+  // Collect IDs of parts that have a percussion clef
+  const percIds = new Set<string>();
+  for (const m of musicXml.matchAll(/<part\s+id="([^"]+)"([\s\S]*?)<\/part>/g)) {
+    if (/<sign>\s*percussion\s*<\/sign>/i.test(m[2])) percIds.add(m[1]);
+  }
+  if (percIds.size === 0) return musicXml;
+
+  // For each percussion part, normalise display-step → B and display-octave → 4
+  // so notes land on the single percussion staff line rather than thousands of
+  // ledger lines above it (webmscore emits display-octave values like 1432).
+  return musicXml.replace(
+    /<part\s+id="([^"]+)"([\s\S]*?)<\/part>/g,
+    (fullMatch, partId, partBody) => {
+      if (!percIds.has(partId)) return fullMatch;
+      const fixed = partBody
+        .replace(/(<display-step>)[A-G](<\/display-step>)/g, "$1B$2")
+        .replace(/(<display-octave>)\d+(<\/display-octave>)/g, (_m: string, open: string, close: string) => `${open}4${close}`);
+      return `<part id="${partId}"${fixed}</part>`;
+    }
+  );
+}
+
+/**
  * Splits a MusicXML document into:
  *   - skeleton: everything except the <part> elements (header, part-list, etc.)
  *   - parts:    the raw <part>...</part> blocks (the actual music)
@@ -320,6 +350,27 @@ export function insertEmptyMeasures(
       );
       return partBlock.replace(regex, `$1\n    ${emptyBlock}`);
     }
+  );
+
+  return renumberMeasures(result);
+}
+
+/**
+ * Inserts a pickup (anacrusis) measure at the very beginning of the score.
+ * The measure gets implicit="yes" and holds a partial rest of `pickupBeats` beats.
+ * All existing measures are shifted forward by 1.
+ */
+export function insertPickupMeasure(musicXml: string, pickupBeats: number): string {
+  const divisions = parseInt(musicXml.match(/<divisions>(\d+)<\/divisions>/)?.[1] ?? "4");
+  const beatType  = parseInt(musicXml.match(/<beat-type>(\d+)<\/beat-type>/)?.[1] ?? "4");
+  const pickupDuration = Math.round(divisions * pickupBeats * (4 / beatType));
+
+  const pickupMeasure = `<measure number="1" implicit="yes">\n      <note><rest/><duration>${pickupDuration}</duration><type>whole</type></note>\n    </measure>`;
+
+  // Insert into every part right after the opening <part ...> tag
+  let result = musicXml.replace(
+    /(<part\b[^>]*>)/g,
+    `$1\n    ${pickupMeasure}`
   );
 
   return renumberMeasures(result);
@@ -1022,6 +1073,14 @@ const BASE_TYPE_MAP: Record<string, { type: string; quarterMultiplier: number; d
   "16th-triplet":    { type: "16th",    quarterMultiplier: 1/6,  dotted: false, triplet: true },
 };
 
+/** Returns the total duration in quarter-note beats for an array of NoteSpecs.
+ *  Chord notes (simultaneous) don't add to the total. */
+export function notesTotalBeats(notes: NoteSpec[]): number {
+  return notes
+    .filter((n) => !n.chord)
+    .reduce((sum, n) => sum + (BASE_TYPE_MAP[n.duration]?.quarterMultiplier ?? 0), 0);
+}
+
 function noteSpecToXml(note: NoteSpec, divisions: number, staff?: number): string {
   const info = BASE_TYPE_MAP[note.duration];
   if (!info) throw new Error(`Unknown duration: ${note.duration}`);
@@ -1278,10 +1337,18 @@ function instrumentStaves(name: string): number {
   return GRAND_STAFF_INSTRUMENTS.has(name.toLowerCase()) ? 2 : 1;
 }
 
+function clefToSignLine(clef: string): { sign: string; line: number } {
+  if (clef === "bass")  return { sign: "F", line: 4 };
+  if (clef === "alto")  return { sign: "C", line: 3 };
+  if (clef === "tenor") return { sign: "C", line: 4 };
+  return { sign: "G", line: 2 }; // treble (default)
+}
+
 export type ScoreInstrument = {
   name: string;        // e.g. "Piano", "Violin", "Voice"
   staves?: number;     // override auto-detection
   midiProgram?: number; // GM program 1–128; auto-detected from name if omitted
+  clef?: "treble" | "bass" | "alto" | "tenor"; // default clef for single-staff instruments
 };
 
 /**
@@ -1314,11 +1381,19 @@ export function createScore(options: {
   // Build <part-list>
   const partList = instruments.map((inst, i) => {
     const id = `P${i + 1}`;
+    const midiChannel = i + 1;  // channels 1-based, skip 10 (percussion)
+    const midiProgram = inst.midiProgram ?? 1;
     return `  <score-part id="${id}">
     <part-name>${inst.name}</part-name>
     <score-instrument id="${id}-I1">
       <instrument-name>${inst.name}</instrument-name>
     </score-instrument>
+    <midi-instrument id="${id}-I1">
+      <midi-channel>${midiChannel >= 10 ? midiChannel + 1 : midiChannel}</midi-channel>
+      <midi-program>${midiProgram}</midi-program>
+      <volume>78.7402</volume>
+      <pan>0</pan>
+    </midi-instrument>
   </score-part>`;
   }).join("\n");
 
@@ -1334,8 +1409,9 @@ export function createScore(options: {
 
       // Attributes block (only in first measure)
       const stavesTag = staves > 1 ? `\n      <staves>${staves}</staves>` : "";
+      const clefXml = clefToSignLine(inst.clef ?? "treble");
       const clefs = staves === 1
-        ? `\n      <clef><sign>G</sign><line>2</line></clef>`
+        ? `\n      <clef><sign>${clefXml.sign}</sign><line>${clefXml.line}</line></clef>`
         : `\n      <clef number="1"><sign>G</sign><line>2</line></clef>\n      <clef number="2"><sign>F</sign><line>4</line></clef>`;
       const attributes = isFirst ? `
     <attributes>
@@ -1468,6 +1544,92 @@ export function renamePart(musicXml: string, partId: string, name: string): stri
     );
 }
 
+/**
+ * Change a part's instrument: updates name, MIDI program, and optionally staves/clefs.
+ * Preserves all existing notes and measures — only changes the instrument metadata.
+ */
+export function changeInstrument(
+  musicXml: string,
+  partId: string,
+  instrument: ScoreInstrument,
+): string {
+  // Update names
+  let xml = renamePart(musicXml, partId, instrument.name);
+
+  // Update MIDI program if provided
+  if (instrument.midiProgram != null) {
+    xml = xml.replace(
+      new RegExp(`(<midi-instrument[^>]*id="${partId}-I1"[\\s\\S]*?<midi-program>)\\d+(</midi-program>)`),
+      `$1${instrument.midiProgram}$2`
+    );
+  }
+
+  // Handle staves change (e.g. 1-staff Trumpet → 2-staff Piano)
+  const targetStaves = instrument.staves ?? instrumentStaves(instrument.name);
+  const currentStavesMatch = xml.match(
+    new RegExp(`<part\\s+id="${partId}"[^>]*>[\\s\\S]*?<staves>(\\d+)</staves>`)
+  );
+  const currentStaves = currentStavesMatch ? parseInt(currentStavesMatch[1]) : 1;
+
+  if (targetStaves !== currentStaves) {
+    // For staves changes, rebuild the part structure — use removePart + addPart
+    // but preserve the measure count first
+    const partBlock = xml.match(new RegExp(`<part\\s+id="${partId}"[^>]*>[\\s\\S]*?</part>`))?.[0] ?? "";
+    const measureCount = (partBlock.match(/<measure\b/g) ?? []).length || 4;
+    xml = removePart(xml, partId);
+    xml = addPart(xml, { ...instrument, staves: targetStaves });
+  }
+
+  return xml;
+}
+
+// ─── changeClef ───────────────────────────────────────────────────────────────
+
+/**
+ * Change the clef of a part in its first-measure attributes block.
+ * @param staffNumber - for multi-staff parts (e.g. 1 or 2). Omit for single-staff.
+ */
+export function changeClef(
+  musicXml: string,
+  partId: string,
+  clef: "treble" | "bass" | "alto" | "tenor",
+  staffNumber?: number
+): string {
+  const { sign, line } = clefToSignLine(clef);
+  const staffAttr = staffNumber != null ? ` number="${staffNumber}"` : "";
+  const newClefXml = `<clef${staffAttr}><sign>${sign}</sign><line>${line}</line></clef>`;
+
+  // Locate the target part block
+  const partStart = musicXml.indexOf(`<part id="${partId}"`);
+  if (partStart === -1) throw new Error(`Part "${partId}" not found`);
+
+  // Find first <attributes> within this part
+  const attrStart = musicXml.indexOf("<attributes>", partStart);
+  if (attrStart === -1) return musicXml;
+  const attrEnd = musicXml.indexOf("</attributes>", attrStart) + "</attributes>".length;
+
+  const before = musicXml.slice(0, attrStart);
+  const attrBlock = musicXml.slice(attrStart, attrEnd);
+  const after = musicXml.slice(attrEnd);
+
+  let newAttrBlock: string;
+  if (staffNumber != null) {
+    // Replace specific numbered clef (e.g. <clef number="1">)
+    newAttrBlock = attrBlock.replace(
+      new RegExp(`<clef\\s+number="${staffNumber}"[^>]*>[\\s\\S]*?</clef>`),
+      newClefXml
+    );
+  } else {
+    // Replace first unnumbered clef (single-staff instruments)
+    newAttrBlock = attrBlock.replace(
+      /<clef(?![^>]*number)[^>]*>[\s\S]*?<\/clef>/,
+      newClefXml
+    );
+  }
+
+  return before + newAttrBlock + after;
+}
+
 /** Return the next unused MIDI channel (1-16, skipping 10 which is drums). */
 function nextMidiChannel(musicXml: string): number {
   const used = new Set(
@@ -1494,7 +1656,7 @@ export function addPart(musicXml: string, instrument: ScoreInstrument): string {
 
   // Read score parameters from existing content
   const firstPart    = musicXml.match(/<part\b[^>]*>[\s\S]*?<\/part>/)?.[0] ?? "";
-  const measureCount = (firstPart.match(/<measure\b/g) ?? []).length;
+  const measureCount = (firstPart.match(/<measure\b/g) ?? []).length || 4;
   const divisions    = parseInt(musicXml.match(/<divisions>(\d+)<\/divisions>/)?.[1] ?? "4");
   const beats        = parseInt(musicXml.match(/<beats>(\d+)<\/beats>/)?.[1] ?? "4");
   const beatType     = parseInt(musicXml.match(/<beat-type>(\d+)<\/beat-type>/)?.[1] ?? "4");
@@ -1502,8 +1664,9 @@ export function addPart(musicXml: string, instrument: ScoreInstrument): string {
   const measureDur   = Math.round(divisions * beats * (4 / beatType));
 
   const stavesTag = staves > 1 ? `\n      <staves>${staves}</staves>` : "";
+  const clefXml   = clefToSignLine(instrument.clef ?? "treble");
   const clefs     = staves === 1
-    ? `\n      <clef><sign>G</sign><line>2</line></clef>`
+    ? `\n      <clef><sign>${clefXml.sign}</sign><line>${clefXml.line}</line></clef>`
     : `\n      <clef number="1"><sign>G</sign><line>2</line></clef>\n      <clef number="2"><sign>F</sign><line>4</line></clef>`;
 
   const measuresList = Array.from({ length: measureCount }, (_, i) => {

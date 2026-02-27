@@ -11,40 +11,51 @@ type SfNode = { stop: (when?: number) => void };
 type Props = {
   src: string;
   channelInstruments?: Record<number, string>; // MIDI channel → soundfont name
-  quarterNotesPerMeasure: number;
+  measureStartsMs: number[];                   // ms timestamp of each measure start (from Verovio timemap)
   selectedMeasures: Set<number>;
   onMeasureChange: (measure: number | null) => void;
 };
 
 const RELEASE_S = 0.15; // fade-out time when stopping a note early (seconds)
 
-export default function MidiPlayerComponent({ src, channelInstruments = {}, quarterNotesPerMeasure, selectedMeasures, onMeasureChange }: Props) {
+export default function MidiPlayerComponent({ src, channelInstruments = {}, measureStartsMs, selectedMeasures, onMeasureChange }: Props) {
   const [state, setState] = useState<State>("loading");
-  const playerRef   = useRef<MidiPlayer.Player | null>(null);
-  const instrumentsRef = useRef<Map<number, any>>(new Map()); // channel → soundfont instance
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const activeNotesRef = useRef<Map<string, SfNode>>(new Map());
+  const playerRef        = useRef<MidiPlayer.Player | null>(null);
+  const instrumentsRef   = useRef<Map<number, any>>(new Map()); // channel → soundfont instance
+  const audioCtxRef      = useRef<AudioContext | null>(null);
+  const activeNotesRef   = useRef<Map<string, SfNode>>(new Map());
   const onMeasureChangeRef = useRef(onMeasureChange);
   onMeasureChangeRef.current = onMeasureChange;
-  const activeRef      = useRef(false);
-  const minTickRef     = useRef(0); // ignore events below this tick (prevents glitch after skipToTick)
-  const rafRef         = useRef<number>(0);
-  const lastMeasureRef = useRef(-1);
+  const activeRef        = useRef(false);
+  const rafRef           = useRef<number>(0);
+  const lastMeasureRef   = useRef(-1);
+
+  // For ms-based measure tracking
+  const playStartAudioTimeRef = useRef(0); // audioCtx.currentTime when play() was called
+  const startOffsetMsRef      = useRef(0); // ms into the score where we started (for selected measures)
+  const measureStartsMsRef    = useRef<number[]>([]);
+  measureStartsMsRef.current  = measureStartsMs;
+
+  function measureAtMs(elapsedMs: number): number {
+    const starts = measureStartsMsRef.current;
+    if (starts.length === 0) return 1;
+    let num = 1;
+    for (let i = 0; i < starts.length; i++) {
+      if (starts[i] <= elapsedMs) num = i + 1;
+      else break;
+    }
+    return num;
+  }
 
   function startMeasureTracking() {
     function tick() {
-      const player = playerRef.current;
-      if (!player || !activeRef.current) return;
-      // midi-player-js exposes currentTick as a property; getCurrentTick() wraps it
-      const currentTick: number = (player as any).getCurrentTick?.() ?? (player as any).currentTick ?? 0;
-      if (currentTick >= minTickRef.current) {
-        const division = (player as any).division || 480;
-        const ticksPerMeasure = division * quarterNotesPerMeasure;
-        const measureNum = Math.floor(currentTick / ticksPerMeasure) + 1;
-        if (measureNum !== lastMeasureRef.current) {
-          lastMeasureRef.current = measureNum;
-          onMeasureChangeRef.current(measureNum);
-        }
+      const ctx = audioCtxRef.current;
+      if (!ctx || !activeRef.current) return;
+      const elapsedMs = (ctx.currentTime - playStartAudioTimeRef.current) * 1000 + startOffsetMsRef.current;
+      const measureNum = measureAtMs(elapsedMs);
+      if (measureNum !== lastMeasureRef.current) {
+        lastMeasureRef.current = measureNum;
+        onMeasureChangeRef.current(measureNum);
       }
       rafRef.current = requestAnimationFrame(tick);
     }
@@ -91,6 +102,10 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, quar
       const channelMap = new Map<number, any>();
       for (const [ch, name] of Object.entries(channelInstruments)) {
         channelMap.set(Number(ch), nameToSf.get(name) ?? fallback);
+      }
+      // Ensure there's always a fallback entry so notes on unmapped channels still play
+      if (channelMap.size === 0) {
+        channelMap.set(1, fallback);
       }
       instrumentsRef.current = channelMap;
 
@@ -151,9 +166,9 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, quar
       stopAllNotes(true);
       audioCtxRef.current?.close();
       onMeasureChangeRef.current(null);
-      playerRef.current    = null;
+      playerRef.current     = null;
       instrumentsRef.current = new Map();
-      audioCtxRef.current  = null;
+      audioCtxRef.current   = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, JSON.stringify(channelInstruments)]);
@@ -177,20 +192,32 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, quar
 
   function handlePlay() {
     const player = playerRef.current;
-    if (!player) return;
+    const ctx = audioCtxRef.current;
+    if (!player || !ctx) return;
     activeRef.current = true;
-    audioCtxRef.current?.resume();
+    ctx.resume();
 
     if (selectedMeasures.size > 0) {
       const startMeasure = Math.min(...selectedMeasures);
-      const division = player.division || 480;
-      const startTick = (startMeasure - 1) * division * quarterNotesPerMeasure;
-      minTickRef.current = startTick;
+      // ms offset: use timemap if available, otherwise fall back to tick math
+      const starts = measureStartsMsRef.current;
+      const startMs = starts.length >= startMeasure
+        ? (starts[startMeasure - 1] ?? 0)
+        : 0;
+      startOffsetMsRef.current = startMs;
+
+      // Skip the MIDI player to the right tick
+      const division = (player as any).division || 480;
+      // For the tick skip, use the tempo from the MIDI to convert ms → ticks
+      // (approximate: assume constant tempo)
+      const bpm = (player as any).tempo || 120;
+      const startTick = Math.round((startMs / 1000) * (bpm / 60) * division);
       player.skipToTick(startTick);
     } else {
-      minTickRef.current = 0;
+      startOffsetMsRef.current = 0;
     }
 
+    playStartAudioTimeRef.current = ctx.currentTime;
     player.play();
     startMeasureTracking();
     setState("playing");

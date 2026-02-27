@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import MidiPlayer from "./MidiPlayer";
 
 type Props = {
@@ -20,6 +19,7 @@ type Props = {
   onJumpTo?: (index: number) => void;
   onPlaybackStop?: () => void;
   onSingClick?: () => void;
+  onBack?: () => void;
 };
 
 // General MIDI program → soundfont-player instrument name (programs 1–128)
@@ -63,20 +63,17 @@ function timeAgo(iso: string): string {
 export default function ScoreViewer({
   musicXml, scoreName, selectedMeasures, onMeasureClick,
   canUndo, canRedo, historyIndex = -1, historyLength = 0,
-  historyEntries = [], onUndo, onRedo, onJumpTo, onPlaybackStop, onSingClick,
+  historyEntries = [], onUndo, onRedo, onJumpTo, onPlaybackStop, onSingClick, onBack,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const onClickRef = useRef(onMeasureClick);
   onClickRef.current = onMeasureClick;
   const [midiSrc, setMidiSrc] = useState<string | null>(null);
+  const [measureStartsMs, setMeasureStartsMs] = useState<number[]>([]);
   const [playingMeasure, setPlayingMeasure] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-
-  // Parse time signature from MusicXML to calculate ticks per measure
-  const beats = parseInt(musicXml?.match(/<beats>(\d+)<\/beats>/)?.[1] ?? "4");
-  const beatType = parseInt(musicXml?.match(/<beat-type>(\d+)<\/beat-type>/)?.[1] ?? "4");
-  const quarterNotesPerMeasure = beats * (4 / beatType);
+  const [rendering, setRendering] = useState(false);
 
   // Build channel → instrument map from all <midi-instrument> blocks in MusicXML
   const channelInstruments: Record<number, string> = {};
@@ -94,7 +91,13 @@ export default function ScoreViewer({
     if (!musicXml || !containerRef.current) return;
     let cancelled = false;
 
+    setRendering(true);
+    setMeasureStartsMs([]);
     async function render() {
+      // Yield to the browser so React can paint the spinner before heavy work
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      if (cancelled) return;
+
       const [{ default: createVerovioModule }, { VerovioToolkit }] = await Promise.all([
         import("verovio/wasm"),
         import("verovio/esm"),
@@ -126,9 +129,21 @@ export default function ScoreViewer({
         setMidiSrc(`data:audio/midi;base64,${midiBase64}`);
       }
 
+      // Build measure start times (ms) from Verovio timemap for accurate playback tracking
+      try {
+        const timemapRaw = (tk as any).renderToTimemap({ includeMeasures: true });
+        const timemap: Array<{ tstamp: number; measureOn?: string }> =
+          typeof timemapRaw === "string" ? JSON.parse(timemapRaw) : timemapRaw;
+        const starts = timemap
+          .filter((e) => e.measureOn !== undefined)
+          .map((e) => e.tstamp);
+        if (!cancelled && starts.length > 0) setMeasureStartsMs(starts);
+      } catch { /* ignore timemap errors, fall back to tick math */ }
+
       // Wait one frame so the browser lays out the SVGs before getBBox()
       requestAnimationFrame(() => {
         if (cancelled || !containerRef.current) return;
+        setRendering(false);
         let idx = 0;
         containerRef.current.querySelectorAll<SVGGElement>(".measure").forEach((measureEl) => {
           idx++;
@@ -156,8 +171,8 @@ export default function ScoreViewer({
       });
     }
 
-    render().catch(console.error);
-    return () => { cancelled = true; };
+    render().catch((err) => { console.error(err); setRendering(false); });
+    return () => { cancelled = true; setRendering(false); };
   }, [musicXml]);
 
   // ── selection + playback highlight ───────────────────────────────────────
@@ -209,13 +224,13 @@ export default function ScoreViewer({
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 bg-gray-900 min-h-[48px]">
-          <Link
-            href="/editor"
+          <button
+            onClick={onBack}
             className="text-gray-500 hover:text-gray-300 transition text-xs px-1.5 py-1 rounded hover:bg-gray-800"
             title="All files"
           >
             ← Files
-          </Link>
+          </button>
         </div>
         <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
           Upload a score and send an instruction to see it here.
@@ -229,13 +244,13 @@ export default function ScoreViewer({
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 bg-gray-900 min-h-[48px]">
         {/* Back to files */}
-        <Link
-          href="/editor"
+        <button
+          onClick={onBack}
           className="text-gray-500 hover:text-gray-300 transition text-xs px-1.5 py-1 rounded hover:bg-gray-800 shrink-0"
           title="All files"
         >
           ← Files
-        </Link>
+        </button>
         <span className="text-gray-700 text-xs">|</span>
         {/* Undo / Redo */}
         <div className="flex items-center gap-1 shrink-0">
@@ -314,7 +329,7 @@ export default function ScoreViewer({
             <MidiPlayer
               src={midiSrc}
               channelInstruments={channelInstruments}
-              quarterNotesPerMeasure={quarterNotesPerMeasure}
+              measureStartsMs={measureStartsMs}
               selectedMeasures={selectedMeasures}
               onMeasureChange={setPlayingMeasure}
             />
@@ -346,7 +361,15 @@ export default function ScoreViewer({
       <ScoreInfoBar musicXml={musicXml} />
 
       {/* Score */}
-      <div className="flex-1 overflow-y-auto bg-white" ref={scrollContainerRef}>
+      <div className="flex-1 overflow-y-auto bg-white relative" ref={scrollContainerRef}>
+        {rendering && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-6 h-6 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
+              <span className="text-xs text-gray-400">Rendering…</span>
+            </div>
+          </div>
+        )}
         <div className="p-6" ref={containerRef} />
       </div>
     </div>

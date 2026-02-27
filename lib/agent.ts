@@ -26,9 +26,13 @@ import {
   createScore,
   addChordSymbols,
   renamePart,
+  changeInstrument,
+  changeClef,
   addPart,
   removePart,
   movePart,
+  notesTotalBeats,
+  insertPickupMeasure,
 } from "./musicxml";
 import type { DynamicMarking, ArticulationMarking, NoteSpec, ScoreInstrument, ChordSymbol } from "./musicxml";
 import { addAccidentals, fixChordSymbols } from "./accidentals";
@@ -132,7 +136,10 @@ Rules:
 - If no score is loaded, call createScore first, then writeNotes to fill in notes.
 - For piano or any 2-staff instrument: staff 1 = right hand, staff 2 = left hand.
 - If the score doesn't have enough measures, call insertEmptyMeasures first.
-- Only respond with plain text (no tool calls) when the user asks a pure question that requires no score changes.`,
+- To change an instrument (e.g. "make it a piano"), use changeInstrument. NEVER use removePart + addPart for this — it destroys the notes.
+- Only respond with plain text (no tool calls) when the user asks a pure question that requires no score changes.
+- CRITICAL for writeNotes: the total duration of all notes in a measure must EXACTLY match the time signature. For 3/4: exactly 3 quarter-note beats (e.g. quarter+quarter+quarter, or dotted-half, or eighth+eighth+quarter+quarter). For 4/4: exactly 4 beats. NEVER overflow a measure — this causes rendering and playback errors.
+- For pickup (anacrusis) measures at the start of a song, use the pickupBeats option in createScore, then write only the pickup notes (e.g. 1 beat for a 1-beat pickup in 3/4). All other measures must be full.`,
     messages: [...history, { role: "user" as const, content: message }],
     tools: {
       createScore: {
@@ -143,7 +150,13 @@ Rules:
         parameters: z.object({
           instruments: z.array(z.object({
             name: z.string().describe("Instrument name, e.g. 'Piano', 'Violin', 'Voice', 'Guitar'."),
-            staves: z.number().optional().describe("Number of staves (1 or 2). Auto-detected from instrument name if omitted."),
+            staves: z.number().optional().describe("Number of staves (1 or 2). Use 2 for piano/organ/harp."),
+            midiProgram: z.number().optional().describe("General MIDI program number (1-128) for playback. Common: 1=Acoustic Grand Piano, 25=Nylon Guitar, 41=Violin, 42=Viola, 43=Cello, 53=Voice Oohs, 57=Trumpet, 74=Flute. Required for correct playback sound."),
+            clef: z.enum(["treble", "bass", "alto", "tenor"]).optional().describe(
+              "Clef for single-staff instruments. Use the musically correct clef: " +
+              "treble=violin/flute/trumpet/oboe/soprano; bass=tuba/cello/bass/trombone/bassoon/baritone sax; " +
+              "alto=viola; tenor=cello high register. Defaults to treble if omitted."
+            ),
           })).describe("List of instruments/parts in the score."),
           key: z.string().optional().describe("Key root, e.g. 'C', 'G', 'Bb', 'F#'. Defaults to 'C'."),
           beats: z.number().optional().describe("Beats per measure (numerator). Defaults to 4."),
@@ -226,6 +239,27 @@ Rules:
           liveXml = result;
           capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, inserted: count, after: afterMeasure };
+        },
+      },
+
+      insertPickupMeasure: {
+        description:
+          "Insert a pickup (anacrusis) measure at the very beginning of an existing score. " +
+          "Use when the user wants to add a pickup/anacrusis to a score that was already created without one. " +
+          "After calling this, use writeNotes on measure 1 to fill in the pickup notes. " +
+          "All existing measures shift forward by 1.",
+        parameters: z.object({
+          pickupBeats: z.number().describe(
+            "Number of beats in the pickup measure. E.g. 1 for a 1-beat pickup in 3/4 (like Happy Birthday), " +
+            "2 for a 2-beat pickup, etc. Must be less than the full measure capacity."
+          ),
+        }),
+        execute: async ({ pickupBeats }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = insertPickupMeasure(liveXml, pickupBeats);
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, pickupBeats, note: "Measure 1 is now a pickup. All previous measures shifted +1. Use writeNotes on measure 1 to fill in the anacrusis notes." };
         },
       },
 
@@ -542,6 +576,39 @@ Rules:
           if (targetMeasure !== measureNumber) {
             console.log(`│ [agent] ⚠ writeNotes: overriding measure ${measureNumber} → ${targetMeasure} (selection enforced)`);
           }
+
+          // ── Duration validation ──────────────────────────────────────────
+          // Check whether this measure is a pickup (anacrusis) — implicit="yes"
+          const isPickup = new RegExp(
+            `<measure\\b[^>]*number="${targetMeasure}"[^>]*implicit="yes"`
+          ).test(liveXml);
+
+          const timeSigBeats    = parseInt(liveXml.match(/<beats>(\d+)<\/beats>/)?.[1] ?? "4");
+          const timeSigBeatType = parseInt(liveXml.match(/<beat-type>(\d+)<\/beat-type>/)?.[1] ?? "4");
+          const measureCapacity = timeSigBeats * (4 / timeSigBeatType); // in quarter-note beats
+
+          const total = notesTotalBeats(notes as NoteSpec[]);
+
+          if (isPickup) {
+            // Pickup: must be > 0 and < full measure capacity
+            if (total <= 0 || total >= measureCapacity) {
+              return {
+                ok: false,
+                error: `Pickup measure ${targetMeasure} must have between 0 and ${measureCapacity} beats (exclusive). Got ${total}. Tip: use fewer notes — just the anacrusis notes.`,
+              };
+            }
+          } else {
+            // Regular measure: must exactly match the time signature capacity
+            const tolerance = 0.02; // allow tiny floating-point error
+            if (Math.abs(total - measureCapacity) > tolerance) {
+              return {
+                ok: false,
+                error: `Measure ${targetMeasure} requires exactly ${measureCapacity} quarter-note beats (${timeSigBeats}/${timeSigBeatType}), but the provided notes total ${total} beats. Adjust note durations so they add up exactly.`,
+              };
+            }
+          }
+          // ────────────────────────────────────────────────────────────────
+
           const result = setMeasureNotes(liveXml, targetMeasure, notes as NoteSpec[], partId ?? "P1", staff);
           const postProcessed = addBeams(fixChordSymbols(addAccidentals(result)));
           liveXml = postProcessed;
@@ -607,11 +674,63 @@ Rules:
         },
       },
 
+      changeInstrument: {
+        description:
+          "Change a part's instrument (e.g. Trumpet → Piano). Updates the name, MIDI program, and staves/clefs. " +
+          "Preserves existing notes when staves stay the same. If staves change (e.g. 1→2 for piano), the part is rebuilt with empty measures. " +
+          "ALWAYS prefer this over removePart + addPart when changing an instrument.",
+        parameters: z.object({
+          partId: z.string().describe("Part ID to change, e.g. 'P1'."),
+          name: z.string().describe("New instrument name, e.g. 'Piano', 'Flute'."),
+          staves: z.number().optional().describe("Number of staves (1 or 2). Omit for single-staff; use 2 for piano/organ/harp."),
+          midiProgram: z.number().int().min(1).max(128).describe(
+            "General MIDI program number (1–128). Pick the correct GM program. " +
+            "Examples: Piano=1, Harpsichord=7, Guitar=25, Violin=41, Cello=43, Trumpet=57, Flute=74, Voice=53."
+          ),
+        }),
+        execute: async ({ partId, name, staves, midiProgram }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = changeInstrument(liveXml, partId, { name, staves, midiProgram });
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, partId, name };
+        },
+      },
+
+      changeClef: {
+        description:
+          "Change the clef of a part. Use when the user says 'change to bass clef', 'use F clef', " +
+          "'change to treble clef', 'alto clef', 'tenor clef', etc. " +
+          "Common clefs: treble (violin, flute, trumpet, piano RH), bass (tuba, cello, bass, piano LH), " +
+          "alto (viola), tenor (cello high register, trombone).",
+        parameters: z.object({
+          partId: z.string().describe("Part ID to change, e.g. 'P1'."),
+          clef: z.enum(["treble", "bass", "alto", "tenor"] as const).describe(
+            "Target clef. treble=G clef, bass=F clef, alto=C clef on middle line, tenor=C clef on 4th line."
+          ),
+          staffNumber: z.number().optional().describe(
+            "For multi-staff parts (e.g. piano): 1=top staff, 2=bottom staff. Omit for single-staff instruments."
+          ),
+        }),
+        execute: async ({ partId, clef, staffNumber }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = changeClef(liveXml, partId, clef, staffNumber);
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, partId, clef, staffNumber: staffNumber ?? "single" };
+        },
+      },
+
       addPart: {
         description: "Add a new instrument part to the score. Creates empty measures in sync with existing parts. Use writeNotes afterwards to fill in the notes.",
         parameters: z.object({
           name: z.string().describe("Instrument name, e.g. 'Violin', 'Baritone Saxophone', 'Flute'."),
           staves: z.number().optional().describe("Number of staves (1 or 2). Omit for single-staff instruments; use 2 for piano/organ/harp."),
+          clef: z.enum(["treble", "bass", "alto", "tenor"]).optional().describe(
+            "Clef for single-staff instruments. Use the musically correct clef: " +
+            "treble=violin/flute/trumpet/oboe/soprano; bass=tuba/cello/bass/trombone/bassoon/baritone sax; " +
+            "alto=viola; tenor=cello high register. Defaults to treble if omitted."
+          ),
           midiProgram: z.number().int().min(1).max(128).describe(
             "General MIDI program number (1–128). You must supply this — pick the correct GM program for the instrument. " +
             "Examples: Acoustic Grand Piano=1, Harpsichord=7, Organ=20, Acoustic Guitar=25, Electric Guitar=27, " +
@@ -622,9 +741,9 @@ Rules:
             "Soprano Voice=53, Choir=53, Xylophone=14, Vibraphone=12, Marimba=13."
           ),
         }),
-        execute: async ({ name, staves, midiProgram }) => {
+        execute: async ({ name, staves, clef, midiProgram }) => {
           if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addPart(liveXml, { name, staves, midiProgram });
+          const result = addPart(liveXml, { name, staves, clef, midiProgram });
           liveXml = result;
           capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, name };

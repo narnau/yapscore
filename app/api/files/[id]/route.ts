@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFile, saveFile, deleteFile } from "@/lib/files";
+import { fixPercussionDisplayOctave } from "@/lib/musicxml";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -14,6 +15,13 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     const admin = createAdminClient();
     const file = await getFile(admin, auth.userId, id);
     if (!file) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Fix percussion display-octave on the fly for any stored file
+    if (file.current_xml) file.current_xml = fixPercussionDisplayOctave(file.current_xml);
+    if (file.history) {
+      for (const entry of file.history) {
+        if (entry.musicXml) entry.musicXml = fixPercussionDisplayOctave(entry.musicXml);
+      }
+    }
     return NextResponse.json({ file });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
