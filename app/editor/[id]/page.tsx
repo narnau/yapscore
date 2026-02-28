@@ -332,6 +332,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         <LeaveModal
           onDelete={handleLeaveDelete}
           onRename={handleLeaveRename}
+          onClose={() => setLeaveModalOpen(false)}
         />
       )}
     </main>
@@ -340,18 +341,28 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
 // ── Leave modal ───────────────────────────────────────────────────────────────
 
-function LeaveModal({ onDelete, onRename }: {
+function LeaveModal({ onDelete, onRename, onClose }: {
   onDelete: () => void;
   onRename: (name: string) => void;
+  onClose: () => void;
 }) {
   const [name, setName] = useState("");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-80 space-y-4 shadow-2xl">
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-gray-100">Untitled file</p>
-          <p className="text-xs text-gray-400">Give it a name or delete it.</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-80 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-gray-100">Untitled file</p>
+            <p className="text-xs text-gray-400">Give it a name or delete it.</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-300 transition ml-4 mt-0.5"
+            title="Close"
+          >
+            ✕
+          </button>
         </div>
         <input
           autoFocus
@@ -360,6 +371,7 @@ function LeaveModal({ onDelete, onRename }: {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && name.trim()) onRename(name.trim());
+            if (e.key === "Escape") onClose();
           }}
           placeholder="e.g. Symphony No. 1"
           className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-indigo-500 transition"

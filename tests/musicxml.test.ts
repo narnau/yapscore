@@ -131,7 +131,7 @@ describe("spliceMeasuresBack", () => {
     expect(result).toContain("<type>whole</type>");
     // Measure 1 should be untouched
     expect(result).toContain('<measure number="1"');
-    expect(result).toContain("<step>C</step><octave>4</octave>");
+    expect(norm(result)).toContain("<step>C</step><octave>4</octave>");
   });
 
   test("deletes a measure when sentMeasureNumbers provided and measure missing from response", () => {
@@ -144,7 +144,7 @@ describe("spliceMeasuresBack", () => {
     expect(measureNums).toEqual([1, 2, 3]);
     // The original measure 3 had a whole note C5, measure 4 had a rest
     // After deletion, new measure 3 should be the old measure 4 (rest)
-    expect(result).toContain("<rest/>");
+    expect(result).toMatch(/<rest[\s/>]/);
   });
 
   test("renumbers measures after deletion", () => {
@@ -186,31 +186,27 @@ describe("spliceMeasuresBack", () => {
 
 describe("renumberMeasures", () => {
   test("renumbers measures sequentially from 1", () => {
-    const xml = `<part id="P1">
-      <measure number="1"><note/></measure>
-      <measure number="5"><note/></measure>
-      <measure number="10"><note/></measure>
-    </part>`;
+    const xml = `<score-partwise version="4.0"><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1">
+      <measure number="1"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+      <measure number="5"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+      <measure number="10"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+    </part></score-partwise>`;
     const result = renumberMeasures(xml);
-    const nums = [...result.matchAll(/number="(\d+)"/g)].map((m) =>
-      parseInt(m[1])
-    );
+    const nums = getMeasureNums(result);
     expect(nums).toEqual([1, 2, 3]);
   });
 
   test("renumbers each part independently", () => {
-    const xml = `<part id="P1">
-      <measure number="3"><note/></measure>
-      <measure number="7"><note/></measure>
+    const xml = `<score-partwise version="4.0"><part-list><score-part id="P1"><part-name>P1</part-name></score-part><score-part id="P2"><part-name>P2</part-name></score-part></part-list><part id="P1">
+      <measure number="3"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+      <measure number="7"><note><rest/><duration>4</duration><type>whole</type></note></measure>
     </part>
     <part id="P2">
-      <measure number="3"><note/></measure>
-      <measure number="7"><note/></measure>
-    </part>`;
+      <measure number="3"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+      <measure number="7"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+    </part></score-partwise>`;
     const result = renumberMeasures(xml);
-    const nums = [...result.matchAll(/number="(\d+)"/g)].map((m) =>
-      parseInt(m[1])
-    );
+    const nums = getMeasureNums(result);
     // Both parts renumbered independently: [1,2] + [1,2]
     expect(nums).toEqual([1, 2, 1, 2]);
   });
@@ -227,7 +223,7 @@ describe("delete vs clear measure", () => {
     );
     expect(nums).toEqual([1, 2, 3]); // was 4, now 3
     // Old measure 1 content (C D E F) should still be in measure 1
-    expect(result).toContain("<step>C</step><octave>4</octave>");
+    expect(norm(result)).toContain("<step>C</step><octave>4</octave>");
   });
 
   test("CLEAR: measure replaced with whole rest, total count stays same", () => {
@@ -241,13 +237,13 @@ describe("delete vs clear measure", () => {
     );
     expect(nums).toEqual([1, 2, 3, 4]); // count unchanged
     // Measure 2 should now be a rest, not G A B C
-    expect(result).not.toContain("<step>G</step><octave>4</octave>");
+    expect(norm(result)).not.toContain("<step>G</step><octave>4</octave>");
     // But original measure 2 position should have a rest
     const m2Match = result.match(
       /<measure\b[^>]*number="2"[^>]*>([\s\S]*?)<\/measure>/
     );
     expect(m2Match).not.toBeNull();
-    expect(m2Match![1]).toContain("<rest/>");
+    expect(m2Match![1]).toMatch(/<rest[\s/>]/);
   });
 
   test("DELETE multiple consecutive measures", () => {
@@ -268,7 +264,7 @@ describe("delete vs clear measure", () => {
     );
     expect(nums).toEqual([1, 2, 3]);
     // New measure 1 should be old measure 2 content (G A B C)
-    expect(result).toContain("<step>G</step><octave>4</octave>");
+    expect(norm(result)).toContain("<step>G</step><octave>4</octave>");
   });
 
   test("DELETE last measure", () => {
@@ -290,9 +286,9 @@ describe("deleteMeasures", () => {
     );
     expect(nums).toEqual([1, 2, 3]);
     // Old measure 2 had G A B C — should be gone
-    expect(result).not.toContain("<step>G</step><octave>4</octave>");
+    expect(norm(result)).not.toContain("<step>G</step><octave>4</octave>");
     // Old measure 1 content should remain
-    expect(result).toContain("<step>C</step><octave>4</octave>");
+    expect(norm(result)).toContain("<step>C</step><octave>4</octave>");
   });
 
   test("deletes multiple measures", () => {
@@ -310,7 +306,7 @@ describe("deleteMeasures", () => {
     );
     expect(nums).toEqual([1]);
     // Should be the old measure 4 (rest)
-    expect(result).toContain("<rest/>");
+    expect(result).toMatch(/<rest[\s/>]/);
   });
 });
 
@@ -329,7 +325,7 @@ describe("clearMeasures", () => {
       /<measure\b[^>]*number="2"[^>]*>([\s\S]*?)<\/measure>/
     );
     expect(m2).not.toBeNull();
-    expect(m2![1]).toContain("<rest/>");
+    expect(m2![1]).toMatch(/<rest[\s/>]/);
     expect(m2![1]).not.toContain("<step>G</step>");
   });
 
@@ -348,7 +344,7 @@ describe("clearMeasures", () => {
     expect(m1![1]).toContain('tempo="120"');
     expect(m1![1]).toContain("<metronome");
     // But notes should be replaced with rest
-    expect(m1![1]).toContain("<rest/>");
+    expect(m1![1]).toMatch(/<rest[\s/>]/);
     expect(m1![1]).not.toContain("<step>C</step>");
   });
 
@@ -360,7 +356,7 @@ describe("clearMeasures", () => {
         new RegExp(`<measure\\b[^>]*number="${num}"[^>]*>([\\s\\S]*?)</measure>`)
       );
       expect(m).not.toBeNull();
-      expect(m![1]).toContain("<rest/>");
+      expect(m![1]).toMatch(/<rest[\s/>]/);
     }
     // Measure 4 unchanged (already a rest, but untouched)
     expect(result).toContain('<measure number="4"');
@@ -385,7 +381,7 @@ describe("insertEmptyMeasures", () => {
     expect(nums).toEqual([1, 2, 3, 4, 5]);
     // New measure 3 should be a rest
     const m3 = getMeasureContent(result, 3);
-    expect(m3).toContain("<rest/>");
+    expect(m3).toMatch(/<rest[\s/>]/);
     // Old measure 3 (whole note C5) is now measure 4
     const m4 = getMeasureContent(result, 4);
     expect(m4).toContain("<step>C</step><octave>5</octave>");
@@ -396,8 +392,8 @@ describe("insertEmptyMeasures", () => {
     const nums = getMeasureNums(result);
     expect(nums).toEqual([1, 2, 3, 4, 5, 6]);
     // First two should be rests
-    expect(getMeasureContent(result, 1)).toContain("<rest/>");
-    expect(getMeasureContent(result, 2)).toContain("<rest/>");
+    expect(getMeasureContent(result, 1)).toMatch(/<rest[\s/>]/);
+    expect(getMeasureContent(result, 2)).toMatch(/<rest[\s/>]/);
     // Old measure 1 is now measure 3
     expect(getMeasureContent(result, 3)).toContain("<step>C</step><octave>4</octave>");
   });
@@ -498,7 +494,7 @@ describe("transposeMeasures", () => {
     // Measure 4 is all rests — should be unchanged
     const result = transposeMeasures(FIXTURE, [4], 5);
     const m4 = getMeasureContent(result, 4);
-    expect(m4).toContain("<rest/>");
+    expect(m4).toMatch(/<rest[\s/>]/);
     expect(m4).not.toContain("<pitch>");
   });
 });
@@ -837,7 +833,7 @@ describe("addTextAnnotation", () => {
     const m1 = getMeasureContent(result, 1);
     // The direction should appear before the first <note>
     const dirIdx = m1.indexOf("<rehearsal");
-    const noteIdx = m1.indexOf("<note>");
+    const noteIdx = m1.search(/<note[\s>]/)
     expect(dirIdx).toBeLessThan(noteIdx);
   });
 });
@@ -949,16 +945,16 @@ describe("deterministic tools (multi-part)", () => {
     expect(p1nums).toEqual([1, 2, 3]);
     expect(p2nums).toEqual([1, 2, 3]);
     // Old measure 2 content (G notes) should be gone from both parts
-    expect(p1![1]).not.toContain("<step>G</step><octave>4</octave>");
-    expect(p2![1]).not.toContain("<step>G</step><octave>3</octave>");
+    expect(norm(p1![1])).not.toContain("<step>G</step><octave>4</octave>");
+    expect(norm(p2![1])).not.toContain("<step>G</step><octave>3</octave>");
   });
 
   test("clearMeasures clears in both parts", () => {
     const result = clearMeasures(TWO_PART_FIXTURE, [2]);
     const p1m2 = result.match(/<part id="P1">[\s\S]*?<measure\b[^>]*number="2"[^>]*>([\s\S]*?)<\/measure>/);
     const p2m2 = result.match(/<part id="P2">[\s\S]*?<measure\b[^>]*number="2"[^>]*>([\s\S]*?)<\/measure>/);
-    expect(p1m2![1]).toContain("<rest/>");
-    expect(p2m2![1]).toContain("<rest/>");
+    expect(p1m2![1]).toMatch(/<rest[\s/>]/);
+    expect(p2m2![1]).toMatch(/<rest[\s/>]/);
     // Measure count unchanged
     const allNums = getMeasureNums(result);
     expect(allNums).toEqual([1, 2, 3, 4, 1, 2, 3, 4]);
@@ -970,8 +966,8 @@ describe("deterministic tools (multi-part)", () => {
     const p2 = result.match(/<part id="P2">([\s\S]*?)<\/part>/);
     const p1m1 = p1![1].match(/<measure\b[^>]*number="1"[^>]*>([\s\S]*?)<\/measure>/);
     const p2m1 = p2![1].match(/<measure\b[^>]*number="1"[^>]*>([\s\S]*?)<\/measure>/);
-    expect(p1m1![1]).toContain("<dynamics><f/></dynamics>");
-    expect(p2m1![1]).toContain("<dynamics><f/></dynamics>");
+    expect(norm(p1m1![1])).toContain("<dynamics><f/></dynamics>");
+    expect(norm(p2m1![1])).toContain("<dynamics><f/></dynamics>");
   });
 });
 
@@ -1037,7 +1033,7 @@ describe("setMeasureNotes", () => {
     ];
     const result = setMeasureNotes(FIXTURE, 2, notes);
     const m2 = getMeasureContent(result, 2);
-    expect(m2).toContain("<rest/>");
+    expect(m2).toMatch(/<rest[\s/>]/);
     expect(m2).toContain("<duration>8</duration>"); // half = 2 * 4 = 8
     expect(m2).toContain("<type>half</type>");
     expect(m2).not.toContain("<pitch>");
@@ -1065,7 +1061,7 @@ describe("setMeasureNotes", () => {
     const m2 = getMeasureContent(result, 2);
     expect(m2).toContain("<duration>2</duration>"); // eighth = 0.5 * 4 = 2
     expect(m2).toContain("<type>eighth</type>");
-    const noteCount = (m2.match(/<note>/g) || []).length;
+    const noteCount = (m2.match(/<note[\s>]/g) || []).length;
     expect(noteCount).toBe(8);
   });
 
@@ -1204,6 +1200,11 @@ describe("setTimeSignature", () => {
 
 // ─── test helpers ───────────────────────────────────────────────────────────
 
+/** Collapse whitespace between XML tags so assertions are format-agnostic */
+function norm(xml: string): string {
+  return xml.replace(/>\s+</g, "><");
+}
+
 function getMeasureNums(xml: string): number[] {
   return [...xml.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) =>
     parseInt(m[1])
@@ -1214,5 +1215,5 @@ function getMeasureContent(xml: string, num: number): string {
   const m = xml.match(
     new RegExp(`<measure\\b[^>]*number="${num}"[^>]*>([\\s\\S]*?)</measure>`)
   );
-  return m?.[1] ?? "";
+  return norm(m?.[1] ?? "");
 }

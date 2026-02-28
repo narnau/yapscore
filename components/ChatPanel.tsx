@@ -51,6 +51,8 @@ export default function ChatPanel({
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [recordingSecs, setRecordingSecs] = useState(0);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
@@ -71,6 +73,7 @@ export default function ChatPanel({
   const toggleRecording = useCallback(async () => {
     // Stop recording
     if (recording) {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       mediaRecorderRef.current?.stop();
       return;
     }
@@ -88,6 +91,7 @@ export default function ChatPanel({
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         setRecording(false);
+        setRecordingSecs(0);
 
         const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
         if (blob.size === 0) return;
@@ -111,7 +115,9 @@ export default function ChatPanel({
 
       mediaRecorderRef.current = recorder;
       recorder.start();
+      setRecordingSecs(0);
       setRecording(true);
+      recordingTimerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000);
     } catch {
       // microphone permission denied or unavailable
     }
@@ -258,8 +264,23 @@ export default function ChatPanel({
             {m.text}
           </div>
         ))}
+        {transcribing && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 self-start text-gray-400 text-sm">
+            <span className="flex gap-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+            </span>
+            Transcribing voice…
+          </div>
+        )}
         {loading && (
-          <div className="text-sm px-3 py-2 rounded-lg bg-gray-800 self-start text-gray-400 animate-pulse">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 self-start text-gray-400 text-sm">
+            <span className="flex gap-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+            </span>
             Processing…
           </div>
         )}
@@ -295,7 +316,9 @@ export default function ChatPanel({
         )}
 
         {/* Instruction input — ChatGPT-style container */}
-        <div className="relative bg-gray-800 rounded-xl border border-gray-700 focus-within:border-indigo-500 transition">
+        <div className={`relative bg-gray-800 rounded-xl border transition ${
+          recording ? "border-red-500" : "border-gray-700 focus-within:border-indigo-500"
+        }`}>
           <textarea
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
@@ -306,51 +329,58 @@ export default function ChatPanel({
               }
             }}
             placeholder={
-              currentMusicXml
+              recording
+                ? "Recording…"
+                : currentMusicXml
                 ? "Modify, transpose, ask anything…"
                 : "Ask me to create a score, or upload one above…"
             }
-            disabled={loading || isAtLimit}
+            disabled={loading || isAtLimit || recording}
             rows={3}
             className="w-full bg-transparent rounded-xl px-3 pt-3 pb-12 text-sm outline-none disabled:opacity-40 resize-none"
           />
-          <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
-            {micSupported && (
+          <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5">
+            {/* Recording state: full-width stop & send button */}
+            {recording ? (
               <button
                 type="button"
                 onClick={toggleRecording}
-                disabled={loading || paywallHit || transcribing}
-                className={`p-1.5 rounded-lg transition disabled:opacity-40 ${
-                  recording
-                    ? "bg-red-600 hover:bg-red-500 text-white animate-pulse"
-                    : transcribing
-                    ? "text-indigo-400 animate-pulse"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-gray-700"
-                }`}
-                title={recording ? "Stop recording" : transcribing ? "Transcribing…" : "Voice input"}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition"
               >
-                {recording ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                    <rect x="5" y="5" width="10" height="10" rx="1" />
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                    <path d="M7 4a3 3 0 0 1 6 0v4a3 3 0 1 1-6 0V4Z" />
-                    <path d="M5.5 9.643a.75.75 0 0 0-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-1.5v-1.546A6.001 6.001 0 0 0 16 10v-.357a.75.75 0 0 0-1.5 0V10a4.5 4.5 0 0 1-9 0v-.357Z" />
-                  </svg>
-                )}
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                {String(Math.floor(recordingSecs / 60)).padStart(2, "0")}:{String(recordingSecs % 60).padStart(2, "0")}
+                <span className="mx-1 text-red-200">·</span>
+                Stop & Send
               </button>
+            ) : (
+              <>
+                <div className="flex-1" />
+                {micSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleRecording}
+                    disabled={loading || isAtLimit || transcribing}
+                    className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-200 hover:bg-gray-700"
+                    title="Voice input"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                      <path d="M7 4a3 3 0 0 1 6 0v4a3 3 0 1 1-6 0V4Z" />
+                      <path d="M5.5 9.643a.75.75 0 0 0-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-1.5v-1.546A6.001 6.001 0 0 0 16 10v-.357a.75.75 0 0 0-1.5 0V10a4.5 4.5 0 0 1-9 0v-.357Z" />
+                    </svg>
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={loading || !instruction.trim() || isAtLimit}
+                  className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition"
+                  title="Send"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                    <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95l14.095-5.637a.75.75 0 0 0 0-1.4L3.105 2.288Z" />
+                  </svg>
+                </button>
+              </>
             )}
-            <button
-              type="submit"
-              disabled={loading || !instruction.trim() || isAtLimit}
-              className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition"
-              title="Send"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95l14.095-5.637a.75.75 0 0 0 0-1.4L3.105 2.288Z" />
-              </svg>
-            </button>
           </div>
         </div>
       </form>

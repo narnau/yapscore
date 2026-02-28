@@ -15,6 +15,7 @@ import {
   getTempo,
   addDynamics,
   addArticulations,
+  removeArticulations,
   addRepeatBarlines,
   addVoltaBrackets,
   addHairpin,
@@ -375,9 +376,10 @@ Rules:
 
       addArticulations: {
         description:
-          "Add articulation markings to all notes in measures. Use when the user says " +
+          "Add articulation markings to EVERY note in the specified measures. Use when the user says " +
           "'staccato', 'accent', 'tenuto', 'marcato', 'staccatissimo', " +
-          "'make it short/detached', 'add accents'.",
+          "'make it short/detached', 'add accents to all notes'. Use partId to target a specific instrument. " +
+          "NOTE: this applies to ALL notes, not alternating ones. For every-other-note patterns, use writeNotes with articulation on specific notes instead.",
         parameters: z.object({
           measureNumbers: z.array(z.number()).describe(
             "Measure numbers to add articulations to. Use selected measures if applicable."
@@ -385,13 +387,42 @@ Rules:
           articulation: z.enum(["staccato", "accent", "tenuto", "marcato", "staccatissimo"] as const).describe(
             "The articulation to add to each note."
           ),
+          partId: z.string().optional().describe(
+            "Target a specific part (e.g. 'P1', 'P2'). Omit to apply to all parts."
+          ),
         }),
-        execute: async ({ measureNumbers, articulation }) => {
+        execute: async ({ measureNumbers, articulation, partId }) => {
           if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addArticulations(liveXml, measureNumbers, articulation as ArticulationMarking);
+          const result = addArticulations(liveXml, measureNumbers, articulation as ArticulationMarking, partId);
           liveXml = result;
           capture.result = { musicXml: result, resultType: "modify" };
-          return { ok: true, articulation, measures: measureNumbers };
+          return { ok: true, articulation, measures: measureNumbers, partId: partId ?? "all" };
+        },
+      },
+
+      removeArticulations: {
+        description:
+          "Remove articulation markings from notes in measures. Use when the user says " +
+          "'remove accents', 'no staccato', 'quitar articulaciones', or when they want " +
+          "articulations only on specific parts and the rest should be cleared. " +
+          "Use partId to target a specific instrument. Omit articulation to remove all types.",
+        parameters: z.object({
+          measureNumbers: z.array(z.number()).describe(
+            "Measure numbers to remove articulations from."
+          ),
+          articulation: z.enum(["staccato", "accent", "tenuto", "marcato", "staccatissimo"] as const).optional().describe(
+            "The specific articulation type to remove. Omit to remove all articulations."
+          ),
+          partId: z.string().optional().describe(
+            "Target a specific part (e.g. 'P1', 'P2'). Omit to apply to all parts."
+          ),
+        }),
+        execute: async ({ measureNumbers, articulation, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = removeArticulations(liveXml, measureNumbers, articulation as ArticulationMarking | undefined, partId);
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, articulation: articulation ?? "all", measures: measureNumbers, partId: partId ?? "all" };
         },
       },
 
@@ -563,6 +594,7 @@ Rules:
             slur: z.enum(["start", "stop"]).optional().describe("Start or stop a slur (phrase mark) on this note."),
             tuplet: z.enum(["start", "stop"]).optional().describe("Mark the start or stop of a tuplet bracket. Use 'start' on the first note and 'stop' on the last note of a triplet group."),
             ornament: z.enum(["trill", "mordent", "inverted-mordent", "turn"]).optional().describe("Ornament to attach to this note."),
+            articulation: z.enum(["staccato", "accent", "tenuto", "marcato", "staccatissimo"]).optional().describe("Articulation marking on this specific note. Use accent for > marks, staccato for dots, tenuto for dashes."),
             lyric: z.object({ text: z.string(), syllabic: z.enum(["single", "begin", "middle", "end"]).optional(), verse: z.number().optional() }).optional().describe("Lyric syllable for vocal parts."),
           })).describe("Array of notes to write into the measure, in order."),
         }),

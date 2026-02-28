@@ -73,7 +73,16 @@ export default function ScoreViewer({
   const [measureStartsMs, setMeasureStartsMs] = useState<number[]>([]);
   const [playingMeasure, setPlayingMeasure] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const historyListRef = useRef<HTMLDivElement>(null);
   const [rendering, setRendering] = useState(false);
+
+  // Auto-scroll history dropdown to show current entry when opened
+  useEffect(() => {
+    if (historyOpen && historyListRef.current) {
+      const active = historyListRef.current.querySelector("[data-active]");
+      if (active) active.scrollIntoView({ block: "center" });
+    }
+  }, [historyOpen]);
 
   // Build channel → instrument map from all <midi-instrument> blocks in MusicXML
   const channelInstruments: Record<number, string> = {};
@@ -289,10 +298,11 @@ export default function ScoreViewer({
                   className="fixed inset-0 z-10"
                   onClick={() => setHistoryOpen(false)}
                 />
-                <div className="absolute left-0 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
+                <div ref={historyListRef} className="absolute left-0 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
                   {historyEntries.map((entry, i) => (
                     <button
                       key={i}
+                      {...(i === historyIndex ? { "data-active": "" } : {})}
                       onClick={() => { onJumpTo?.(i); setHistoryOpen(false); }}
                       className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-800 transition flex items-center gap-2 ${
                         i === historyIndex ? "text-indigo-400 font-semibold" : "text-gray-300"
