@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import { capture } from "@/lib/posthog";
@@ -25,10 +25,20 @@ function timeAgo(iso: string): string {
 
 export default function FilesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [upgraded, setUpgraded] = useState(false);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (searchParams.get("upgraded") === "true") {
+      setUpgraded(true);
+      // Remove the query param from the URL without a page reload
+      window.history.replaceState({}, "", "/editor");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetch("/api/files")
@@ -110,9 +120,19 @@ export default function FilesPage() {
 
   return (
     <div className="min-h-screen bg-white text-gray-900 flex flex-col">
+      {/* Upgrade success banner */}
+      {upgraded && (
+        <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-sm text-emerald-800">
+            <span className="text-base">🎉</span>
+            <span><strong>Welcome to Pro!</strong> You now have unlimited AI edits.</span>
+          </div>
+          <button onClick={() => setUpgraded(false)} className="text-emerald-600 hover:text-emerald-800 transition text-lg leading-none">✕</button>
+        </div>
+      )}
       {/* Header */}
       <header className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold tracking-tight flex items-center gap-1.5"><Logo size={24} className="text-brand-primary" />Yap<span className="text-brand-primary">Score</span></h1>
+        <h1 className="text-xl font-bold tracking-tight flex items-center"><Logo size={24} className="text-brand-primary mr-1.5" />Yap<span className="text-brand-primary">Score</span></h1>
         <div className="flex items-center gap-2">
           <button
             onClick={createBlank}

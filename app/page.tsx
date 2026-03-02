@@ -1,30 +1,6 @@
 import Link from "next/link";
 import ScoreAnimation from "@/components/ScoreAnimation";
-import Logo from "@/components/Logo";
-
-function Navbar() {
-  return (
-    <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-1.5">
-          <Logo size={24} className="text-brand-primary" />
-          Yap<span className="text-brand-primary">Score</span>
-        </Link>
-        <div className="flex items-center gap-6">
-          <Link href="/docs" className="text-sm text-gray-600 hover:text-gray-900 transition">
-            Docs
-          </Link>
-          <Link
-            href="/login"
-            className="text-sm px-5 py-2 bg-brand-primary hover:bg-brand-primary/90 text-white rounded-lg font-medium transition shadow-sm"
-          >
-            Get Started
-          </Link>
-        </div>
-      </div>
-    </nav>
-  );
-}
+import PublicNavbar from "@/components/PublicNavbar";
 
 function Hero() {
   return (
@@ -272,7 +248,7 @@ function Pricing() {
           <div className="bg-white rounded-2xl p-8 border border-gray-200 text-left">
             <h3 className="text-lg font-bold text-gray-900">Free</h3>
             <div className="mt-3">
-              <span className="text-4xl font-extrabold text-gray-900">$0</span>
+              <span className="text-4xl font-extrabold text-gray-900">€0</span>
               <span className="text-brand-secondary ml-1">/month</span>
             </div>
             <ul className="mt-6 space-y-3 text-sm text-gray-700">
@@ -303,7 +279,7 @@ function Pricing() {
             </div>
             <h3 className="text-lg font-bold text-gray-900">Pro</h3>
             <div className="mt-3">
-              <span className="text-4xl font-extrabold text-gray-900">$9</span>
+              <span className="text-4xl font-extrabold text-gray-900">€9.90</span>
               <span className="text-brand-secondary ml-1">/month</span>
             </div>
             <ul className="mt-6 space-y-3 text-sm text-gray-700">
@@ -390,6 +366,7 @@ function Footer() {
         </div>
         <div className="flex items-center gap-6 text-sm text-brand-secondary">
           <Link href="/docs" className="hover:text-gray-900 transition">Docs</Link>
+          <Link href="/changelog" className="hover:text-gray-900 transition">Changelog</Link>
           <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
         </div>
       </div>
@@ -400,7 +377,7 @@ function Footer() {
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <Navbar />
+      <PublicNavbar />
       <Hero />
       <HowItWorks />
       <Features />

@@ -11,19 +11,9 @@ type Props = {
   scoreName: string | null;
   selectedMeasures: Set<number>;
   onMeasureClick: (measureNumber: number, addToSelection: boolean) => void;
-  // History controls
-  canUndo?: boolean;
-  canRedo?: boolean;
-  historyIndex?: number;
-  historyLength?: number;
-  historyEntries?: { name: string; timestamp: string }[];
-  onUndo?: () => void;
-  onRedo?: () => void;
-  onJumpTo?: (index: number) => void;
   onPlaybackStop?: () => void;
-  onSingClick?: () => void;
-  onBack?: () => void;
   onMusicXmlChange?: (xml: string, label: string) => void;
+  isMobile?: boolean;
 };
 
 // General MIDI program → soundfont-player instrument name (programs 1–128)
@@ -53,22 +43,9 @@ const GM_INSTRUMENTS: string[] = [
   "guitar_fret_noise","breath_noise","seashore","bird_tweet","telephone_ring","helicopter","applause","gunshot",
 ];
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1)  return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
-
 export default function ScoreViewer({
   musicXml, scoreName, selectedMeasures, onMeasureClick,
-  canUndo, canRedo, historyIndex = -1, historyLength = 0,
-  historyEntries = [], onUndo, onRedo, onJumpTo, onPlaybackStop, onSingClick, onBack,
-  onMusicXmlChange,
+  onPlaybackStop, onMusicXmlChange, isMobile,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -78,8 +55,6 @@ export default function ScoreViewer({
   const [midiSrc, setMidiSrc] = useState<string | null>(null);
   const [measureStartsMs, setMeasureStartsMs] = useState<number[]>([]);
   const [playingMeasure, setPlayingMeasure] = useState<number | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const historyListRef = useRef<HTMLDivElement>(null);
   const [rendering, setRendering] = useState(false);
 
   // Swing: "jazz" = 66% triplet swing (2:1), "straight" = no swing
@@ -97,14 +72,6 @@ export default function ScoreViewer({
     const processed = swingEnabled ? applySwingToMidi(raw, 2 / 3) : raw;
     setMidiSrc(`data:audio/midi;base64,${processed}`);
   }, [swingEnabled]);
-
-  // Auto-scroll history dropdown to show current entry when opened
-  useEffect(() => {
-    if (historyOpen && historyListRef.current) {
-      const active = historyListRef.current.querySelector("[data-active]");
-      if (active) active.scrollIntoView({ block: "center" });
-    }
-  }, [historyOpen]);
 
   // Build channel → instrument map from all <midi-instrument> blocks in MusicXML
   const channelInstruments: Record<number, string> = {};
@@ -260,15 +227,6 @@ export default function ScoreViewer({
   if (!musicXml) {
     return (
       <div className="flex flex-col h-full">
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 bg-white min-h-[48px]">
-          <button
-            onClick={onBack}
-            className="text-brand-secondary hover:text-gray-900 transition text-xs px-1.5 py-1 rounded hover:bg-gray-100"
-            title="All files"
-          >
-            ← Files
-          </button>
-        </div>
         <div className="flex-1 flex items-center justify-center text-brand-secondary text-sm">
           Upload a score and send an instruction to see it here.
         </div>
@@ -276,97 +234,38 @@ export default function ScoreViewer({
     );
   }
 
+  const downloadMusicXml = () => {
+    if (!musicXml) return;
+    capture("download_clicked", { format: "musicxml" });
+    const blob = new Blob([musicXml], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${scoreName ?? "score"}.musicxml`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 bg-white min-h-[48px]">
-        {/* Back to files */}
-        <button
-          onClick={onBack}
-          className="text-brand-secondary hover:text-gray-900 transition text-xs px-1.5 py-1 rounded hover:bg-gray-100 shrink-0"
-          title="All files"
-        >
-          ← Files
-        </button>
-        <span className="text-gray-300 text-xs">|</span>
-        {/* Undo / Redo */}
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={onUndo}
-            disabled={!canUndo}
-            title="Undo (Ctrl+Z)"
-            className="px-2 py-1 rounded text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-30 transition"
-          >
-            ↩
-          </button>
-          <button
-            onClick={onRedo}
-            disabled={!canRedo}
-            title="Redo (Ctrl+Y)"
-            className="px-2 py-1 rounded text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-30 transition"
-          >
-            ↪
-          </button>
+    <div className="flex flex-col h-full relative">
+      {/* Info bar: metadata + jazz/straight + playback + download */}
+      <div className="flex flex-wrap items-center gap-2 px-4 py-1.5 border-b border-gray-200 bg-gray-50">
+        <div className="flex-1 min-w-0">
+          <ScoreInfoBar
+            musicXml={musicXml}
+            onTempoChange={onMusicXmlChange && musicXml ? (bpm) => {
+              const updated = setTempo(musicXml, bpm);
+              capture("tempo_changed_inline", { bpm });
+              onMusicXmlChange(updated, `Tempo: ♩ = ${bpm}`);
+            } : undefined}
+          />
         </div>
-
-        {/* History dropdown */}
-        {historyLength > 0 && (
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setHistoryOpen((o) => !o)}
-              title="Version history"
-              className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
-            >
-              v{historyIndex + 1}/{historyLength}
-            </button>
-            {historyOpen && (
-              <>
-                {/* backdrop */}
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setHistoryOpen(false)}
-                />
-                <div ref={historyListRef} className="absolute left-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
-                  {historyEntries.map((entry, i) => (
-                    <button
-                      key={i}
-                      {...(i === historyIndex ? { "data-active": "" } : {})}
-                      onClick={() => { onJumpTo?.(i); setHistoryOpen(false); }}
-                      className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition flex items-center gap-2 ${
-                        i === historyIndex ? "text-brand-primary font-semibold" : "text-gray-700"
-                      }`}
-                    >
-                      <span className="text-brand-secondary tabular-nums w-5 shrink-0">{i + 1}.</span>
-                      <span className="truncate flex-1">{entry.name}</span>
-                      <span className="text-brand-secondary shrink-0 tabular-nums">
-                        {timeAgo(entry.timestamp)}
-                      </span>
-                      {i === historyIndex && <span className="text-brand-primary">←</span>}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Sing */}
-        {onSingClick && (
-          <button
-            onClick={() => { capture("sing_opened"); onSingClick(); }}
-            title="Sing a melody"
-            className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 transition shrink-0"
-          >
-            ♪ Sing
-          </button>
-        )}
-
         {/* Jazz / Straight toggle */}
         {midiSrc && (
           <button
             onClick={() => setSwingEnabled(s => { capture("swing_toggled", { enabled: !s }); return !s; })}
             title={swingEnabled ? "Switch to straight" : "Switch to jazz swing"}
-            className={`text-xs px-2 py-1 rounded transition shrink-0 ${
+            className={`text-xs px-2 py-1 rounded-lg transition shrink-0 ${
               swingEnabled
                 ? "bg-brand-accent hover:bg-brand-accent/90 text-gray-900 font-medium"
                 : "bg-gray-100 hover:bg-gray-200 text-gray-500"
@@ -375,9 +274,8 @@ export default function ScoreViewer({
             {swingEnabled ? "Jazz" : "Straight"}
           </button>
         )}
-
-        {/* MIDI player */}
-        <div className="flex-1 min-w-0">
+        {/* Play — desktop only (mobile uses FAB) */}
+        <div className="hidden md:flex items-center gap-2 shrink-0">
           {midiSrc ? (
             <MidiPlayer
               src={midiSrc}
@@ -389,37 +287,25 @@ export default function ScoreViewer({
           ) : (
             <span className="text-xs text-brand-secondary">Rendering…</span>
           )}
+          <button
+            onClick={downloadMusicXml}
+            className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
+            title="Download as MusicXML"
+          >
+            ⬇ Export
+          </button>
         </div>
-
-        {/* Download MusicXML */}
-        <button
-          onClick={() => {
-            if (!musicXml) return;
-            capture("download_clicked", { format: "musicxml" });
-            const blob = new Blob([musicXml], { type: "application/xml" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${scoreName ?? "score"}.musicxml`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-          className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition shrink-0"
-          title="Download as MusicXML"
-        >
-          ⬇ MusicXML
-        </button>
+        {/* Mobile: download only (play is a FAB) */}
+        <div className="flex md:hidden items-center gap-2 shrink-0">
+          <button
+            onClick={downloadMusicXml}
+            className="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
+            title="Download as MusicXML"
+          >
+            ⬇
+          </button>
+        </div>
       </div>
-
-      {/* Score info bar */}
-      <ScoreInfoBar
-        musicXml={musicXml}
-        onTempoChange={onMusicXmlChange && musicXml ? (bpm) => {
-          const updated = setTempo(musicXml, bpm);
-          capture("tempo_changed_inline", { bpm });
-          onMusicXmlChange(updated, `Tempo: ♩ = ${bpm}`);
-        } : undefined}
-      />
 
       {/* Score */}
       <div className="flex-1 overflow-y-auto bg-white relative" ref={scrollContainerRef}>
@@ -431,8 +317,21 @@ export default function ScoreViewer({
             </div>
           </div>
         )}
-        <div className="p-6" ref={containerRef} />
+        <div className="p-3 md:p-6" ref={containerRef} />
       </div>
+
+      {/* Mobile floating play button (FAB) */}
+      {isMobile && midiSrc && (
+        <div className="md:hidden fixed bottom-4 right-4 z-30">
+          <MidiPlayer
+            src={midiSrc}
+            channelInstruments={channelInstruments}
+            measureStartsMs={measureStartsMs}
+            selectedMeasures={selectedMeasures}
+            onMeasureChange={setPlayingMeasure}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -502,7 +401,7 @@ function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: string; onTempoCh
   items.push({ label: `${measureCount} bars` });
 
   return (
-    <div className="flex items-center gap-3 px-4 py-1 border-b border-gray-200 bg-gray-50 text-[11px] text-brand-secondary">
+    <div className="flex items-center gap-3 text-[11px] text-brand-secondary">
       {items.map((item, i) => (
         <span key={i} className={`flex items-center gap-3${item.dim ? " opacity-40" : ""}`}>
           {i > 0 && <span className="text-gray-300">·</span>}
