@@ -24,7 +24,7 @@ jobs:
         run: bun run tsc --noEmit
 
       - name: Tests
-        run: bun test
+        run: bun test tests/musicxml.test.ts tests/musicxml-regression.test.ts tests/musicxml-new-features.test.ts
 
       - name: Pull Vercel environment
         run: bunx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}

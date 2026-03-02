@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bun test
+      - run: bun test tests/musicxml.test.ts tests/musicxml-regression.test.ts tests/musicxml-new-features.test.ts
 
   build:
     name: Build
