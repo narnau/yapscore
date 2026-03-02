@@ -78,7 +78,8 @@ export default function EditorTopBar({
     <div className="relative flex items-center px-3 py-2 border-b border-gray-200 bg-white shrink-0">
       {/* Centered logo (absolute so it doesn't affect layout) */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <Logo size={16} className="text-brand-primary" />
+        <Logo size={18} className="text-brand-primary mr-1" />
+        <span className="text-sm font-bold text-gray-900 tracking-tight">Yap<span className="text-brand-primary">Score</span></span>
       </div>
       {/* Left zone — Back */}
       <div className="flex items-center shrink-0">
