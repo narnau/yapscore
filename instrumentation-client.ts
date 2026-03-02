@@ -15,6 +15,17 @@ Sentry.init({
   // Enable sending user PII (Personally Identifiable Information)
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
   sendDefaultPii: true,
+
+  // Drop non-actionable events: browser Event objects captured as promise
+  // rejections (e.g. resource load failures, CSP violations). These have no
+  // stack trace and surface as "<unknown>" in Sentry.
+  beforeSend(event, hint) {
+    const orig = hint?.originalException;
+    if (orig instanceof Event && !(orig instanceof Error)) {
+      return null;
+    }
+    return event;
+  },
 });
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

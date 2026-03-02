@@ -37,7 +37,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
               // API calls: Supabase, OpenRouter, Stripe
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""} https://openrouter.ai https://api.stripe.com https://o4507995819524096.ingest.us.sentry.io https://gleitz.github.io https://eu.i.posthog.com https://eu-assets.i.posthog.com`,
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""} https://openrouter.ai https://api.stripe.com https://gleitz.github.io https://eu.i.posthog.com https://eu-assets.i.posthog.com`,
               // Stripe hosted fields
               "frame-src https://js.stripe.com https://hooks.stripe.com",
               "worker-src 'self' blob:",
