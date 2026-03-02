@@ -6,3 +6,9 @@ node_modules/
 # Score library — ignore uploaded files, but keep the directory and metadata
 score-library/files/*
 !score-library/files/.gitkeep
+
+# Sentry Config File
+.env.sentry-build-plugin
+
+# Sentry auto-fix worktrees
+.sentry-worktrees/

@@ -8,11 +8,12 @@ import {
 import type {
   Score, Part, Measure, MeasureEntry, NoteEntry, Pitch,
   MeasureAttributes, DirectionEntry, DirectionType,
-  BackupEntry, Barline, NoteType, Notation, ArticulationNotation, Lyric as MxlLyric,
+  BackupEntry, Barline, NoteType, Notation, Lyric as MxlLyric,
   PartInfo, DynamicsValue,
 } from "musicxml-io";
 
 type HarmonyEntry = Extract<MeasureEntry, { type: "harmony" }>;
+type ArticulationNotation = Extract<Notation, { type: "articulation" }>;
 
 // ─── Score model helpers ────────────────────────────────────────────────────
 
@@ -419,10 +420,18 @@ export function insertPickupMeasure(musicXml: string, pickupBeats: number): stri
   const pickupDuration = Math.round(divisions * pickupBeats * (4 / beatType));
 
   for (const part of score.parts) {
+    const originalFirst = part.measures[0];
+
+    // Move attributes from the original first measure to the new pickup measure
+    // so the first measure in the file always carries divisions, clef, key, time.
+    const attrs = originalFirst?.attributes;
+    if (originalFirst) originalFirst.attributes = undefined;
+
     const m: Measure = {
       _id: generateId(),
       number: "1",
       implicit: true,
+      attributes: attrs,
       entries: [wholeRest(pickupDuration)],
     };
     part.measures = [m, ...part.measures];
@@ -1771,4 +1780,62 @@ export function movePart(musicXml: string, partId: string, direction: "up" | "do
   }
 
   return mxlSerialize(score);
+}
+
+// ─── setSwing / getSwing ─────────────────────────────────────────────────────
+
+export type SwingInfo = {
+  /** first:second ratio — e.g. {first:2, second:1} for standard triplet swing */
+  first: number;
+  second: number;
+  swingType: "eighth" | "16th";
+};
+
+/** Convert a swing percentage (50–75) to a simple first:second ratio for MusicXML.
+ *  50% → 1:1 (straight), 60% → 3:2, 66% → 2:1, 75% → 3:1 */
+function percentToSwingRatio(percent: number): { first: number; second: number } {
+  // Common named ratios
+  if (percent <= 50) return { first: 1, second: 1 };
+  if (percent >= 75) return { first: 3, second: 1 };
+  if (percent >= 65 && percent <= 68) return { first: 2, second: 1 }; // 66.7%
+  if (percent >= 58 && percent <= 62) return { first: 3, second: 2 }; // 60%
+  // Generic: store as p:(100-p) — exact but large numbers
+  const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
+  const g = gcd(percent, 100 - percent);
+  return { first: percent / g, second: (100 - percent) / g };
+}
+
+/** Convert first:second back to percentage (e.g. 2:1 → 67). */
+export function swingRatioToPercent(first: number, second: number): number {
+  return Math.round(first / (first + second) * 100);
+}
+
+/** Remove any existing swing direction, then optionally insert a new one. */
+export function setSwing(musicXml: string, swing: SwingInfo | null): string {
+  // Strip any existing swing direction block we previously inserted
+  let xml = musicXml.replace(
+    /<direction[^>]*>\s*<direction-type>\s*<words[^>]*>Swing<\/words>\s*<\/direction-type>[\s\S]*?<\/direction>\n?/g,
+    ""
+  );
+  if (!swing) return xml;
+
+  const { first, second, swingType } = swing;
+  const block =
+    `<direction placement="above">\n` +
+    `      <direction-type><words>Swing</words></direction-type>\n` +
+    `      <sound><swing><first>${first}</first><second>${second}</second>` +
+    `<swing-type>${swingType}</swing-type></swing></sound>\n` +
+    `    </direction>\n    `;
+
+  // Insert as first child of the first measure
+  return xml.replace(/(<measure\b[^>]*>)(\s*)/, `$1\n    ${block}`);
+}
+
+/** Detect swing info stored in the MusicXML (returns null if straight). */
+export function getSwing(musicXml: string): SwingInfo | null {
+  const m = musicXml.match(
+    /<swing>\s*<first>(\d+)<\/first>\s*<second>(\d+)<\/second>\s*<swing-type>(eighth|16th)<\/swing-type>\s*<\/swing>/
+  );
+  if (!m) return null;
+  return { first: parseInt(m[1]), second: parseInt(m[2]), swingType: m[3] as "eighth" | "16th" };
 }

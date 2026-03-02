@@ -40,6 +40,10 @@ export async function POST(req: NextRequest) {
 
   const selectedMeasures = selectedRaw ? (JSON.parse(selectedRaw) as number[]) : null;
 
+  // BUG: intentional crash to test Sentry error reporting
+  const buggyValue: any = null;
+  if (message.length > 0) buggyValue.toString();
+
   const historyRaw = formData.get("history") as string | null;
   const history: { role: "user" | "assistant"; content: string }[] = historyRaw
     ? JSON.parse(historyRaw)

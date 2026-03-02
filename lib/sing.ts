@@ -290,14 +290,21 @@ export function quantizePitches(
   const totalSlots = measures * beats * 2;
   const notes: DetectedNote[] = [];
 
+  // Snap the first detected note to beat 1 (slot 0): subtract its timestamp
+  // from all frames so the melody always starts at the beginning of the grid.
+  const firstPitched = pitches.find(p => p.hz > 0);
+  const timeOffset = firstPitched ? firstPitched.time : 0;
+  const shifted = pitches.map(p => ({ time: p.time - timeOffset, hz: p.hz }));
+
   console.log(`[sing] quantizePitches: bpm=${bpm}, beats=${beats}, measures=${measures}, totalSlots=${totalSlots}, slotDuration=${slotDuration.toFixed(3)}s`);
+  console.log(`[sing] first note at t=${timeOffset.toFixed(3)}s → aligned to slot 0 (beat 1)`);
 
   for (let slot = 0; slot < totalSlots; slot++) {
     const slotStart = slot * slotDuration;
     const slotEnd = slotStart + slotDuration;
 
     // Get all pitch frames within this slot
-    const framesInSlot = pitches.filter(p => p.time >= slotStart && p.time < slotEnd);
+    const framesInSlot = shifted.filter(p => p.time >= slotStart && p.time < slotEnd);
     const pitchedFrames = framesInSlot.filter(p => p.hz > 0);
 
     if (pitchedFrames.length < framesInSlot.length * 0.5 || pitchedFrames.length === 0) {
@@ -323,7 +330,7 @@ export function quantizePitches(
     for (let slot = 0; slot < totalSlots; slot++) {
       const slotStart = slot * slotDuration;
       const slotEnd = slotStart + slotDuration;
-      const framesInSlot = pitches.filter(p => p.time >= slotStart && p.time < slotEnd && p.hz > 0);
+      const framesInSlot = shifted.filter(p => p.time >= slotStart && p.time < slotEnd && p.hz > 0);
 
       for (const frame of framesInSlot) {
         const exactMidi = 12 * Math.log2(frame.hz / 440) + 69;

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "1",
+    "@sentry/nextjs": "^10",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.97.0",
     "adm-zip": "^0.5.16",

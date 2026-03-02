@@ -56,7 +56,9 @@ export default function ChatPanel({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [micSupported, setMicSupported] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     setMicSupported(!!navigator.mediaDevices?.getUserMedia);
@@ -122,6 +124,29 @@ export default function ChatPanel({
       // microphone permission denied or unavailable
     }
   }, [recording]);
+
+  async function handleFileUpload(file: File) {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/load", { method: "POST", body: form });
+      const data = await res.json();
+      if (data.error) {
+        addMessage({ role: "system", text: `Error loading file: ${data.error}` });
+      } else {
+        const name = file.name.replace(/\.(mscz|mxl|xml|musicxml)$/i, "");
+        onFileNameChange(name);
+        onScoreReady(data.musicXml, name);
+        addMessage({ role: "system", text: `Loaded: ${file.name}` });
+      }
+    } catch {
+      addMessage({ role: "system", text: "Failed to upload file." });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   async function handleUpgrade() {
     try {
@@ -298,6 +323,17 @@ export default function ChatPanel({
         <div ref={chatEndRef} />
       </div>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".mscz,.mxl,.xml,.musicxml"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFileUpload(file);
+        }}
+      />
+
       <form ref={formRef} onSubmit={handleSubmit} className="border-t border-gray-800 p-3 space-y-2">
         {/* Selection badge */}
         {selectedMeasures.size > 0 && (
@@ -333,7 +369,7 @@ export default function ChatPanel({
                 ? "Recording…"
                 : currentMusicXml
                 ? "Modify, transpose, ask anything…"
-                : "Ask me to create a score, or upload one above…"
+                : "Ask me to create a score, or upload a file with 📎…"
             }
             disabled={loading || isAtLimit || recording}
             rows={3}
@@ -354,6 +390,23 @@ export default function ChatPanel({
               </button>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loading || uploading}
+                  className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-200 hover:bg-gray-700"
+                  title="Upload .mscz or .mxl file"
+                >
+                  {uploading ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 animate-spin">
+                      <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                      <path fillRule="evenodd" d="M15.621 4.379a3 3 0 0 0-4.242 0l-7 7a3 3 0 0 0 4.241 4.243h.001l.497-.5a.75.75 0 0 1 1.064 1.057l-.498.501-.002.002a4.5 4.5 0 0 1-6.364-6.364l7-7a4.5 4.5 0 0 1 6.368 6.36l-3.455 3.553A2.625 2.625 0 1 1 9.52 9.52l3.45-3.451a.75.75 0 1 1 1.061 1.06l-3.45 3.451a1.125 1.125 0 0 0 1.587 1.595l3.454-3.553a3 3 0 0 0 0-4.242Z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </button>
                 <div className="flex-1" />
                 {micSupported && (
                   <button

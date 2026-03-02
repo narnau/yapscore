@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MidiPlayer from "./MidiPlayer";
+import { applySwingToMidi } from "@/lib/swing-midi";
+import { getSwing } from "@/lib/musicxml";
 
 type Props = {
   musicXml: string | null;
@@ -69,12 +71,38 @@ export default function ScoreViewer({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const onClickRef = useRef(onMeasureClick);
   onClickRef.current = onMeasureClick;
+  const rawMidiBase64Ref = useRef<string | null>(null);
   const [midiSrc, setMidiSrc] = useState<string | null>(null);
   const [measureStartsMs, setMeasureStartsMs] = useState<number[]>([]);
   const [playingMeasure, setPlayingMeasure] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyListRef = useRef<HTMLDivElement>(null);
   const [rendering, setRendering] = useState(false);
+
+  // Swing state: initialized from MusicXML, can be toggled independently.
+  // swingPercent: 50 = straight, 60 = MuseScore default, 66 = jazz triplet, 75 = dotted feel
+  const [swingEnabled, setSwingEnabled] = useState(() => !!musicXml && !!getSwing(musicXml));
+  const [swingPercent, setSwingPercent] = useState(() => {
+    if (!musicXml) return 60;
+    const sw = getSwing(musicXml);
+    if (!sw) return 60;
+    return Math.round(sw.first / (sw.first + sw.second) * 100);
+  });
+
+  // Re-detect swing when musicXml changes (e.g. agent adds/removes swing)
+  useEffect(() => {
+    const sw = musicXml ? getSwing(musicXml) : null;
+    setSwingEnabled(!!sw);
+    if (sw) setSwingPercent(Math.round(sw.first / (sw.first + sw.second) * 100));
+  }, [musicXml]);
+
+  // Recompute midiSrc whenever swing toggle or percentage changes (no re-render needed)
+  useEffect(() => {
+    const raw = rawMidiBase64Ref.current;
+    if (!raw) return;
+    const processed = swingEnabled ? applySwingToMidi(raw, swingPercent / 100) : raw;
+    setMidiSrc(`data:audio/midi;base64,${processed}`);
+  }, [swingEnabled, swingPercent]);
 
   // Auto-scroll history dropdown to show current entry when opened
   useEffect(() => {
@@ -135,7 +163,9 @@ export default function ScoreViewer({
       // Export MIDI for playback
       const midiBase64 = tk.renderToMIDI() as string;
       if (!cancelled && midiBase64) {
-        setMidiSrc(`data:audio/midi;base64,${midiBase64}`);
+        rawMidiBase64Ref.current = midiBase64;
+        const processed = swingEnabled ? applySwingToMidi(midiBase64, swingPercent / 100) : midiBase64;
+        setMidiSrc(`data:audio/midi;base64,${processed}`);
       }
 
       // Build measure start times (ms) from Verovio timemap for accurate playback tracking
@@ -331,6 +361,38 @@ export default function ScoreViewer({
           >
             ♪ Sing
           </button>
+        )}
+
+        {/* Swing toggle + percentage */}
+        {midiSrc && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setSwingEnabled(s => !s)}
+              title={swingEnabled ? "Switch to straight feel" : "Switch to swing feel"}
+              className={`text-xs px-2 py-1 rounded transition ${
+                swingEnabled
+                  ? "bg-amber-600 hover:bg-amber-500 text-white"
+                  : "bg-gray-800 hover:bg-gray-700 text-gray-400"
+              }`}
+            >
+              {swingEnabled ? "Swing" : "Straight"}
+            </button>
+            {swingEnabled && (
+              <>
+                <input
+                  type="range"
+                  min={50}
+                  max={75}
+                  step={1}
+                  value={swingPercent}
+                  onChange={e => setSwingPercent(parseInt(e.target.value))}
+                  title={`Swing: ${swingPercent}% (50=straight, 60=default, 66=jazz, 75=dotted)`}
+                  className="w-16 h-1 accent-amber-500 cursor-pointer"
+                />
+                <span className="text-xs text-amber-400 tabular-nums w-7">{swingPercent}%</span>
+              </>
+            )}
+          </div>
         )}
 
         {/* MIDI player */}

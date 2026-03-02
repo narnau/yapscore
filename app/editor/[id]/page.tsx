@@ -89,6 +89,19 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           const entries = [{ musicXml: file.current_xml, name: file.name, timestamp: file.updated_at, messages: [] as Message[] }];
           dispatch({ type: "restore", entries, index: 0 });
           setMessages([]);
+        } else if (history.length === 0 && !file.current_xml) {
+          // Brand new file — load a default blank piano score and show a welcome message
+          const defaultRes = await fetch("/api/default-score");
+          if (defaultRes.ok) {
+            const { musicXml: defaultXml } = await defaultRes.json();
+            const welcomeMsg: Message = {
+              role: "system",
+              text: "👋 I've set up a blank 4-measure piano score for you. Tell me what you'd like to create — a melody, a chord progression, an arrangement — or upload a .mscz file to get started!",
+            };
+            const entries = [{ musicXml: defaultXml, name: null, timestamp: new Date().toISOString(), messages: [welcomeMsg] }];
+            dispatch({ type: "restore", entries, index: 0 });
+            setMessages([welcomeMsg]);
+          }
         } else {
           dispatch({ type: "restore", entries: history, index });
           setMessages(messagesAtIndex(history, index));
