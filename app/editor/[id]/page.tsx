@@ -322,6 +322,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           onPlaybackStop={() => setSelectedMeasures(new Set())}
           onSingClick={musicXml ? () => setSingOpen(true) : undefined}
           onBack={handleBack}
+          onMusicXmlChange={(xml, label) => handleScoreReady(xml, label)}
         />
       </div>
       {singOpen && musicXml && (

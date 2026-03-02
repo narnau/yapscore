@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import MidiPlayer from "./MidiPlayer";
 import { applySwingToMidi } from "@/lib/swing-midi";
-import { getSwing } from "@/lib/musicxml";
+import { getSwing, setTempo } from "@/lib/musicxml";
 import { capture } from "@/lib/posthog";
 
 type Props = {
@@ -23,6 +23,7 @@ type Props = {
   onPlaybackStop?: () => void;
   onSingClick?: () => void;
   onBack?: () => void;
+  onMusicXmlChange?: (xml: string, label: string) => void;
 };
 
 // General MIDI program → soundfont-player instrument name (programs 1–128)
@@ -67,6 +68,7 @@ export default function ScoreViewer({
   musicXml, scoreName, selectedMeasures, onMeasureClick,
   canUndo, canRedo, historyIndex = -1, historyLength = 0,
   historyEntries = [], onUndo, onRedo, onJumpTo, onPlaybackStop, onSingClick, onBack,
+  onMusicXmlChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -410,7 +412,14 @@ export default function ScoreViewer({
       </div>
 
       {/* Score info bar */}
-      <ScoreInfoBar musicXml={musicXml} />
+      <ScoreInfoBar
+        musicXml={musicXml}
+        onTempoChange={onMusicXmlChange && musicXml ? (bpm) => {
+          const updated = setTempo(musicXml, bpm);
+          capture("tempo_changed_inline", { bpm });
+          onMusicXmlChange(updated, `Tempo: ♩ = ${bpm}`);
+        } : undefined}
+      />
 
       {/* Score */}
       <div className="flex-1 overflow-y-auto bg-white relative" ref={scrollContainerRef}>
@@ -432,7 +441,7 @@ export default function ScoreViewer({
 
 const FIFTHS_KEYS = ["Cb","Gb","Db","Ab","Eb","Bb","F","C","G","D","A","E","B","F#","C#"];
 
-function ScoreInfoBar({ musicXml }: { musicXml: string }) {
+function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: string; onTempoChange?: (bpm: number) => void }) {
   const instruments = [...musicXml.matchAll(/<part-name>([^<]+)<\/part-name>/g)]
     .map((m) => m[1].trim())
     .filter(Boolean)
@@ -454,11 +463,42 @@ function ScoreInfoBar({ musicXml }: { musicXml: string }) {
     ? (firstPart[0].match(/<measure\b/g) ?? []).length
     : 0;
 
-  const items: Array<{ label: string; dim?: boolean }> = [];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function startEdit() {
+    if (!onTempoChange) return;
+    setDraft(String(tempo));
+    setEditing(true);
+    setTimeout(() => { inputRef.current?.select(); }, 0);
+  }
+
+  function commit() {
+    const bpm = parseInt(draft, 10);
+    if (!isNaN(bpm) && bpm >= 20 && bpm <= 400 && bpm !== tempo) {
+      onTempoChange?.(bpm);
+    }
+    setEditing(false);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") commit();
+    if (e.key === "Escape") setEditing(false);
+  }
+
+  // Reset editing state when musicXml changes (e.g. after a commit re-render)
+  const prevTempoRef = useRef(tempo);
+  if (prevTempoRef.current !== tempo) {
+    prevTempoRef.current = tempo;
+    if (editing) setEditing(false);
+  }
+
+  const items: Array<{ label: string; dim?: boolean; isTempoSlot?: boolean }> = [];
   if (instruments) items.push({ label: instruments });
   items.push({ label: key });
   items.push({ label: `${beatsStr}/${beatTypeStr}` });
-  items.push({ label: `♩ = ${tempo}`, dim: !tempoExplicit });
+  items.push({ label: `♩ = ${tempo}`, dim: !tempoExplicit, isTempoSlot: true });
   items.push({ label: `${measureCount} bars` });
 
   return (
@@ -466,7 +506,34 @@ function ScoreInfoBar({ musicXml }: { musicXml: string }) {
       {items.map((item, i) => (
         <span key={i} className={`flex items-center gap-3${item.dim ? " opacity-40" : ""}`}>
           {i > 0 && <span className="text-gray-700">·</span>}
-          {item.label}
+          {item.isTempoSlot && onTempoChange ? (
+            editing ? (
+              <span className="flex items-center gap-1">
+                <span>♩ =</span>
+                <input
+                  ref={inputRef}
+                  type="number"
+                  min={20}
+                  max={400}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={commit}
+                  onKeyDown={onKeyDown}
+                  className="w-14 px-1 py-0 rounded bg-gray-700 text-gray-100 text-[11px] border border-gray-600 focus:outline-none focus:border-indigo-500 tabular-nums"
+                />
+              </span>
+            ) : (
+              <button
+                onClick={startEdit}
+                title="Click to change tempo"
+                className="hover:text-gray-200 hover:underline decoration-dotted underline-offset-2 transition cursor-pointer"
+              >
+                {item.label}
+              </button>
+            )
+          ) : (
+            item.label
+          )}
         </span>
       ))}
     </div>
