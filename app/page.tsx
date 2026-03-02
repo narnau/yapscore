@@ -1,11 +1,13 @@
 import Link from "next/link";
 import ScoreAnimation from "@/components/ScoreAnimation";
+import Logo from "@/components/Logo";
 
 function Navbar() {
   return (
     <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold text-gray-900 tracking-tight">
+        <Link href="/" className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-1.5">
+          <Logo size={24} className="text-brand-primary" />
           Yap<span className="text-brand-primary">Score</span>
         </Link>
         <div className="flex items-center gap-6">

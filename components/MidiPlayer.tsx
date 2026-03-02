@@ -245,14 +245,14 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
       {state === "playing" ? (
         <button
           onClick={handleStop}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition"
         >
           <span>⏹</span> Stop
         </button>
       ) : (
         <button
           onClick={handlePlay}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-primary hover:bg-brand-primary/90 text-sm transition"
         >
           <span>▶</span> Play
         </button>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -43,11 +44,9 @@ export default function LoginPage() {
       if (error) {
         setError(error.message);
       } else if (data.session) {
-        // Auto-confirmed (local dev) — redirect immediately
         await fetch("/api/auth/profile", { method: "POST" });
         router.push("/editor");
       } else {
-        // Email confirmation required (production)
         setEmailSent(true);
       }
     } else {
@@ -58,7 +57,6 @@ export default function LoginPage() {
       if (error) {
         setError(error.message);
       } else {
-        // Ensure profile row exists
         await fetch("/api/auth/profile", { method: "POST" });
         router.push("/editor");
       }
@@ -69,20 +67,20 @@ export default function LoginPage() {
 
   if (emailSent) {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center px-6">
+      <main className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
         <div className="max-w-sm w-full text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-indigo-900/50 flex items-center justify-center mx-auto">
-            <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="w-12 h-12 rounded-full bg-brand-primary/10 flex items-center justify-center mx-auto">
+            <svg className="w-6 h-6 text-brand-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold tracking-tight">Check your email</h1>
-          <p className="text-sm text-gray-400">
-            We sent a confirmation link to <span className="text-gray-200">{email}</span>. Click the link to activate your account.
+          <h1 className="text-xl font-bold tracking-tight text-gray-900">Check your email</h1>
+          <p className="text-sm text-brand-secondary">
+            We sent a confirmation link to <span className="text-gray-900 font-medium">{email}</span>. Click the link to activate your account.
           </p>
           <button
             onClick={() => { setEmailSent(false); setMode("login"); }}
-            className="text-xs text-indigo-400 hover:text-indigo-300 transition"
+            className="text-xs text-brand-primary hover:text-brand-primary/80 transition"
           >
             Back to sign in
           </button>
@@ -92,15 +90,18 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-6">
+    <main className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
       <div className="max-w-sm w-full space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight">
-            {mode === "login" ? "Sign in to YapScore" : "Create an account"}
+          <Link href="/" className="text-2xl font-bold text-gray-900 tracking-tight">
+            Yap<span className="text-brand-primary">Score</span>
+          </Link>
+          <h1 className="text-xl font-bold tracking-tight text-gray-900 mt-6">
+            {mode === "login" ? "Welcome back" : "Create an account"}
           </h1>
-          <p className="text-sm text-gray-400 mt-2">
+          <p className="text-sm text-brand-secondary mt-2">
             {mode === "login"
-              ? "Sign in to access the editor, save scores, and more."
+              ? "Sign in to access your scores and editor."
               : "Create a free account to get started."}
           </p>
         </div>
@@ -108,7 +109,7 @@ export default function LoginPage() {
         {/* Google OAuth */}
         <button
           onClick={handleGoogleLogin}
-          className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white text-gray-900 rounded-xl text-sm font-medium hover:bg-gray-100 transition"
+          className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition shadow-sm"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -133,9 +134,9 @@ export default function LoginPage() {
 
         {/* Divider */}
         <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-gray-800" />
-          <span className="text-xs text-gray-500">or</span>
-          <div className="flex-1 h-px bg-gray-800" />
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-brand-secondary">or</span>
+          <div className="flex-1 h-px bg-gray-200" />
         </div>
 
         {/* Email/Password form */}
@@ -146,7 +147,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
             required
-            className="w-full bg-gray-800 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition"
           />
           <input
             type="password"
@@ -155,13 +156,13 @@ export default function LoginPage() {
             placeholder="Password"
             required
             minLength={6}
-            className="w-full bg-gray-800 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition"
           />
-          {error && <p className="text-red-400 text-xs">{error}</p>}
+          {error && <p className="text-red-500 text-xs">{error}</p>}
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 rounded-xl text-sm font-medium transition"
+            className="w-full px-4 py-3 bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-40 text-white rounded-xl text-sm font-medium transition shadow-sm"
           >
             {loading
               ? "Loading..."
@@ -172,13 +173,13 @@ export default function LoginPage() {
         </form>
 
         {/* Toggle login/signup */}
-        <p className="text-center text-xs text-gray-500">
+        <p className="text-center text-xs text-brand-secondary">
           {mode === "login" ? (
             <>
               Don&apos;t have an account?{" "}
               <button
                 onClick={() => { setMode("signup"); setError(null); }}
-                className="text-indigo-400 hover:text-indigo-300 transition"
+                className="text-brand-primary hover:text-brand-primary/80 font-medium transition"
               >
                 Sign up
               </button>
@@ -188,7 +189,7 @@ export default function LoginPage() {
               Already have an account?{" "}
               <button
                 onClick={() => { setMode("login"); setError(null); }}
-                className="text-indigo-400 hover:text-indigo-300 transition"
+                className="text-brand-primary hover:text-brand-primary/80 font-medium transition"
               >
                 Sign in
               </button>

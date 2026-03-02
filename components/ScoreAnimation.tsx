@@ -36,10 +36,9 @@ const SCENARIOS: { prompt: string; notes: Note[] }[] = [
   {
     prompt: "Write a waltz, let it breathe",
     notes: [
-      { x: 118, y: 70 },               // G4
-      { x: 178, y: 55 },               // C5
-      { x: 238, y: 45 },               // E5
-      { x: 298, y: 55 },               // C5
+      { x: 128, y: 70 },               // G4  — 3 beats, 3/4 time
+      { x: 218, y: 55 },               // C5
+      { x: 308, y: 45 },               // E5
     ],
   },
 ];
@@ -143,14 +142,22 @@ export default function ScoreAnimation() {
           transition: `opacity ${FADE_MS}ms ease`,
         }}
       >
-        {/* Window chrome */}
-        <div className="bg-gray-100 px-4 py-3 border-b border-gray-200 flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-red-400" />
-          <span className="w-3 h-3 rounded-full bg-yellow-400" />
-          <span className="w-3 h-3 rounded-full bg-green-400" />
-          <span className="ml-3 text-xs text-gray-400 font-medium tracking-wide">
-            YapScore · Editor
-          </span>
+        {/* Browser URL bar */}
+        <div className="bg-gray-50 px-3 py-2.5 border-b border-gray-200 flex items-center gap-2">
+          {/* Back / forward */}
+          <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+          {/* URL pill */}
+          <div className="flex-1 bg-white rounded-md border border-gray-200 px-2.5 py-1 flex items-center gap-1.5">
+            <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <span className="text-xs text-gray-400 tracking-wide">yapscore.ai/editor</span>
+          </div>
         </div>
 
         {/* Score area */}
@@ -165,13 +172,13 @@ export default function ScoreAnimation() {
             {STAFF_LINES.map((y) => (
               <line
                 key={y}
-                x1="82" y1={y} x2="390" y2={y}
+                x1="66" y1={y} x2="390" y2={y}
                 stroke="#E5E7EB" strokeWidth="1.5"
               />
             ))}
 
             {/* Bar line at start */}
-            <line x1="82" y1="40" x2="82" y2="80" stroke="#D1D5DB" strokeWidth="1.5" />
+            <line x1="66" y1="40" x2="66" y2="80" stroke="#D1D5DB" strokeWidth="1.5" />
 
             {/* Treble clef (Unicode 𝄞 in serif) */}
             <text

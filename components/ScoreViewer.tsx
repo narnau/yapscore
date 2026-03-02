@@ -260,16 +260,16 @@ export default function ScoreViewer({
   if (!musicXml) {
     return (
       <div className="flex flex-col h-full">
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 bg-gray-900 min-h-[48px]">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 bg-white min-h-[48px]">
           <button
             onClick={onBack}
-            className="text-gray-500 hover:text-gray-300 transition text-xs px-1.5 py-1 rounded hover:bg-gray-800"
+            className="text-brand-secondary hover:text-gray-900 transition text-xs px-1.5 py-1 rounded hover:bg-gray-100"
             title="All files"
           >
             ← Files
           </button>
         </div>
-        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+        <div className="flex-1 flex items-center justify-center text-brand-secondary text-sm">
           Upload a score and send an instruction to see it here.
         </div>
       </div>
@@ -279,23 +279,23 @@ export default function ScoreViewer({
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 bg-gray-900 min-h-[48px]">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 bg-white min-h-[48px]">
         {/* Back to files */}
         <button
           onClick={onBack}
-          className="text-gray-500 hover:text-gray-300 transition text-xs px-1.5 py-1 rounded hover:bg-gray-800 shrink-0"
+          className="text-brand-secondary hover:text-gray-900 transition text-xs px-1.5 py-1 rounded hover:bg-gray-100 shrink-0"
           title="All files"
         >
           ← Files
         </button>
-        <span className="text-gray-700 text-xs">|</span>
+        <span className="text-gray-300 text-xs">|</span>
         {/* Undo / Redo */}
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={onUndo}
             disabled={!canUndo}
             title="Undo (Ctrl+Z)"
-            className="px-2 py-1 rounded text-sm bg-gray-800 hover:bg-gray-700 disabled:opacity-30 transition"
+            className="px-2 py-1 rounded text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-30 transition"
           >
             ↩
           </button>
@@ -303,7 +303,7 @@ export default function ScoreViewer({
             onClick={onRedo}
             disabled={!canRedo}
             title="Redo (Ctrl+Y)"
-            className="px-2 py-1 rounded text-sm bg-gray-800 hover:bg-gray-700 disabled:opacity-30 transition"
+            className="px-2 py-1 rounded text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-30 transition"
           >
             ↪
           </button>
@@ -315,7 +315,7 @@ export default function ScoreViewer({
             <button
               onClick={() => setHistoryOpen((o) => !o)}
               title="Version history"
-              className="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
+              className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
             >
               v{historyIndex + 1}/{historyLength}
             </button>
@@ -326,22 +326,22 @@ export default function ScoreViewer({
                   className="fixed inset-0 z-10"
                   onClick={() => setHistoryOpen(false)}
                 />
-                <div ref={historyListRef} className="absolute left-0 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
+                <div ref={historyListRef} className="absolute left-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
                   {historyEntries.map((entry, i) => (
                     <button
                       key={i}
                       {...(i === historyIndex ? { "data-active": "" } : {})}
                       onClick={() => { onJumpTo?.(i); setHistoryOpen(false); }}
-                      className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-800 transition flex items-center gap-2 ${
-                        i === historyIndex ? "text-indigo-400 font-semibold" : "text-gray-300"
+                      className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition flex items-center gap-2 ${
+                        i === historyIndex ? "text-brand-primary font-semibold" : "text-gray-700"
                       }`}
                     >
-                      <span className="text-gray-500 tabular-nums w-5 shrink-0">{i + 1}.</span>
+                      <span className="text-brand-secondary tabular-nums w-5 shrink-0">{i + 1}.</span>
                       <span className="truncate flex-1">{entry.name}</span>
-                      <span className="text-gray-600 shrink-0 tabular-nums">
+                      <span className="text-brand-secondary shrink-0 tabular-nums">
                         {timeAgo(entry.timestamp)}
                       </span>
-                      {i === historyIndex && <span className="text-indigo-400">←</span>}
+                      {i === historyIndex && <span className="text-brand-primary">←</span>}
                     </button>
                   ))}
                 </div>
@@ -355,7 +355,7 @@ export default function ScoreViewer({
           <button
             onClick={() => { capture("sing_opened"); onSingClick(); }}
             title="Sing a melody"
-            className="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition shrink-0"
+            className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 transition shrink-0"
           >
             ♪ Sing
           </button>
@@ -368,8 +368,8 @@ export default function ScoreViewer({
             title={swingEnabled ? "Switch to straight" : "Switch to jazz swing"}
             className={`text-xs px-2 py-1 rounded transition shrink-0 ${
               swingEnabled
-                ? "bg-amber-600 hover:bg-amber-500 text-white"
-                : "bg-gray-800 hover:bg-gray-700 text-gray-400"
+                ? "bg-brand-accent hover:bg-brand-accent/90 text-gray-900 font-medium"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-500"
             }`}
           >
             {swingEnabled ? "Jazz" : "Straight"}
@@ -387,7 +387,7 @@ export default function ScoreViewer({
               onMeasureChange={setPlayingMeasure}
             />
           ) : (
-            <span className="text-xs text-gray-500">Rendering…</span>
+            <span className="text-xs text-brand-secondary">Rendering…</span>
           )}
         </div>
 
@@ -404,7 +404,7 @@ export default function ScoreViewer({
             a.click();
             URL.revokeObjectURL(url);
           }}
-          className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition shrink-0"
+          className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition shrink-0"
           title="Download as MusicXML"
         >
           ⬇ MusicXML
@@ -426,7 +426,7 @@ export default function ScoreViewer({
         {rendering && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
             <div className="flex flex-col items-center gap-2">
-              <div className="w-6 h-6 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-gray-300 border-t-brand-primary rounded-full animate-spin" />
               <span className="text-xs text-gray-400">Rendering…</span>
             </div>
           </div>
@@ -502,10 +502,10 @@ function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: string; onTempoCh
   items.push({ label: `${measureCount} bars` });
 
   return (
-    <div className="flex items-center gap-3 px-4 py-1 border-b border-gray-800 bg-gray-850 text-[11px] text-gray-400">
+    <div className="flex items-center gap-3 px-4 py-1 border-b border-gray-200 bg-gray-50 text-[11px] text-brand-secondary">
       {items.map((item, i) => (
         <span key={i} className={`flex items-center gap-3${item.dim ? " opacity-40" : ""}`}>
-          {i > 0 && <span className="text-gray-700">·</span>}
+          {i > 0 && <span className="text-gray-300">·</span>}
           {item.isTempoSlot && onTempoChange ? (
             editing ? (
               <span className="flex items-center gap-1">
@@ -519,14 +519,14 @@ function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: string; onTempoCh
                   onChange={(e) => setDraft(e.target.value)}
                   onBlur={commit}
                   onKeyDown={onKeyDown}
-                  className="w-14 px-1 py-0 rounded bg-gray-700 text-gray-100 text-[11px] border border-gray-600 focus:outline-none focus:border-indigo-500 tabular-nums"
+                  className="w-14 px-1 py-0 rounded bg-white text-gray-900 text-[11px] border border-gray-200 focus:outline-none focus:border-brand-primary tabular-nums"
                 />
               </span>
             ) : (
               <button
                 onClick={startEdit}
                 title="Click to change tempo"
-                className="hover:text-gray-200 hover:underline decoration-dotted underline-offset-2 transition cursor-pointer"
+                className="hover:text-gray-900 hover:underline decoration-dotted underline-offset-2 transition cursor-pointer"
               >
                 {item.label}
               </button>

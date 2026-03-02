@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Logo from "@/components/Logo";
 import { capture } from "@/lib/posthog";
 
 type FileEntry = {
@@ -108,22 +109,22 @@ export default function FilesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
+    <div className="min-h-screen bg-white text-gray-900 flex flex-col">
       {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold tracking-tight">YapScore</h1>
+      <header className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+        <h1 className="text-xl font-bold tracking-tight flex items-center gap-1.5"><Logo size={24} className="text-brand-primary" />Yap<span className="text-brand-primary">Score</span></h1>
         <div className="flex items-center gap-2">
           <button
             onClick={createBlank}
             disabled={creating}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium transition"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-50 text-white text-sm font-medium transition shadow-sm"
           >
             + New file
           </button>
           <form action="/api/auth/logout" method="POST">
             <button
               type="submit"
-              className="px-3 py-2 rounded-lg text-gray-400 hover:text-gray-100 hover:bg-gray-800 text-sm transition"
+              className="px-3 py-2 rounded-lg text-brand-secondary hover:text-gray-900 hover:bg-gray-50 text-sm transition"
             >
               Log out
             </button>
@@ -141,9 +142,9 @@ export default function FilesPage() {
             const f = e.dataTransfer.files?.[0];
             if (f) handleUpload(f);
           }}
-          className="mb-8 border-2 border-dashed border-gray-700 hover:border-indigo-500 rounded-xl px-6 py-8 text-center cursor-pointer transition group"
+          className="mb-8 border-2 border-dashed border-gray-200 hover:border-brand-primary rounded-xl px-6 py-8 text-center cursor-pointer transition group"
         >
-          <p className="text-gray-400 group-hover:text-gray-200 transition text-sm">
+          <p className="text-brand-secondary group-hover:text-gray-900 transition text-sm">
             Drop a <strong>.mscz</strong>, <strong>.mxl</strong> or <strong>.musicxml</strong> file here, or click to upload
           </p>
           <input
@@ -160,28 +161,28 @@ export default function FilesPage() {
 
         {/* File list */}
         {loading ? (
-          <p className="text-sm text-gray-500 animate-pulse">Loading…</p>
+          <p className="text-sm text-brand-secondary animate-pulse">Loading…</p>
         ) : files.length === 0 ? (
           <div className="text-center py-16 space-y-2">
-            <p className="text-gray-400">No files yet.</p>
-            <p className="text-sm text-gray-600">Upload a score or create a blank file to get started.</p>
+            <p className="text-gray-700">No files yet.</p>
+            <p className="text-sm text-brand-secondary">Upload a score or create a blank file to get started.</p>
           </div>
         ) : (
           <div className="space-y-2">
-            <p className="text-xs text-gray-600 uppercase tracking-wider mb-3">Recent files</p>
+            <p className="text-xs text-brand-secondary uppercase tracking-wider mb-3">Recent files</p>
             {files.map((f) => (
               <Link
                 key={f.id}
                 href={`/editor/${f.id}`}
-                className="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 transition group"
+                className="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-50 hover:bg-gray-100 border border-gray-100 hover:border-gray-200 transition group"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{f.name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{timeAgo(f.updated_at)}</p>
+                  <p className="text-sm font-medium truncate text-gray-900">{f.name}</p>
+                  <p className="text-xs text-brand-secondary mt-0.5">{timeAgo(f.updated_at)}</p>
                 </div>
                 <button
                   onClick={(e) => deleteFile(f.id, e)}
-                  className="ml-4 text-gray-600 hover:text-red-400 transition text-xs px-2 py-1 rounded"
+                  className="ml-4 text-gray-400 hover:text-red-500 transition text-xs px-2 py-1 rounded"
                   title="Delete"
                 >
                   Delete
@@ -193,8 +194,8 @@ export default function FilesPage() {
       </main>
 
       {creating && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <p className="text-sm text-gray-300 animate-pulse">Creating…</p>
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <p className="text-sm text-brand-secondary animate-pulse">Creating…</p>
         </div>
       )}
     </div>

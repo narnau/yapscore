@@ -344,11 +344,11 @@ export default function SingModal({
   }, [musicXml, detectedNotes, beats, replaceSelected, selectedMeasures, insertAfter, onInsert, targetPart, targetStaff, parts]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
-          <h2 className="text-sm font-semibold text-gray-200">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-900">
             {phase === "setup" && "Sing a Melody"}
             {phase === "countdown" && "Get Ready..."}
             {phase === "recording" && "Recording"}
@@ -357,7 +357,7 @@ export default function SingModal({
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-300 text-lg leading-none px-1"
+            className="text-gray-400 hover:text-gray-600 text-lg leading-none px-1"
           >
             ×
           </button>
@@ -368,14 +368,14 @@ export default function SingModal({
           {phase === "setup" && (
             <div className="space-y-4">
               {error && (
-                <div className="text-red-400 text-xs bg-red-950/40 border border-red-900 rounded px-3 py-2">
+                <div className="text-red-600 text-xs bg-red-50 border border-red-200 rounded px-3 py-2">
                   {error}
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">BPM (tempo)</label>
+                  <label className="block text-xs text-brand-secondary mb-1">BPM (tempo)</label>
                   <input
                     type="number"
                     min={40}
@@ -386,11 +386,11 @@ export default function SingModal({
                       setBpm(isNaN(v) ? 0 : v);
                     }}
                     onBlur={() => setBpm(prev => Math.max(40, Math.min(240, prev || 120)))}
-                    className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-sm text-gray-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-brand-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Measures to record</label>
+                  <label className="block text-xs text-brand-secondary mb-1">Measures to record</label>
                   <input
                     type="number"
                     min={1}
@@ -401,7 +401,7 @@ export default function SingModal({
                       setMeasuresToRecord(isNaN(v) ? 0 : v);
                     }}
                     onBlur={() => setMeasuresToRecord(prev => Math.max(1, Math.min(8, prev || 2)))}
-                    className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-sm text-gray-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-brand-primary"
                   />
                 </div>
               </div>
@@ -413,17 +413,17 @@ export default function SingModal({
               {/* Reference pitch / chord */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">Reference</span>
-                  <div className="flex rounded overflow-hidden border border-gray-700 text-xs">
+                  <span className="text-xs text-brand-secondary">Reference</span>
+                  <div className="flex rounded overflow-hidden border border-gray-200 text-xs">
                     <button
                       onClick={() => setRefMode("note")}
-                      className={`px-3 py-1 transition ${refMode === "note" ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                      className={`px-3 py-1 transition ${refMode === "note" ? "bg-brand-primary text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
                     >
                       Note
                     </button>
                     <button
                       onClick={() => setRefMode("chord")}
-                      className={`px-3 py-1 transition ${refMode === "chord" ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                      className={`px-3 py-1 transition ${refMode === "chord" ? "bg-brand-primary text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
                     >
                       Chord
                     </button>
@@ -433,7 +433,7 @@ export default function SingModal({
                     <select
                       value={referenceNote}
                       onChange={e => setReferenceNote(e.target.value)}
-                      className="px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
+                      className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-brand-primary"
                     >
                       {REFERENCE_NOTES.map(n => (
                         <option key={n} value={n}>{n}</option>
@@ -443,7 +443,7 @@ export default function SingModal({
                     <select
                       value={referenceChord}
                       onChange={e => setReferenceChord(e.target.value)}
-                      className="px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
+                      className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-brand-primary"
                     >
                       {Object.keys(REFERENCE_CHORDS).map(c => (
                         <option key={c} value={c}>{c}</option>
@@ -455,8 +455,8 @@ export default function SingModal({
                     onClick={isRefPlaying ? stopReference : playReference}
                     className={`px-3 py-1 rounded border text-xs transition ${
                       isRefPlaying
-                        ? "bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600"
-                        : "bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700"
+                        ? "bg-gray-200 border-gray-300 text-gray-700 hover:bg-gray-300"
+                        : "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
                     {isRefPlaying ? "Stop" : "Listen"}
@@ -464,15 +464,15 @@ export default function SingModal({
                 </div>
               </div>
 
-              <div className="text-xs text-gray-500 bg-gray-800/50 rounded p-3">
-                <strong className="text-gray-400">How it works:</strong> Listen to the reference pitch,
+              <div className="text-xs text-brand-secondary bg-gray-50 rounded p-3">
+                <strong className="text-gray-700">How it works:</strong> Listen to the reference pitch,
                 click Start, hear the count-in ({beats} clicks), then sing or hum your melody.
                 Recording stops automatically after {measuresToRecord} measure{measuresToRecord > 1 ? "s" : ""}.
               </div>
 
               <button
                 onClick={handleStart}
-                className="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition"
+                className="w-full py-3 rounded-lg bg-brand-primary hover:bg-brand-primary/90 text-white font-medium text-sm transition"
               >
                 Start
               </button>
@@ -482,7 +482,7 @@ export default function SingModal({
           {/* ── Phase: Countdown ─────────────────────────────────── */}
           {phase === "countdown" && (
             <div className="flex flex-col items-center justify-center py-12">
-              <div className="text-7xl font-bold text-indigo-400 tabular-nums animate-pulse">
+              <div className="text-7xl font-bold text-brand-primary tabular-nums animate-pulse">
                 {countdownBeat || "..."}
               </div>
               <div className="text-sm text-gray-500 mt-4">Count-in — start singing after this</div>
@@ -505,8 +505,8 @@ export default function SingModal({
                     key={i}
                     className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold transition-all ${
                       currentBeat === i + 1
-                        ? "bg-indigo-500 text-white scale-110"
-                        : "bg-gray-800 text-gray-600"
+                        ? "bg-brand-primary text-white scale-110"
+                        : "bg-gray-100 text-gray-400"
                     }`}
                   >
                     {i + 1}
@@ -515,14 +515,14 @@ export default function SingModal({
               </div>
 
               {/* Measure counter */}
-              <div className="text-sm text-gray-400">
+              <div className="text-sm text-brand-secondary">
                 Measure {currentMeasure} / {measuresToRecord}
               </div>
 
               {/* Progress bar */}
-              <div className="w-full bg-gray-800 rounded-full h-1.5">
+              <div className="w-full bg-gray-100 rounded-full h-1.5">
                 <div
-                  className="bg-indigo-500 h-1.5 rounded-full transition-all"
+                  className="bg-brand-primary h-1.5 rounded-full transition-all"
                   style={{
                     width: `${(((currentMeasure - 1) * beats + currentBeat) / (measuresToRecord * beats)) * 100}%`,
                   }}
@@ -531,7 +531,7 @@ export default function SingModal({
 
               <button
                 onClick={handleStopEarly}
-                className="px-4 py-2 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm transition"
+                className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition"
               >
                 Stop early
               </button>
@@ -546,7 +546,7 @@ export default function SingModal({
                 <span className="absolute text-4xl animate-bounce" style={{ left: 0, animationDelay: "0s" }}>
                   ♪
                 </span>
-                <span className="absolute text-3xl animate-bounce text-indigo-400" style={{ left: 28, top: 4, animationDelay: "0.2s" }}>
+                <span className="absolute text-3xl animate-bounce text-brand-primary" style={{ left: 28, top: 4, animationDelay: "0.2s" }}>
                   ♫
                 </span>
                 <span className="absolute text-4xl animate-bounce text-purple-400" style={{ left: 52, animationDelay: "0.4s" }}>
@@ -555,7 +555,7 @@ export default function SingModal({
               </div>
 
               {/* Rotating message */}
-              <div className="text-sm text-gray-300 text-center transition-all">
+              <div className="text-sm text-gray-700 text-center transition-all">
                 {processingMsg}
               </div>
 
@@ -564,7 +564,7 @@ export default function SingModal({
                 {[0, 1, 2].map(i => (
                   <div
                     key={i}
-                    className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"
+                    className="w-2 h-2 rounded-full bg-brand-primary animate-pulse"
                     style={{ animationDelay: `${i * 0.3}s` }}
                   />
                 ))}
@@ -583,7 +583,7 @@ export default function SingModal({
                     className="w-full [&>svg]:w-full [&>svg]:h-auto"
                   />
                 ) : (
-                  <div className="flex items-center justify-center py-8 text-gray-400 text-sm bg-gray-800 rounded">
+                  <div className="flex items-center justify-center py-8 text-brand-secondary text-sm bg-gray-50 rounded">
                     Rendering preview...
                   </div>
                 )}
@@ -605,8 +605,8 @@ export default function SingModal({
                 }}
                 className={`w-full py-2 rounded text-sm font-medium transition flex items-center justify-center gap-2 ${
                   isPlaying
-                    ? "bg-gray-700 hover:bg-gray-600 text-gray-200"
-                    : "bg-gray-800 hover:bg-gray-700 text-gray-200"
+                    ? "bg-gray-200 hover:bg-gray-300 text-gray-700"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
                 }`}
               >
                 {isPlaying ? (
@@ -617,19 +617,19 @@ export default function SingModal({
               </button>
 
               {/* Insert options */}
-              <div className="border-t border-gray-800 pt-4 space-y-3">
+              <div className="border-t border-gray-200 pt-4 space-y-3">
                 {/* Part & staff selectors */}
                 <div className="flex items-center gap-3 flex-wrap">
                   {parts.length > 1 && (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">Part</span>
+                      <span className="text-xs text-brand-secondary">Part</span>
                       <select
                         value={targetPart}
                         onChange={e => {
                           setTargetPart(e.target.value);
                           setTargetStaff(undefined);
                         }}
-                        className="px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
+                        className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-brand-primary"
                       >
                         {parts.map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
@@ -640,11 +640,11 @@ export default function SingModal({
 
                   {(parts.find(p => p.id === targetPart)?.staves ?? 1) > 1 && (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">Staff</span>
+                      <span className="text-xs text-brand-secondary">Staff</span>
                       <select
                         value={targetStaff ?? ""}
                         onChange={e => setTargetStaff(e.target.value ? parseInt(e.target.value) : undefined)}
-                        className="px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
+                        className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-brand-primary"
                       >
                         <option value="">All staves</option>
                         <option value="1">Staff 1 (treble)</option>
@@ -655,12 +655,12 @@ export default function SingModal({
                 </div>
 
                 {selectedMeasures.size > 0 && (
-                  <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                  <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={replaceSelected}
                       onChange={e => setReplaceSelected(e.target.checked)}
-                      className="rounded bg-gray-800 border-gray-600"
+                      className="rounded bg-gray-50 border-gray-200"
                     />
                     Replace selected measures ({[...selectedMeasures].sort((a, b) => a - b).join(", ")})
                   </label>
@@ -668,11 +668,11 @@ export default function SingModal({
 
                 {!replaceSelected && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">Insert after measure</span>
+                    <span className="text-xs text-brand-secondary">Insert after measure</span>
                     <select
                       value={insertAfter}
                       onChange={e => setInsertAfter(parseInt(e.target.value))}
-                      className="px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
+                      className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-brand-primary"
                     >
                       {Array.from({ length: scoreMeasures + 1 }, (_, i) => (
                         <option key={i} value={i}>
@@ -696,13 +696,13 @@ export default function SingModal({
                     audioCtxRef.current?.close();
                     audioCtxRef.current = null;
                   }}
-                  className="flex-1 py-2 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm transition"
+                  className="flex-1 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition"
                 >
                   Re-sing
                 </button>
                 <button
                   onClick={handleInsert}
-                  className="flex-1 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition"
+                  className="flex-1 py-2 rounded bg-brand-primary hover:bg-brand-primary/90 text-white text-sm font-medium transition"
                 >
                   Insert
                 </button>

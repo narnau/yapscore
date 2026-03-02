@@ -277,15 +277,15 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   );
 
   return (
-    <main className="flex h-full">
+    <main className="flex h-full bg-white text-gray-900">
       {/* Save indicator */}
-      <div className="fixed top-2 right-3 z-50 text-[10px] text-gray-600 pointer-events-none">
+      <div className="fixed top-2 right-3 z-50 text-[10px] text-brand-secondary pointer-events-none">
         {saveStatus === "saving"  && "Saving…"}
         {saveStatus === "unsaved" && "Unsaved"}
       </div>
 
       {/* Chat — 34% */}
-      <div className="w-[34%] min-w-[280px] border-r border-gray-800 flex flex-col">
+      <div className="w-[34%] min-w-[280px] border-r border-gray-200 flex flex-col">
         <ChatPanel
           currentMusicXml={musicXml}
           fileName={fileName}
@@ -369,16 +369,16 @@ function LeaveModal({ onDelete, onRename, onClose }: {
   const [name, setName] = useState("");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-80 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white border border-gray-200 rounded-xl p-6 w-80 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-100">Untitled file</p>
-            <p className="text-xs text-gray-400">Give it a name or delete it.</p>
+            <p className="text-sm font-medium text-gray-900">Untitled file</p>
+            <p className="text-xs text-brand-secondary">Give it a name or delete it.</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-300 transition ml-4 mt-0.5"
+            className="text-gray-400 hover:text-gray-600 transition ml-4 mt-0.5"
             title="Close"
           >
             ✕
@@ -394,19 +394,19 @@ function LeaveModal({ onDelete, onRename, onClose }: {
             if (e.key === "Escape") onClose();
           }}
           placeholder="e.g. Symphony No. 1"
-          className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-indigo-500 transition"
+          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/30 transition"
         />
         <div className="flex gap-2">
           <button
             onClick={onDelete}
-            className="flex-1 px-3 py-2 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 text-sm transition"
+            className="flex-1 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-sm transition"
           >
             Delete
           </button>
           <button
             onClick={() => { if (name.trim()) onRename(name.trim()); }}
             disabled={!name.trim()}
-            className="flex-1 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm transition"
+            className="flex-1 px-3 py-2 rounded-lg bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-40 text-white text-sm transition"
           >
             Save
           </button>

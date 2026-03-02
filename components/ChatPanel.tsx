@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Logo from "@/components/Logo";
 import { capture } from "@/lib/posthog";
 
 export type Message = {
@@ -242,25 +243,25 @@ export default function ChatPanel({
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-gray-800">
+    <div className="flex flex-col h-full bg-white">
+      <div className="px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold tracking-tight">YapScore</h1>
+          <h1 className="text-lg font-bold tracking-tight text-gray-900 flex items-center gap-1.5"><Logo size={20} className="text-brand-primary" />Yap<span className="text-brand-primary">Score</span></h1>
           <div className="flex items-center gap-1.5">
             {usage && usage.limit !== null && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-brand-secondary">
                 {usage.used}/{usage.limit}
               </span>
             )}
             {usage?.plan === "pro" && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-900 text-indigo-300">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary font-medium">
                 Pro
               </span>
             )}
             {currentMusicXml && (
               <button
                 onClick={() => { onMessagesChange([]); onNew(); }}
-                className="text-xs px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-red-900 text-gray-400 hover:text-red-300 transition"
+                className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-red-50 text-brand-secondary hover:text-red-600 transition"
                 title="Clear score and start fresh"
               >
                 New
@@ -277,12 +278,12 @@ export default function ChatPanel({
             onChange={(e) => onFileNameChange(e.target.value)}
             onBlur={() => setEditingName(false)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingName(false); }}
-            className="mt-0.5 w-full bg-gray-800 text-xs text-gray-200 px-1.5 py-0.5 rounded outline-none focus:ring-1 focus:ring-indigo-500"
+            className="mt-0.5 w-full bg-gray-50 border border-gray-200 text-xs text-gray-900 px-1.5 py-0.5 rounded outline-none focus:ring-1 focus:ring-brand-primary"
           />
         ) : (
           <button
             onClick={() => setEditingName(true)}
-            className="mt-0.5 text-xs text-gray-400 hover:text-gray-200 truncate max-w-full text-left transition"
+            className="mt-0.5 text-xs text-brand-secondary hover:text-gray-900 truncate max-w-full text-left transition"
             title="Click to rename"
           >
             {fileName}
@@ -290,45 +291,45 @@ export default function ChatPanel({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-hide" style={{ scrollbarWidth: "none" }}>
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-hide bg-gray-50" style={{ scrollbarWidth: "none" }}>
         {messages.map((m, i) => (
           <div
             key={i}
             className={`text-sm px-3 py-2 rounded-lg max-w-[90%] ${
               m.role === "user"
-                ? "bg-indigo-600 self-end ml-auto"
-                : "bg-gray-800 self-start"
+                ? "bg-brand-primary text-white self-end ml-auto"
+                : "bg-white border border-gray-200 text-gray-700 self-start shadow-sm"
             }`}
           >
             {m.text}
           </div>
         ))}
         {transcribing && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 self-start text-gray-400 text-sm">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 self-start text-brand-secondary text-sm shadow-sm">
             <span className="flex gap-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce" style={{ animationDelay: "300ms" }} />
             </span>
             Transcribing voice…
           </div>
         )}
         {loading && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 self-start text-gray-400 text-sm">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 self-start text-brand-secondary text-sm shadow-sm">
             <span className="flex gap-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-secondary animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-secondary animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-secondary animate-bounce" style={{ animationDelay: "300ms" }} />
             </span>
             Processing…
           </div>
         )}
         {isAtLimit && (
-          <div className="px-3 py-3 rounded-lg bg-amber-900/30 border border-amber-700 text-center space-y-2">
-            <p className="text-sm text-amber-200">Free tier limit reached</p>
+          <div className="px-3 py-3 rounded-lg bg-amber-50 border border-amber-200 text-center space-y-2">
+            <p className="text-sm text-amber-800">Free tier limit reached</p>
             <button
               onClick={handleUpgrade}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition"
+              className="px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 text-white rounded-lg text-sm font-medium transition"
             >
               Upgrade to Pro
             </button>
@@ -348,17 +349,17 @@ export default function ChatPanel({
         }}
       />
 
-      <form ref={formRef} onSubmit={handleSubmit} className="border-t border-gray-800 p-3 space-y-2">
+      <form ref={formRef} onSubmit={handleSubmit} className="border-t border-gray-200 p-3 space-y-2 bg-white">
         {/* Selection badge */}
         {selectedMeasures.size > 0 && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-900/50 border border-indigo-700 text-xs text-indigo-300">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-primary/5 border border-brand-primary/20 text-xs text-brand-primary">
             <span>
               {selectedMeasures.size === 1 ? "Measure" : "Measures"} {[...selectedMeasures].sort((a, b) => a - b).join(", ")} selected
             </span>
             <button
               type="button"
               onClick={onClearSelection}
-              className="ml-auto text-indigo-400 hover:text-white transition"
+              className="ml-auto text-brand-primary hover:text-brand-primary/70 transition"
             >
               ✕
             </button>
@@ -366,8 +367,8 @@ export default function ChatPanel({
         )}
 
         {/* Instruction input — ChatGPT-style container */}
-        <div className={`relative bg-gray-800 rounded-xl border transition ${
-          recording ? "border-red-500" : "border-gray-700 focus-within:border-indigo-500"
+        <div className={`relative bg-gray-50 rounded-xl border transition ${
+          recording ? "border-red-500" : "border-gray-200 focus-within:border-brand-primary"
         }`}>
           <textarea
             value={instruction}
@@ -387,7 +388,7 @@ export default function ChatPanel({
             }
             disabled={loading || isAtLimit || recording}
             rows={3}
-            className="w-full bg-transparent rounded-xl px-3 pt-3 pb-12 text-sm outline-none disabled:opacity-40 resize-none"
+            className="w-full bg-transparent rounded-xl px-3 pt-3 pb-12 text-sm text-gray-900 placeholder-gray-400 outline-none disabled:opacity-40 resize-none"
           />
           <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5">
             {/* Recording state: full-width stop & send button */}
@@ -395,7 +396,7 @@ export default function ChatPanel({
               <button
                 type="button"
                 onClick={toggleRecording}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition"
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition"
               >
                 <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                 {String(Math.floor(recordingSecs / 60)).padStart(2, "0")}:{String(recordingSecs % 60).padStart(2, "0")}
@@ -408,7 +409,7 @@ export default function ChatPanel({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={loading || uploading}
-                  className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-200 hover:bg-gray-700"
+                  className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-700 hover:bg-gray-200"
                   title="Upload .mscz or .mxl file"
                 >
                   {uploading ? (
@@ -427,7 +428,7 @@ export default function ChatPanel({
                     type="button"
                     onClick={toggleRecording}
                     disabled={loading || isAtLimit || transcribing}
-                    className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-200 hover:bg-gray-700"
+                    className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-700 hover:bg-gray-200"
                     title="Voice input"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
@@ -439,7 +440,7 @@ export default function ChatPanel({
                 <button
                   type="submit"
                   disabled={loading || !instruction.trim() || isAtLimit}
-                  className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition"
+                  className="p-1.5 rounded-lg bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-40 text-white transition"
                   title="Send"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
