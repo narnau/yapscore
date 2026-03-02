@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 // ─── Staff geometry ──────────────────────────────────────────────────────────
@@ -172,13 +173,13 @@ export default function ScoreAnimation() {
             {STAFF_LINES.map((y) => (
               <line
                 key={y}
-                x1="66" y1={y} x2="390" y2={y}
+                x1="52" y1={y} x2="390" y2={y}
                 stroke="#E5E7EB" strokeWidth="1.5"
               />
             ))}
 
             {/* Bar line at start */}
-            <line x1="66" y1="40" x2="66" y2="80" stroke="#D1D5DB" strokeWidth="1.5" />
+            <line x1="52" y1="40" x2="52" y2="80" stroke="#D1D5DB" strokeWidth="1.5" />
 
             {/* Treble clef (Unicode 𝄞 in serif) */}
             <text
@@ -263,10 +264,11 @@ export default function ScoreAnimation() {
                 />
               )}
             </p>
-            <button
+            <Link
+              href="/editor"
               className="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center"
               style={{ background: "#F55D3E" }}
-              aria-label="Send"
+              aria-label="Go to editor"
             >
               <svg
                 className="w-3.5 h-3.5 text-white"
@@ -275,7 +277,7 @@ export default function ScoreAnimation() {
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
               </svg>
-            </button>
+            </Link>
           </div>
         </div>
       </div>
