@@ -32,7 +32,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
               // API calls: Supabase, OpenRouter, Stripe
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""} https://openrouter.ai https://api.stripe.com https://o4507995819524096.ingest.us.sentry.io`,
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""} https://openrouter.ai https://api.stripe.com https://o4507995819524096.ingest.us.sentry.io https://gleitz.github.io`,
               // Stripe hosted fields
               "frame-src https://js.stripe.com https://hooks.stripe.com",
               "worker-src 'self' blob:",
@@ -85,7 +85,9 @@ export default withSentryConfig(nextConfig, {
   silent: !process.env.CI,
 
   // Skip source map upload when no auth token (e.g. CI build checks)
-  disableSourceMapUpload: !process.env.SENTRY_AUTH_TOKEN,
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN,
+  },
 
   // For all available options, see:
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/

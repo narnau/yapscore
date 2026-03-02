@@ -165,6 +165,8 @@ async function getSpiceModel() {
   if (!spicePromise) {
     spicePromise = (async () => {
       console.log("[sing] Loading TensorFlow.js + SPICE model...");
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore — loaded at runtime, not a build dependency
       const tf = await import("@tensorflow/tfjs");
       const model = await tf.loadGraphModel(SPICE_MODEL_URL, { fromTFHub: true });
       console.log("[sing] SPICE model loaded");
