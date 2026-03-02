@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     baseURL: "https://openrouter.ai/api/v1",
   });
 
-  const model = process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash-preview";
+  const model = process.env.OPENROUTER_TRANSCRIBE_MODEL ?? "google/gemini-2.5-flash-preview";
 
   console.log(`[transcribe] format=${format} size=${buffer.length}b model=${model}`);
 

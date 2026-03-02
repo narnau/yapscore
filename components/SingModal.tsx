@@ -250,7 +250,15 @@ export default function SingModal({
     setPhase("processing");
 
     // Detect pitches (SPICE model — async)
-    const pitches = await detectPitches(buffer);
+    let pitches;
+    try {
+      pitches = await detectPitches(buffer);
+    } catch (err) {
+      console.error("[sing] Pitch detection failed:", err);
+      setError("Failed to analyze audio. Check your connection and try again.");
+      setPhase("setup");
+      return;
+    }
 
     // Quantize to eighth-note slots
     const result = quantizePitches(pitches, bpm, beats, measuresToRecord);
