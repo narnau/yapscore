@@ -356,34 +356,22 @@ Rules:
 
       setSwing: {
         description:
-          "Enable or disable swing feel for the score. Swing makes pairs of eighth notes " +
-          "play in a long-short pattern (like jazz/blues). Use when the user says " +
-          "'add swing', 'make it swing', 'jazz feel', 'remove swing', 'make it straight', " +
-          "or specifies a swing percentage. " +
-          "Percentage guide: 50=straight, 60=soft swing (MuseScore default), " +
-          "66=standard jazz triplet swing, 75=dotted feel.",
+          "Enable or disable jazz swing feel. Swing makes pairs of eighth notes play " +
+          "long-short (2:1 triplet ratio), giving a jazz/blues feel. " +
+          "Use when the user says 'add swing', 'make it swing', 'jazz feel', " +
+          "'remove swing', 'make it straight', 'no swing'.",
         parameters: z.object({
-          enabled: z.boolean().describe("True to enable swing, false to remove it."),
-          percent: z.number().min(50).max(75).optional()
-            .describe("Swing percentage: 50=straight, 60=default, 66=jazz, 75=dotted. Defaults to 60."),
-          swingType: z.enum(["eighth", "16th"]).optional()
-            .describe("Which note value swings: 'eighth' (default) or '16th'."),
+          enabled: z.boolean().describe("True to enable jazz swing, false for straight."),
         }),
-        execute: async ({ enabled, percent = 60, swingType = "eighth" }) => {
+        execute: async ({ enabled }) => {
           if (!liveXml) throw new Error("No score is currently loaded");
-          let swing: SwingInfo | null = null;
-          if (enabled) {
-            // Convert percent to first:second ratio
-            const p = Math.max(50, Math.min(75, percent));
-            if (p >= 65 && p <= 68) { swing = { first: 2, second: 1, swingType }; }
-            else if (p >= 58 && p <= 62) { swing = { first: 3, second: 2, swingType }; }
-            else if (p >= 73) { swing = { first: 3, second: 1, swingType }; }
-            else { swing = { first: p, second: 100 - p, swingType }; }
-          }
+          const swing: SwingInfo | null = enabled
+            ? { first: 2, second: 1, swingType: "eighth" }
+            : null;
           const result = setSwing(liveXml, swing);
           liveXml = result;
           capture.result = { musicXml: result, resultType: "modify" };
-          return { ok: true, swing: enabled ? `${percent}% ${swingType}` : "straight" };
+          return { ok: true, swing: enabled ? "jazz (2:1)" : "straight" };
         },
       },
 

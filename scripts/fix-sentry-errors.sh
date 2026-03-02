@@ -114,7 +114,8 @@ echo "$ISSUES" | jq -c '.[]' | while read -r ISSUE; do
   (cd "$WT_PATH" && bun install --frozen-lockfile --silent 2>/dev/null || true)
 
   # Run Claude Code in the worktree (cd into it so it's the working directory)
-  (cd "$WT_PATH" && claude -p "
+  # --dangerously-skip-permissions: needed for unattended runs (no human to approve tool calls)
+  (cd "$WT_PATH" && claude --dangerously-skip-permissions -p "
 You are fixing a production error reported by Sentry.
 
 ## Error
