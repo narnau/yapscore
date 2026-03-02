@@ -105,7 +105,7 @@ export default function FilesPage() {
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
       {/* Header */}
       <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold tracking-tight">score-ai</h1>
+        <h1 className="text-xl font-semibold tracking-tight">YapScore</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={createBlank}

@@ -96,7 +96,7 @@ export default function LoginPage() {
       <div className="max-w-sm w-full space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold tracking-tight">
-            {mode === "login" ? "Sign in to score-ai" : "Create an account"}
+            {mode === "login" ? "Sign in to YapScore" : "Create an account"}
           </h1>
           <p className="text-sm text-gray-400 mt-2">
             {mode === "login"

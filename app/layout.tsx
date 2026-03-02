@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "score-ai",
-  description: "AI-powered MuseScore editor",
+  title: "YapScore",
+  description: "AI-powered music score editor",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

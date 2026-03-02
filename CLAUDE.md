@@ -1,4 +1,4 @@
-# score-ai-web
+# YapScore
 
 LLM-powered MuseScore editor. Upload .mscz → edit with natural language → download modified .mscz.
 
@@ -24,12 +24,12 @@ LLM-powered MuseScore editor. Upload .mscz → edit with natural language → do
 The user starts the dev server with log capture so Claude can read server output directly:
 
 ```bash
-bun dev 2>&1 | tee /tmp/score-ai.log
+bun dev 2>&1 | tee /tmp/yapscore.log
 ```
 
-- Logs appear in the terminal AND are written to `/tmp/score-ai.log`
-- When debugging a bug, read the log with `tail -n 100 /tmp/score-ai.log` or grep for `[agent]`, `[llm]`, errors, etc.
-- Never ask the user to paste logs — read `/tmp/score-ai.log` directly
+- Logs appear in the terminal AND are written to `/tmp/yapscore.log`
+- When debugging a bug, read the log with `tail -n 100 /tmp/yapscore.log` or grep for `[agent]`, `[llm]`, errors, etc.
+- Never ask the user to paste logs — read `/tmp/yapscore.log` directly
 - Agent logs are prefixed with `[agent]`, LLM logs with `[llm]`
 
 ## Project Structure

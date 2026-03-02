@@ -6,6 +6,27 @@ const nextConfig: NextConfig = {
   devTools: false,
   // Keep heavy Node-only packages out of the browser bundle
   serverExternalPackages: ["adm-zip", "webmscore"],
+
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          // Prevent clickjacking attacks
+          { key: "X-Frame-Options", value: "DENY" },
+          // Block MIME-type sniffing
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          // Only send origin in Referer header
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // Disable browser features the app doesn't use
+          { key: "Permissions-Policy", value: "camera=(), geolocation=(), interest-cohort=()" },
+          // Uncomment on production once HTTPS is confirmed:
+          // { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+        ],
+      },
+    ];
+  },
+
   webpack: (config, { isServer, webpack }) => {
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
 
@@ -42,6 +63,9 @@ export default withSentryConfig(nextConfig, {
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,
+
+  // Skip source map upload when no auth token (e.g. CI build checks)
+  disableSourceMapUpload: !process.env.SENTRY_AUTH_TOKEN,
 
   // For all available options, see:
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/

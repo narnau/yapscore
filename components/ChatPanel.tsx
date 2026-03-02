@@ -231,7 +231,7 @@ export default function ChatPanel({
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 border-b border-gray-800">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold tracking-tight">score-ai</h1>
+          <h1 className="text-lg font-semibold tracking-tight">YapScore</h1>
           <div className="flex items-center gap-1.5">
             {usage && usage.limit !== null && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">

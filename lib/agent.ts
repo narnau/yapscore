@@ -35,8 +35,20 @@ import {
   notesTotalBeats,
   insertPickupMeasure,
   setSwing,
+  addSlur,
+  removeSlurs,
+  addLyrics,
+  addFermata,
+  addOttava,
+  addPedalMarking,
+  setScoreMetadata,
+  addNavigationMark,
+  addArpeggio,
+  addTremolo,
+  addGlissando,
+  addBreathMark,
 } from "./musicxml";
-import type { DynamicMarking, ArticulationMarking, NoteSpec, ScoreInstrument, ChordSymbol, SwingInfo } from "./musicxml";
+import type { DynamicMarking, ArticulationMarking, NoteSpec, ScoreInstrument, ChordSymbol, SwingInfo, NavigationMarkType } from "./musicxml";
 import { addAccidentals, fixChordSymbols } from "./accidentals";
 import { addBeams } from "./beams";
 
@@ -83,9 +95,11 @@ export async function runAgent(
 
   type ScoreCapture = { musicXml: string; name?: string; resultType: "load" | "modify" };
 
+  // Truncate message in logs to avoid leaking sensitive user content
+  const msgPreview = message.length > 120 ? message.slice(0, 120) + "…" : message;
   console.log("╔══════════════════════════════════════════════════════════════");
   console.log(`║ [agent] model   : ${model}`);
-  console.log(`║ [agent] message : ${message}`);
+  console.log(`║ [agent] message : ${msgPreview}`);
   const logCtx = currentMusicXml
     ? (() => { try { return extractParts(currentMusicXml).context; } catch { return "loaded"; } })()
     : "none";
@@ -204,7 +218,8 @@ Rules:
           "Clear the content of measures, replacing all notes with rests. The measures " +
           "stay in the score (same length) but become empty. Use when the user says " +
           "'clear', 'empty', 'remove the melody from', or 'blank out' measures. " +
-          "If the user mentions a specific instrument/part, pass its partId to only clear that part.",
+          "If the user mentions a specific instrument/part, pass its partId to only clear that part. " +
+          "For piano scores, use staff=1 for right hand (treble) and staff=2 for left hand (bass).",
         parameters: z.object({
           measureNumbers: z.array(z.number()).describe(
             "Measure numbers to clear. Use the selected measures if the user says " +
@@ -214,13 +229,18 @@ Rules:
             "If provided, only clear notes in this part (e.g. 'P2'). " +
             "Omit to clear all parts in the given measures."
           ),
+          staff: z.number().optional().describe(
+            "If provided, only clear notes on this staff number within the part. " +
+            "Use staff=1 for right hand / treble clef, staff=2 for left hand / bass clef. " +
+            "Omit to clear all staves."
+          ),
         }),
-        execute: async ({ measureNumbers, partId }) => {
+        execute: async ({ measureNumbers, partId, staff }) => {
           if (!liveXml) throw new Error("No score is currently loaded");
-          const result = clearMeasures(liveXml, measureNumbers, partId);
+          const result = clearMeasures(liveXml, measureNumbers, partId, staff);
           liveXml = result;
           capture.result = { musicXml: result, resultType: "modify" };
-          return { ok: true, cleared: measureNumbers, partId: partId ?? "all" };
+          return { ok: true, cleared: measureNumbers, partId: partId ?? "all", staff: staff ?? "all" };
         },
       },
 
@@ -707,8 +727,9 @@ Rules:
         execute: async ({ measureNumber, partId, chords }) => {
           if (!liveXml) throw new Error("No score is currently loaded");
           const result = addChordSymbols(liveXml, measureNumber, chords as ChordSymbol[], partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+          if (result.error) return { ok: false, error: result.error };
+          liveXml = result.xml;
+          capture.result = { musicXml: result.xml, resultType: "modify" };
           return { ok: true, measure: measureNumber, chords: chords.length };
         },
       },
@@ -829,6 +850,221 @@ Rules:
           liveXml = result;
           capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, partId, direction };
+        },
+      },
+
+      // ── Phrasing & Expression ────────────────────────────────────────────
+
+      addSlur: {
+        description: "Add a slur (curved legato line) over a range of measures in a part. The slur starts on the first note of startMeasure and ends on the last note of endMeasure.",
+        parameters: z.object({
+          startMeasure: z.number().describe("Measure where the slur starts."),
+          endMeasure: z.number().describe("Measure where the slur ends (can equal startMeasure for within-measure slur)."),
+          partId: z.string().optional().describe("Part ID (default 'P1')."),
+        }),
+        execute: async ({ startMeasure, endMeasure, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = addSlur(liveXml, startMeasure, endMeasure, partId ?? "P1");
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, startMeasure, endMeasure };
+        },
+      },
+
+      removeSlurs: {
+        description: "Remove all slurs from a range of measures.",
+        parameters: z.object({
+          startMeasure: z.number(),
+          endMeasure: z.number(),
+          partId: z.string().optional(),
+        }),
+        execute: async ({ startMeasure, endMeasure, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = removeSlurs(liveXml, startMeasure, endMeasure, partId);
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, startMeasure, endMeasure };
+        },
+      },
+
+      addFermata: {
+        description: "Add a fermata (hold symbol) to a note in a measure. By default goes on the last note. Optionally specify beat (1-based) to target a different note.",
+        parameters: z.object({
+          measureNumber: z.number(),
+          beat: z.number().optional().describe("Beat (1-based) to place the fermata on. Omit for last note."),
+          type: z.enum(["upright", "inverted"]).optional().describe("Fermata orientation. Default: upright."),
+          partId: z.string().optional(),
+        }),
+        execute: async ({ measureNumber, beat, type, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = addFermata(liveXml, measureNumber, beat, type ?? "upright", partId ?? "P1");
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, measureNumber };
+        },
+      },
+
+      addBreathMark: {
+        description: "Add a breath mark (comma) at the end of a measure — used in wind, brass, and vocal music to indicate a breathing pause.",
+        parameters: z.object({
+          measureNumber: z.number(),
+          partId: z.string().optional(),
+        }),
+        execute: async ({ measureNumber, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = addBreathMark(liveXml, measureNumber, partId ?? "P1");
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, measureNumber };
+        },
+      },
+
+      addGlissando: {
+        description: "Add a glissando (slide) line from the last note of startMeasure to the first note of endMeasure. Use lineType='wavy' for a gliss, 'solid' for a portamento.",
+        parameters: z.object({
+          startMeasure: z.number(),
+          endMeasure: z.number(),
+          lineType: z.enum(["solid", "wavy"]).optional().describe("Line style. Default: wavy."),
+          partId: z.string().optional(),
+        }),
+        execute: async ({ startMeasure, endMeasure, lineType, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = addGlissando(liveXml, startMeasure, endMeasure, lineType ?? "wavy", partId ?? "P1");
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, startMeasure, endMeasure };
+        },
+      },
+
+      // ── Piano / Keyboard Markings ────────────────────────────────────────
+
+      addOttava: {
+        description: "Add an ottava line (8va, 8vb, 15ma) above or below a passage. 8va sounds an octave higher, 8vb an octave lower.",
+        parameters: z.object({
+          startMeasure: z.number(),
+          endMeasure: z.number(),
+          ottava: z.enum(["8va", "8vb", "15ma", "15mb"]).describe("Type of octave transposition line."),
+          partId: z.string().optional(),
+        }),
+        execute: async ({ startMeasure, endMeasure, ottava, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = addOttava(liveXml, startMeasure, endMeasure, ottava, partId ?? "P1");
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, startMeasure, endMeasure, ottava };
+        },
+      },
+
+      addPedalMarking: {
+        description: "Add sustain pedal markings (Ped. … *) spanning measures. Essential for piano music.",
+        parameters: z.object({
+          startMeasure: z.number(),
+          endMeasure: z.number(),
+          partId: z.string().optional(),
+        }),
+        execute: async ({ startMeasure, endMeasure, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = addPedalMarking(liveXml, startMeasure, endMeasure, partId ?? "P1");
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, startMeasure, endMeasure };
+        },
+      },
+
+      addArpeggio: {
+        description: "Add arpeggiate (rolled chord) markings to all notes in a measure.",
+        parameters: z.object({
+          measureNumber: z.number(),
+          direction: z.enum(["up", "down"]).optional().describe("Arpeggio roll direction. Default: up."),
+          partId: z.string().optional(),
+        }),
+        execute: async ({ measureNumber, direction, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = addArpeggio(liveXml, measureNumber, direction ?? "up", partId ?? "P1");
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, measureNumber };
+        },
+      },
+
+      addTremolo: {
+        description: "Add single-note tremolo (rapid repetition) to all notes in a measure. marks=1 means eighth-note tremolo, 2=sixteenth, 3=thirty-second (buzz roll).",
+        parameters: z.object({
+          measureNumber: z.number(),
+          marks: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().describe("Number of tremolo beams. Default: 3."),
+          partId: z.string().optional(),
+        }),
+        execute: async ({ measureNumber, marks, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = addTremolo(liveXml, measureNumber, (marks ?? 3) as 1 | 2 | 3, partId ?? "P1");
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, measureNumber, marks: marks ?? 3 };
+        },
+      },
+
+      // ── Lyrics ───────────────────────────────────────────────────────────
+
+      addLyrics: {
+        description: "Add lyrics (text under notes) to a measure. Each string in syllables[] maps to one note in order. Use a trailing '-' to indicate a hyphenated syllable (e.g. 'mu-', 'sic'). Skips rests and chord notes.",
+        parameters: z.object({
+          measureNumber: z.number(),
+          syllables: z.array(z.string()).describe("List of syllables, one per note. E.g. ['Twinkle', 'twin-', 'kle'] or ['A-', 'ma-', 'zing']."),
+          partId: z.string().optional(),
+        }),
+        execute: async ({ measureNumber, syllables, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = addLyrics(liveXml, measureNumber, syllables, partId ?? "P1");
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, measureNumber, syllables: syllables.length };
+        },
+      },
+
+      // ── Score Metadata ───────────────────────────────────────────────────
+
+      setScoreMetadata: {
+        description: "Set the title, subtitle, composer, lyricist, arranger, or copyright of the score. All fields are optional — only provided fields are updated.",
+        parameters: z.object({
+          title: z.string().optional().describe("Score title (shown at top)."),
+          subtitle: z.string().optional().describe("Subtitle / work title."),
+          composer: z.string().optional().describe("Composer name (shown top-right)."),
+          lyricist: z.string().optional().describe("Lyricist name."),
+          arranger: z.string().optional().describe("Arranger name."),
+          copyright: z.string().optional().describe("Copyright notice."),
+        }),
+        execute: async (meta) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = setScoreMetadata(liveXml, meta);
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, ...meta };
+        },
+      },
+
+      // ── Navigation / Repeat Structures ───────────────────────────────────
+
+      addNavigationMark: {
+        description:
+          "Add a navigation/repeat mark to a measure:\n" +
+          "  • segno   — S𝄋 sign (jump target)\n" +
+          "  • coda    — 𝄌 coda symbol (jump target)\n" +
+          "  • fine    — 'Fine' (end marker)\n" +
+          "  • dacapo  — 'D.C. al Fine' (go back to beginning)\n" +
+          "  • dalsegno — 'D.S. al Coda' (go back to segno)\n" +
+          "  • toCoda  — 'To Coda' (jump forward to coda)",
+        parameters: z.object({
+          measureNumber: z.number(),
+          markType: z.enum(["segno", "coda", "fine", "dacapo", "dalsegno", "toCoda"] as const)
+            .describe("Type of navigation mark to add."),
+          partId: z.string().optional(),
+        }),
+        execute: async ({ measureNumber, markType, partId }) => {
+          if (!liveXml) throw new Error("No score is currently loaded");
+          const result = addNavigationMark(liveXml, measureNumber, markType as NavigationMarkType, partId ?? "P1");
+          liveXml = result;
+          capture.result = { musicXml: result, resultType: "modify" };
+          return { ok: true, measureNumber, markType };
         },
       },
     },

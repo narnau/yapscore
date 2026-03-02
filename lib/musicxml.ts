@@ -9,8 +9,11 @@ import type {
   Score, Part, Measure, MeasureEntry, NoteEntry, Pitch,
   MeasureAttributes, DirectionEntry, DirectionType,
   BackupEntry, Barline, NoteType, Notation, Lyric as MxlLyric,
-  PartInfo, DynamicsValue,
+  PartInfo, DynamicsValue, ScoreMetadata,
 } from "musicxml-io";
+
+// SoundEntry is not re-exported by musicxml-io, define locally
+type SoundEntry = Extract<MeasureEntry, { type: "sound" }>;
 
 type HarmonyEntry = Extract<MeasureEntry, { type: "harmony" }>;
 type ArticulationNotation = Extract<Notation, { type: "articulation" }>;
@@ -356,7 +359,7 @@ export function deleteMeasures(musicXml: string, measureNumbers: number[]): stri
 
 // ─── clearMeasures ──────────────────────────────────────────────────────────
 
-export function clearMeasures(musicXml: string, measureNumbers: number[], partId?: string): string {
+export function clearMeasures(musicXml: string, measureNumbers: number[], partId?: string, staff?: number): string {
   const toClear = new Set(measureNumbers);
   const score = mxlParse(musicXml);
   const dur = measureDuration(score);
@@ -366,14 +369,26 @@ export function clearMeasures(musicXml: string, measureNumbers: number[], partId
     for (const m of part.measures) {
       if (!toClear.has(measureNum(m))) continue;
 
-      // Preserve attributes, direction, barline entries
-      const preserved = m.entries.filter(e =>
-        e.type === "direction" || e.type === "attributes"
-      );
-      const preservedBarlines = m.barlines;
+      if (staff != null) {
+        // Staff-specific clear: remove only notes belonging to this staff,
+        // keep all other entries (notes on other staves, attributes, directions)
+        m.entries = m.entries.filter(e => {
+          if (e.type !== "note") return true;
+          const noteStaff = (e as NoteEntry).staff ?? 1;
+          return noteStaff !== staff;
+        });
+        // Add a whole rest for the cleared staff
+        m.entries.push(wholeRest(dur, staff, staff === 2 ? 5 : 1));
+      } else {
+        // Preserve attributes, direction, barline entries
+        const preserved = m.entries.filter(e =>
+          e.type === "direction" || e.type === "attributes"
+        );
+        const preservedBarlines = m.barlines;
 
-      m.entries = [...preserved, wholeRest(dur)];
-      m.barlines = preservedBarlines;
+        m.entries = [...preserved, wholeRest(dur)];
+        m.barlines = preservedBarlines;
+      }
     }
   }
   return mxlSerialize(score);
@@ -1510,17 +1525,21 @@ export function addChordSymbols(
   measureNumber: number,
   chords: ChordSymbol[],
   partId: string = "P1"
-): string {
+): { xml: string; error?: string } {
   const score = mxlParse(musicXml);
   const divisions = getDivisions(score);
   const beatType = getBeatType(score);
   const beatTicks = Math.round(divisions * (4 / beatType));
 
   const part = findPart(score, partId);
-  if (!part) return musicXml;
+  if (!part) return { xml: musicXml, error: `Part '${partId}' not found` };
 
+  const totalMeasures = part.measures.length;
   const measure = findMeasure(part, measureNumber);
-  if (!measure) return musicXml;
+  if (!measure) return { xml: musicXml, error: `Measure ${measureNumber} does not exist (score has ${totalMeasures} measures). Call insertEmptyMeasures first to add more measures.` };
+
+  // Remove any existing chord symbols in this measure before inserting new ones
+  measure.entries = measure.entries.filter(e => e.type !== "harmony");
 
   const firstNoteIdx = measure.entries.findIndex(e => e.type === "note");
 
@@ -1546,7 +1565,7 @@ export function addChordSymbols(
       measure.entries.push(harmony);
     }
   }
-  return mxlSerialize(score);
+  return { xml: mxlSerialize(score) };
 }
 
 // ─── renamePart ─────────────────────────────────────────────────────────────
@@ -1838,4 +1857,507 @@ export function getSwing(musicXml: string): SwingInfo | null {
   );
   if (!m) return null;
   return { first: parseInt(m[1]), second: parseInt(m[2]), swingType: m[3] as "eighth" | "16th" };
+}
+
+// ─── addSlur / removeSlurs ───────────────────────────────────────────────────
+
+/**
+ * Add a slur spanning from the first note of startMeasure to the last note of
+ * endMeasure in the given part.
+ */
+export function addSlur(
+  musicXml: string,
+  startMeasure: number,
+  endMeasure: number,
+  partId = "P1",
+): string {
+  const score = mxlParse(musicXml);
+  const part = findPart(score, partId);
+  if (!part) return musicXml;
+
+  for (const m of part.measures) {
+    const num = measureNum(m);
+    if (num < startMeasure || num > endMeasure) continue;
+
+    const notes = m.entries.filter(
+      (e): e is NoteEntry => e.type === "note" && !e.rest
+    );
+    if (!notes.length) continue;
+
+    if (num === startMeasure) {
+      const first = notes[0];
+      if (!first.notations) first.notations = [];
+      first.notations.push({ type: "slur", slurType: "start", number: 1 });
+    }
+    if (num === endMeasure) {
+      const last = notes[notes.length - 1];
+      if (!last.notations) last.notations = [];
+      last.notations.push({ type: "slur", slurType: "stop", number: 1 });
+    }
+  }
+  return mxlSerialize(score);
+}
+
+/** Remove all slur notations from measures in the given range. */
+export function removeSlurs(
+  musicXml: string,
+  startMeasure: number,
+  endMeasure: number,
+  partId?: string,
+): string {
+  const score = mxlParse(musicXml);
+  for (const part of score.parts) {
+    if (partId && part.id !== partId) continue;
+    for (const m of part.measures) {
+      const num = measureNum(m);
+      if (num < startMeasure || num > endMeasure) continue;
+      for (const e of m.entries) {
+        if (e.type !== "note") continue;
+        const note = e as NoteEntry;
+        if (note.notations) {
+          note.notations = note.notations.filter(n => n.type !== "slur");
+        }
+      }
+    }
+  }
+  return mxlSerialize(score);
+}
+
+// ─── addLyrics ───────────────────────────────────────────────────────────────
+
+/**
+ * Attach lyrics (syllables) to consecutive non-rest notes in a measure.
+ * Syllables ending with "-" are treated as "begin" or "middle"; the next
+ * syllable gets "middle" or "end" syllabic value automatically.
+ */
+export function addLyrics(
+  musicXml: string,
+  measureNumber: number,
+  syllables: string[],
+  partId = "P1",
+): string {
+  const score = mxlParse(musicXml);
+  const part = findPart(score, partId);
+  if (!part) return musicXml;
+  const measure = findMeasure(part, measureNumber);
+  if (!measure) return musicXml;
+
+  const notes = measure.entries.filter(
+    (e): e is NoteEntry => e.type === "note" && !e.rest && !e.chord
+  );
+
+  for (let i = 0; i < Math.min(notes.length, syllables.length); i++) {
+    const raw = syllables[i];
+    const text = raw.replace(/-$/, ""); // strip trailing hyphen
+    const hasDash = raw.endsWith("-");
+
+    // Determine syllabic: look at context
+    const prevHadDash = i > 0 && syllables[i - 1].endsWith("-");
+    let syllabic: MxlLyric["syllabic"];
+    if (prevHadDash && hasDash) syllabic = "middle";
+    else if (prevHadDash)        syllabic = "end";
+    else if (hasDash)            syllabic = "begin";
+    else                         syllabic = "single";
+
+    // Replace existing lyric on this note
+    notes[i].lyrics = [{ text, syllabic }];
+  }
+
+  return mxlSerialize(score);
+}
+
+// ─── addFermata ──────────────────────────────────────────────────────────────
+
+/**
+ * Add a fermata to a note in a measure. If beat is given (1-based), the
+ * fermata is placed on the note closest to that beat. Otherwise it goes on
+ * the last note of the measure (most common use case).
+ */
+export function addFermata(
+  musicXml: string,
+  measureNumber: number,
+  beat?: number,
+  type: "upright" | "inverted" = "upright",
+  partId = "P1",
+): string {
+  const score = mxlParse(musicXml);
+  const divisions = getDivisions(score);
+  const part = findPart(score, partId);
+  if (!part) return musicXml;
+  const measure = findMeasure(part, measureNumber);
+  if (!measure) return musicXml;
+
+  const notes = measure.entries.filter(
+    (e): e is NoteEntry => e.type === "note" && !e.rest
+  );
+  if (!notes.length) return musicXml;
+
+  let target: NoteEntry;
+  if (beat != null) {
+    // Find note closest to the requested beat position
+    const targetTick = Math.round((beat - 1) * divisions);
+    let tick = 0;
+    let best = notes[0];
+    let bestDist = Infinity;
+    for (const entry of measure.entries) {
+      if (entry.type === "note") {
+        const note = entry as NoteEntry;
+        const dist = Math.abs(tick - targetTick);
+        if (!note.rest && !note.chord && dist < bestDist) {
+          bestDist = dist;
+          best = note;
+        }
+        if (!note.chord) tick += note.duration;
+      }
+    }
+    target = best;
+  } else {
+    target = notes[notes.length - 1];
+  }
+
+  if (!target.notations) target.notations = [];
+  target.notations.push({ type: "fermata", fermataType: type });
+
+  return mxlSerialize(score);
+}
+
+// ─── addOttava ───────────────────────────────────────────────────────────────
+
+/**
+ * Add an ottava (8va, 8vb, 15ma) spanning measures startMeasure–endMeasure.
+ * The start direction is placed in startMeasure and the stop in endMeasure.
+ */
+export function addOttava(
+  musicXml: string,
+  startMeasure: number,
+  endMeasure: number,
+  ottava: "8va" | "8vb" | "15ma" | "15mb" = "8va",
+  partId = "P1",
+): string {
+  const score = mxlParse(musicXml);
+  const ottavaType = ottava === "8va" || ottava === "15ma" ? "down" : "up";
+  const size = ottava.startsWith("15") ? 15 : 8;
+
+  for (const part of score.parts) {
+    if (part.id !== partId) continue;
+    for (const m of part.measures) {
+      const num = measureNum(m);
+      if (num === startMeasure) {
+        const dir: DirectionEntry = {
+          _id: generateId(),
+          type: "direction",
+          placement: "above",
+          directionTypes: [{ kind: "octave-shift", type: ottavaType as "up" | "down" | "stop", size }],
+        };
+        const idx = m.entries.findIndex(e => e.type === "note");
+        if (idx !== -1) m.entries.splice(idx, 0, dir);
+        else m.entries.push(dir);
+      }
+      if (num === endMeasure) {
+        const stop: DirectionEntry = {
+          _id: generateId(),
+          type: "direction",
+          placement: "above",
+          directionTypes: [{ kind: "octave-shift", type: "stop", size }],
+        };
+        m.entries.push(stop);
+      }
+    }
+  }
+  return mxlSerialize(score);
+}
+
+// ─── addPedalMarking ─────────────────────────────────────────────────────────
+
+/**
+ * Add sustain pedal start/stop markings spanning measures startMeasure–endMeasure.
+ */
+export function addPedalMarking(
+  musicXml: string,
+  startMeasure: number,
+  endMeasure: number,
+  partId = "P1",
+): string {
+  const score = mxlParse(musicXml);
+  for (const part of score.parts) {
+    if (part.id !== partId) continue;
+    for (const m of part.measures) {
+      const num = measureNum(m);
+      if (num === startMeasure) {
+        const dir: DirectionEntry = {
+          _id: generateId(),
+          type: "direction",
+          placement: "below",
+          directionTypes: [{ kind: "pedal", type: "start", line: true }],
+        };
+        const idx = m.entries.findIndex(e => e.type === "note");
+        if (idx !== -1) m.entries.splice(idx, 0, dir);
+        else m.entries.push(dir);
+      }
+      if (num === endMeasure) {
+        const dir: DirectionEntry = {
+          _id: generateId(),
+          type: "direction",
+          placement: "below",
+          directionTypes: [{ kind: "pedal", type: "stop", line: true }],
+        };
+        m.entries.push(dir);
+      }
+    }
+  }
+  return mxlSerialize(score);
+}
+
+// ─── setScoreMetadata / getScoreMetadata ─────────────────────────────────────
+
+export type ScoreMetadataInput = {
+  title?: string;
+  subtitle?: string;
+  composer?: string;
+  lyricist?: string;
+  arranger?: string;
+  copyright?: string;
+};
+
+export function setScoreMetadata(musicXml: string, meta: ScoreMetadataInput): string {
+  const score = mxlParse(musicXml);
+  if (!score.metadata) score.metadata = {} as ScoreMetadata;
+
+  if (meta.title !== undefined) score.metadata.movementTitle = meta.title;
+  if (meta.subtitle !== undefined) score.metadata.workTitle = meta.subtitle;
+
+  // Creators: composer, lyricist, arranger
+  const creatorFields: { key: keyof ScoreMetadataInput; type: string }[] = [
+    { key: "composer", type: "composer" },
+    { key: "lyricist", type: "lyricist" },
+    { key: "arranger", type: "arranger" },
+  ];
+  for (const { key, type } of creatorFields) {
+    if (meta[key] === undefined) continue;
+    if (!score.metadata.creators) score.metadata.creators = [];
+    const idx = score.metadata.creators.findIndex(c => c.type === type);
+    if (idx !== -1) {
+      score.metadata.creators[idx].value = meta[key] as string;
+    } else {
+      score.metadata.creators.push({ type, value: meta[key] as string });
+    }
+  }
+
+  if (meta.copyright !== undefined) {
+    score.metadata.rights = [meta.copyright];
+  }
+
+  return mxlSerialize(score);
+}
+
+export function getScoreMetadata(musicXml: string): ScoreMetadataInput {
+  const score = mxlParse(musicXml);
+  const m = score.metadata ?? {};
+  const result: ScoreMetadataInput = {};
+  if (m.movementTitle) result.title = m.movementTitle;
+  if (m.workTitle) result.subtitle = m.workTitle;
+  if (m.rights?.length) result.copyright = m.rights[0];
+  for (const creator of m.creators ?? []) {
+    if (creator.type === "composer") result.composer = creator.value;
+    else if (creator.type === "lyricist") result.lyricist = creator.value;
+    else if (creator.type === "arranger") result.arranger = creator.value;
+  }
+  return result;
+}
+
+// ─── addNavigationMark ───────────────────────────────────────────────────────
+
+export type NavigationMarkType = "segno" | "coda" | "fine" | "dacapo" | "dalsegno" | "toCoda";
+
+/**
+ * Add a navigation mark (segno, coda, fine, D.C., D.S.) to a measure.
+ */
+export function addNavigationMark(
+  musicXml: string,
+  measureNumber: number,
+  markType: NavigationMarkType,
+  partId = "P1",
+): string {
+  const score = mxlParse(musicXml);
+  const part = findPart(score, partId);
+  if (!part) return musicXml;
+  const measure = findMeasure(part, measureNumber);
+  if (!measure) return musicXml;
+
+  const idx = measure.entries.findIndex(e => e.type === "note");
+  const insertAt = (entry: MeasureEntry) => {
+    if (idx !== -1) measure.entries.splice(idx, 0, entry);
+    else measure.entries.push(entry);
+  };
+
+  switch (markType) {
+    case "segno": {
+      insertAt({ _id: generateId(), type: "direction", placement: "above", directionTypes: [{ kind: "segno" }] });
+      insertAt({ _id: generateId(), type: "sound", segno: "segno" } as SoundEntry);
+      break;
+    }
+    case "coda": {
+      insertAt({ _id: generateId(), type: "direction", placement: "above", directionTypes: [{ kind: "coda" }] });
+      insertAt({ _id: generateId(), type: "sound", coda: "coda" } as SoundEntry);
+      break;
+    }
+    case "fine": {
+      insertAt({ _id: generateId(), type: "direction", placement: "above", directionTypes: [{ kind: "words", text: "Fine", fontWeight: "bold" }] });
+      measure.entries.push({ _id: generateId(), type: "sound", fine: true } as SoundEntry);
+      break;
+    }
+    case "dacapo": {
+      measure.entries.push({ _id: generateId(), type: "direction", placement: "above", directionTypes: [{ kind: "words", text: "D.C. al Fine" }] } as DirectionEntry);
+      measure.entries.push({ _id: generateId(), type: "sound", dacapo: true } as SoundEntry);
+      break;
+    }
+    case "dalsegno": {
+      measure.entries.push({ _id: generateId(), type: "direction", placement: "above", directionTypes: [{ kind: "words", text: "D.S. al Coda" }] } as DirectionEntry);
+      measure.entries.push({ _id: generateId(), type: "sound", dalsegno: "segno" } as SoundEntry);
+      break;
+    }
+    case "toCoda": {
+      insertAt({ _id: generateId(), type: "direction", placement: "above", directionTypes: [{ kind: "words", text: "To Coda" }] });
+      insertAt({ _id: generateId(), type: "sound", tocoda: "coda" } as SoundEntry);
+      break;
+    }
+  }
+
+  return mxlSerialize(score);
+}
+
+// ─── addArpeggio ─────────────────────────────────────────────────────────────
+
+/**
+ * Add arpeggiate notation to all chord notes in a measure.
+ */
+export function addArpeggio(
+  musicXml: string,
+  measureNumber: number,
+  direction: "up" | "down" = "up",
+  partId = "P1",
+): string {
+  const score = mxlParse(musicXml);
+  const part = findPart(score, partId);
+  if (!part) return musicXml;
+  const measure = findMeasure(part, measureNumber);
+  if (!measure) return musicXml;
+
+  for (const entry of measure.entries) {
+    if (entry.type !== "note") continue;
+    const note = entry as NoteEntry;
+    if (note.rest) continue;
+    if (!note.notations) note.notations = [];
+    note.notations.push({ type: "arpeggiate", direction });
+  }
+  return mxlSerialize(score);
+}
+
+// ─── addTremolo ──────────────────────────────────────────────────────────────
+
+/**
+ * Add single-note tremolo (buzz roll) to all notes in a measure.
+ * marks: number of beams (1=eighth, 2=sixteenth, 3=thirty-second tremolo).
+ */
+export function addTremolo(
+  musicXml: string,
+  measureNumber: number,
+  marks: 1 | 2 | 3 = 3,
+  partId = "P1",
+): string {
+  const score = mxlParse(musicXml);
+  const part = findPart(score, partId);
+  if (!part) return musicXml;
+  const measure = findMeasure(part, measureNumber);
+  if (!measure) return musicXml;
+
+  for (const entry of measure.entries) {
+    if (entry.type !== "note") continue;
+    const note = entry as NoteEntry;
+    if (note.rest) continue;
+    if (!note.notations) note.notations = [];
+    note.notations.push({
+      type: "ornament",
+      ornament: "tremolo",
+      tremoloMarks: marks,
+      tremoloType: "single",
+    });
+  }
+  return mxlSerialize(score);
+}
+
+// ─── addGlissando ────────────────────────────────────────────────────────────
+
+/**
+ * Add a glissando from the last note of startMeasure to the first note of
+ * endMeasure (or within a single measure if start === end).
+ */
+export function addGlissando(
+  musicXml: string,
+  startMeasure: number,
+  endMeasure: number,
+  lineType: "solid" | "wavy" = "wavy",
+  partId = "P1",
+): string {
+  const score = mxlParse(musicXml);
+  const part = findPart(score, partId);
+  if (!part) return musicXml;
+
+  const sameM = startMeasure === endMeasure;
+
+  for (const m of part.measures) {
+    const num = measureNum(m);
+    if (num < startMeasure || num > endMeasure) continue;
+
+    const notes = m.entries.filter(
+      (e): e is NoteEntry => e.type === "note" && !e.rest
+    );
+    if (!notes.length) continue;
+
+    if (num === startMeasure) {
+      const note = sameM ? notes[0] : notes[notes.length - 1];
+      if (!note.notations) note.notations = [];
+      note.notations.push({ type: "glissando", glissandoType: "start", lineType, number: 1 });
+    }
+    if (num === endMeasure && !sameM) {
+      const note = notes[0];
+      if (!note.notations) note.notations = [];
+      note.notations.push({ type: "glissando", glissandoType: "stop", lineType, number: 1 });
+    }
+    if (sameM && notes.length >= 2) {
+      // Also add stop to last note in same measure
+      const last = notes[notes.length - 1];
+      if (!last.notations) last.notations = [];
+      last.notations.push({ type: "glissando", glissandoType: "stop", lineType, number: 1 });
+    }
+  }
+  return mxlSerialize(score);
+}
+
+// ─── addBreathMark ───────────────────────────────────────────────────────────
+
+/**
+ * Add a breath mark (caesura pause) after the last note of a measure.
+ */
+export function addBreathMark(
+  musicXml: string,
+  measureNumber: number,
+  partId = "P1",
+): string {
+  const score = mxlParse(musicXml);
+  const part = findPart(score, partId);
+  if (!part) return musicXml;
+  const measure = findMeasure(part, measureNumber);
+  if (!measure) return musicXml;
+
+  const notes = measure.entries.filter(
+    (e): e is NoteEntry => e.type === "note" && !e.rest
+  );
+  if (!notes.length) return musicXml;
+
+  const last = notes[notes.length - 1];
+  if (!last.notations) last.notations = [];
+  last.notations.push({ type: "articulation", articulation: "breath-mark" });
+
+  return mxlSerialize(score);
 }

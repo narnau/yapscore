@@ -10,13 +10,13 @@ export async function POST(req: NextRequest) {
   const audio = formData.get("audio") as File | null;
   if (!audio) return NextResponse.json({ error: "Missing audio" }, { status: 400 });
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "OPENROUTER_API_KEY not set" }, { status: 500 });
+  // Size limit: 25 MB (Gemini audio limit)
+  const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
+  if (audio.size > MAX_AUDIO_SIZE) {
+    return NextResponse.json({ error: "Audio file too large (max 25 MB)" }, { status: 413 });
+  }
 
-  const buffer = Buffer.from(await audio.arrayBuffer());
-  const base64 = buffer.toString("base64");
-
-  // Map MIME type to a format string Gemini understands
+  // MIME allowlist — reject non-audio uploads
   const mime = audio.type.split(";")[0]; // strip codecs suffix
   const formatMap: Record<string, string> = {
     "audio/webm": "webm",
@@ -27,7 +27,16 @@ export async function POST(req: NextRequest) {
     "audio/flac": "flac",
     "audio/mpeg": "mp3",
   };
-  const format = formatMap[mime] ?? "webm";
+  if (!formatMap[mime]) {
+    return NextResponse.json({ error: "Unsupported audio type" }, { status: 415 });
+  }
+  const format = formatMap[mime];
+
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: "OPENROUTER_API_KEY not set" }, { status: 500 });
+
+  const buffer = Buffer.from(await audio.arrayBuffer());
+  const base64 = buffer.toString("base64");
 
   const client = new OpenAI({
     apiKey,

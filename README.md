@@ -1,4 +1,4 @@
-# score-ai-web
+# YapScore
 
 AI-powered music score editor. Upload a MuseScore file, describe your changes in natural language, and let AI do the rest.
 
@@ -106,7 +106,7 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 ### 3. Stripe
 
 1. Go to [Stripe Dashboard](https://dashboard.stripe.com)
-2. Create a **Product** (e.g. "score-ai Pro")
+2. Create a **Product** (e.g. "YapScore Pro")
 3. Add a **Price** to it (e.g. $9/month, recurring)
 4. Copy the Price ID (`price_...`) → `STRIPE_PRICE_ID`
 5. Go to **Developers > API keys**:

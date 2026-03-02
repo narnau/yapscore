@@ -7,9 +7,35 @@ export const maxDuration = 300;
 
 const FREE_LIMIT = 5;
 
+// In-process burst rate limiter: max 5 requests per user per 10 seconds.
+// Prevents rapid-fire requests from burning LLM API credits.
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_WINDOW_MS = 10_000;
+const RATE_MAX = 5;
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(userId);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= RATE_MAX) return false;
+  entry.count++;
+  return true;
+}
+
 export async function POST(req: NextRequest) {
   const auth = await getAuthUser();
   if (!auth.ok) return auth.response;
+
+  // Burst rate limit check
+  if (!checkRateLimit(auth.userId)) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait a moment." },
+      { status: 429 }
+    );
+  }
 
   // Check usage limits
   const admin = createAdminClient();
@@ -33,17 +59,30 @@ export async function POST(req: NextRequest) {
   const message = formData.get("message") as string | null;
   const currentMusicXml = formData.get("musicXml") as string | null;
   const selectedRaw = formData.get("selectedMeasures") as string | null;
+  const historyRaw = formData.get("history") as string | null;
 
   if (!message) {
     return NextResponse.json({ error: "Missing message" }, { status: 400 });
   }
 
-  const selectedMeasures = selectedRaw ? (JSON.parse(selectedRaw) as number[]) : null;
+  // Safe JSON parsing — malformed input must not crash the route
+  let selectedMeasures: number[] | null = null;
+  if (selectedRaw) {
+    try {
+      selectedMeasures = JSON.parse(selectedRaw) as number[];
+    } catch {
+      return NextResponse.json({ error: "Invalid selectedMeasures JSON" }, { status: 400 });
+    }
+  }
 
-  const historyRaw = formData.get("history") as string | null;
-  const history: { role: "user" | "assistant"; content: string }[] = historyRaw
-    ? JSON.parse(historyRaw)
-    : [];
+  let history: { role: "user" | "assistant"; content: string }[] = [];
+  if (historyRaw) {
+    try {
+      history = JSON.parse(historyRaw);
+    } catch {
+      history = []; // non-critical — degrade gracefully without crashing
+    }
+  }
 
   try {
     const result = await runAgent(message, currentMusicXml, selectedMeasures, history);
