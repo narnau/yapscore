@@ -171,7 +171,11 @@ async function getSpiceModel() {
       const model = await tf.loadGraphModel(SPICE_MODEL_URL, { fromTFHub: true });
       console.log("[sing] SPICE model loaded");
       return { tf, model };
-    })();
+    })().catch((err) => {
+      // Clear cached promise so next call retries the load
+      spicePromise = null;
+      throw err;
+    });
   }
   return spicePromise;
 }
