@@ -20,6 +20,26 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // Disable browser features the app doesn't use
           { key: "Permissions-Policy", value: "camera=(), geolocation=(), interest-cohort=()" },
+          // Content Security Policy — restrict resource origins
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              // Next.js inline scripts + Verovio WASM blob workers
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://js.stripe.com",
+              "style-src 'self' 'unsafe-inline'",
+              // Verovio WASM + local files
+              "img-src 'self' data: blob:",
+              "font-src 'self' data:",
+              // API calls: Supabase, OpenRouter, Stripe
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""} https://openrouter.ai https://api.stripe.com https://o4507995819524096.ingest.us.sentry.io`,
+              // Stripe hosted fields
+              "frame-src https://js.stripe.com https://hooks.stripe.com",
+              "worker-src 'self' blob:",
+              "object-src 'none'",
+              "base-uri 'self'",
+            ].join("; "),
+          },
           // Uncomment on production once HTTPS is confirmed:
           // { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
         ],

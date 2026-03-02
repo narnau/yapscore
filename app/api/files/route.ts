@@ -12,8 +12,8 @@ export async function GET() {
     const files = await listFiles(admin, auth.userId);
     return NextResponse.json({ files });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[files] GET error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const { id } = await createFile(admin, auth.userId, name);
     return NextResponse.json({ id });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[files] POST error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

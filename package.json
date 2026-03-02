@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "1",
+    "@posthog/ai": "^7.9.3",
     "@sentry/nextjs": "^10",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.97.0",
@@ -20,6 +21,8 @@
     "next": "^15.1.0",
     "openai": "^6.25.0",
     "opensheetmusicdisplay": "^1.8.9",
+    "posthog-js": "^1.356.2",
+    "posthog-node": "^5.26.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "soundfont-player": "^0.12.0",

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { captureServer } from "@/lib/posthog-server";
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -24,13 +25,23 @@ export async function POST(req: NextRequest) {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object;
-      const customerId = session.customer as string;
+      const customerId = typeof session.customer === "string" ? session.customer : null;
+      if (!customerId) {
+        console.error("[stripe webhook] checkout.session.completed missing customer ID");
+        break;
+      }
 
       // Upgrade user to pro
-      await admin
+      const { data: upgraded } = await admin
         .from("profiles")
         .update({ plan: "pro" })
-        .eq("stripe_customer_id", customerId);
+        .eq("stripe_customer_id", customerId)
+        .select("id")
+        .single();
+
+      if (upgraded) {
+        captureServer(upgraded.id, "user_upgraded_to_pro", { stripe_customer_id: customerId });
+      }
 
       console.log(`[stripe webhook] upgraded customer ${customerId} to pro`);
       break;
@@ -38,13 +49,23 @@ export async function POST(req: NextRequest) {
 
     case "customer.subscription.deleted": {
       const subscription = event.data.object;
-      const customerId = subscription.customer as string;
+      const customerId = typeof subscription.customer === "string" ? subscription.customer : null;
+      if (!customerId) {
+        console.error("[stripe webhook] customer.subscription.deleted missing customer ID");
+        break;
+      }
 
       // Downgrade user to free
-      await admin
+      const { data: downgraded } = await admin
         .from("profiles")
         .update({ plan: "free", interactions_used: 0 })
-        .eq("stripe_customer_id", customerId);
+        .eq("stripe_customer_id", customerId)
+        .select("id")
+        .single();
+
+      if (downgraded) {
+        captureServer(downgraded.id, "user_downgraded_to_free", { stripe_customer_id: customerId });
+      }
 
       console.log(`[stripe webhook] downgraded customer ${customerId} to free`);
       break;

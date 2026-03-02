@@ -24,8 +24,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     }
     return NextResponse.json({ file });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[files/id] GET error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -47,8 +47,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     await saveFile(admin, auth.userId, id, patch);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[files/id] PATCH error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -62,7 +62,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
     await deleteFile(admin, auth.userId, id);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[files/id] DELETE error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

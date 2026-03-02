@@ -8,6 +8,7 @@ import ScoreViewer from "@/components/ScoreViewer";
 import SingModal from "@/components/SingModal";
 import type { HistoryEntry } from "@/lib/files";
 import { historyReducer, messagesAtIndex } from "@/lib/editor-history";
+import { capture } from "@/lib/posthog";
 
 // ── auto-save ─────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       } catch { /* ignore, use cache */ }
 
       setLoaded(true);
+      capture("score_opened", { fileId: id, fileName });
     }
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,11 +174,13 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
   const handleUndo = useCallback(() => {
     if (hsRef.current.index <= 0) return;
+    capture("undo");
     navigateTo(hsRef.current.index - 1);
   }, [navigateTo]);
 
   const handleRedo = useCallback(() => {
     if (hsRef.current.index >= hsRef.current.entries.length - 1) return;
+    capture("redo");
     navigateTo(hsRef.current.index + 1);
   }, [navigateTo]);
 
@@ -221,11 +225,13 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   }
 
   async function handleLeaveDelete() {
+    capture("file_deleted", { fileId: id });
     await fetch(`/api/files/${id}`, { method: "DELETE" });
     router.push("/editor");
   }
 
   async function handleLeaveRename(name: string) {
+    capture("file_renamed", { fileId: id, newName: name });
     setFileName(name);
     // Update localStorage immediately so the fast-path cache has the correct name
     try {

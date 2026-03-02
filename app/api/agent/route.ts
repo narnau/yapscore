@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runAgent } from "@/lib/agent";
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { setLlmUserId } from "@/lib/llm";
 
 export const maxDuration = 300;
 
@@ -85,6 +86,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    setLlmUserId(auth.userId);
     const result = await runAgent(message, currentMusicXml, selectedMeasures, history);
 
     await admin.rpc("increment_interactions", { user_id: auth.userId });
@@ -102,5 +104,7 @@ export async function POST(req: NextRequest) {
       type: "chat",
       message: "Sorry, something went wrong. Please try again.",
     });
+  } finally {
+    setLlmUserId(null);
   }
 }

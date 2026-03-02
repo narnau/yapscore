@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { capture } from "@/lib/posthog";
 
 type FileEntry = {
   id: string;
@@ -31,11 +32,16 @@ export default function FilesPage() {
   useEffect(() => {
     fetch("/api/files")
       .then((r) => r.json())
-      .then((d) => setFiles(d.files ?? []))
+      .then((d) => {
+        const list = d.files ?? [];
+        setFiles(list);
+        capture("dashboard_loaded", { fileCount: list.length });
+      })
       .finally(() => setLoading(false));
   }, []);
 
   async function createBlank() {
+    capture("file_created");
     setCreating(true);
     try {
       const res = await fetch("/api/files", {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import MidiPlayer from "./MidiPlayer";
 import { applySwingToMidi } from "@/lib/swing-midi";
 import { getSwing } from "@/lib/musicxml";
+import { capture } from "@/lib/posthog";
 
 type Props = {
   musicXml: string | null;
@@ -225,7 +226,11 @@ export default function ScoreViewer({
   const prevPlayingMeasureRef = useRef<number | null>(null);
   useEffect(() => {
     if (playingMeasure === null && prevPlayingMeasureRef.current !== null) {
+      capture("playback_stopped");
       onPlaybackStop?.();
+    }
+    if (playingMeasure !== null && prevPlayingMeasureRef.current === null) {
+      capture("playback_started");
     }
     prevPlayingMeasureRef.current = playingMeasure;
     if (playingMeasure === null) return;
@@ -346,7 +351,7 @@ export default function ScoreViewer({
         {/* Sing */}
         {onSingClick && (
           <button
-            onClick={onSingClick}
+            onClick={() => { capture("sing_opened"); onSingClick(); }}
             title="Sing a melody"
             className="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition shrink-0"
           >
@@ -357,7 +362,7 @@ export default function ScoreViewer({
         {/* Jazz / Straight toggle */}
         {midiSrc && (
           <button
-            onClick={() => setSwingEnabled(s => !s)}
+            onClick={() => setSwingEnabled(s => { capture("swing_toggled", { enabled: !s }); return !s; })}
             title={swingEnabled ? "Switch to straight" : "Switch to jazz swing"}
             className={`text-xs px-2 py-1 rounded transition shrink-0 ${
               swingEnabled
@@ -388,6 +393,7 @@ export default function ScoreViewer({
         <button
           onClick={() => {
             if (!musicXml) return;
+            capture("download_clicked", { format: "musicxml" });
             const blob = new Blob([musicXml], { type: "application/xml" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");

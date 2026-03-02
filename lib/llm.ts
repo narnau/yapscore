@@ -1,4 +1,5 @@
-import OpenAI from "openai";
+import { OpenAI } from "@posthog/ai";
+import { getPostHogServer } from "@/lib/posthog-server";
 
 function buildInitialPrompt(parts: string, context: string, instruction: string): string {
   return `You are a music notation expert working with MusicXML.
@@ -65,13 +66,19 @@ function stripMarkdownFences(text: string): string {
   return text;
 }
 
+/** userId is optional — when provided, LLM call is captured to PostHog */
+let _currentUserId: string | null = null;
+export function setLlmUserId(userId: string | null) { _currentUserId = userId; }
+
 async function callOpenRouter(prompt: string): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
 
+  const phServer = getPostHogServer();
   const client = new OpenAI({
     apiKey,
     baseURL: "https://openrouter.ai/api/v1",
+    posthog: phServer!,
   });
 
   const model = process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash-preview";
@@ -93,7 +100,12 @@ async function callOpenRouter(prompt: string): Promise<string> {
   let response;
   try {
     response = await client.chat.completions.create(
-      { model, messages: [{ role: "user", content: prompt }], max_tokens: 8192 },
+      {
+        model,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 8192,
+        ...(phServer && _currentUserId ? { posthogDistinctId: _currentUserId } : {}),
+      } as any,
       { signal: controller.signal }
     );
   } finally {

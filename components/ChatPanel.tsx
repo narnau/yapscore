@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { capture } from "@/lib/posthog";
 
 export type Message = {
   role: "user" | "system";
@@ -97,6 +98,7 @@ export default function ChatPanel({
 
         const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
         if (blob.size === 0) return;
+        capture("voice_recording_completed");
 
         setTranscribing(true);
         try {
@@ -119,6 +121,7 @@ export default function ChatPanel({
       recorder.start();
       setRecordingSecs(0);
       setRecording(true);
+      capture("voice_recording_started");
       recordingTimerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000);
     } catch {
       // microphone permission denied or unavailable
@@ -126,6 +129,10 @@ export default function ChatPanel({
   }, [recording]);
 
   async function handleFileUpload(file: File) {
+    capture("file_uploaded", {
+      fileType: file.name.split(".").pop()?.toLowerCase(),
+      fileSizeKb: Math.round(file.size / 1024),
+    });
     setUploading(true);
     try {
       const form = new FormData();
@@ -149,6 +156,7 @@ export default function ChatPanel({
   }
 
   async function handleUpgrade() {
+    capture("upgrade_clicked");
     try {
       const res = await fetch("/api/stripe/checkout", { method: "POST" });
       const data = await res.json();
@@ -173,6 +181,11 @@ export default function ChatPanel({
     setInstruction("");
     onClearSelection();
     setLoading(true);
+    capture("chat_message_sent", {
+      messageLength: text.length,
+      hasScore: !!currentMusicXml,
+      selectedMeasureCount: selectedMeasures.size,
+    });
 
     try {
       const form = new FormData();
@@ -199,6 +212,7 @@ export default function ChatPanel({
       const data = await res.json();
 
       if (res.status === 402) {
+        capture("paywall_hit");
         setPaywallHit(true);
         onMessagesChange([
           ...next,

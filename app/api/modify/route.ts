@@ -22,9 +22,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing musicXml or instruction" }, { status: 400 });
   }
 
-  const selectedMeasures = selectedRaw
-    ? (JSON.parse(selectedRaw) as number[])
-    : null;
+  let selectedMeasures: number[] | null = null;
+  if (selectedRaw) {
+    try {
+      const parsed = JSON.parse(selectedRaw);
+      if (!Array.isArray(parsed) || !parsed.every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0)) {
+        return NextResponse.json({ error: "Invalid selectedMeasures" }, { status: 400 });
+      }
+      selectedMeasures = parsed;
+    } catch {
+      return NextResponse.json({ error: "Invalid selectedMeasures JSON" }, { status: 400 });
+    }
+  }
 
   // Decide what to send to the LLM
   let skeleton: string;
@@ -35,15 +44,15 @@ export async function POST(req: NextRequest) {
   try {
     if (isPartialEdit) {
       ({ skeleton, selectedMeasures: partsToSend, context } =
-        extractSelectedMeasures(musicXml, selectedMeasures));
-      console.log(`[modify] partial edit — measures: ${selectedMeasures.join(", ")}`);
+        extractSelectedMeasures(musicXml, selectedMeasures!));
+      console.log(`[modify] partial edit — measures: ${selectedMeasures!.join(", ")}`);
     } else {
       ({ skeleton, parts: partsToSend, context } = extractParts(musicXml));
       console.log(`[modify] full edit`);
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: `Failed to parse MusicXML: ${message}` }, { status: 400 });
+    console.error("[modify] MusicXML parse error:", err);
+    return NextResponse.json({ error: "Failed to parse MusicXML" }, { status: 400 });
   }
 
   console.log(`[modify] context   : ${context}`);
@@ -59,8 +68,8 @@ export async function POST(req: NextRequest) {
     try {
       modified = await modifyXml(partsToSend, context, instruction, errorMsg);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return NextResponse.json({ error: `LLM error: ${message}` }, { status: 500 });
+      console.error("[modify] LLM error:", err);
+      return NextResponse.json({ error: "LLM request failed" }, { status: 500 });
     }
 
     console.log(`[modify] LLM responded in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
