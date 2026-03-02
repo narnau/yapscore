@@ -237,29 +237,29 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
   handleStopRef.current = handleStop;
 
   if (state === "loading") {
-    return <span className="text-xs text-gray-500 animate-pulse">Loading player…</span>;
+    return (
+      <button disabled className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg bg-gray-100 text-gray-400 transition shrink-0">
+        <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" /></svg>
+        Loading…
+      </button>
+    );
   }
 
-  return (
-    <div className="flex items-center gap-3">
-      {state === "playing" ? (
-        <button
-          onClick={handleStop}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition"
-        >
-          <span>⏹</span> Stop
-        </button>
-      ) : (
-        <button
-          onClick={handlePlay}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-primary hover:bg-brand-primary/90 text-sm transition"
-        >
-          <span>▶</span> Play
-        </button>
-      )}
-      <span className="text-xs text-gray-500">
-        {state === "stopped" ? "Finished" : "Ready"}
-      </span>
-    </div>
+  return state === "playing" ? (
+    <button
+      onClick={handleStop}
+      className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition shrink-0"
+    >
+      <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1.5" /></svg>
+      Stop
+    </button>
+  ) : (
+    <button
+      onClick={handlePlay}
+      className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg bg-brand-primary hover:bg-brand-primary/90 text-white transition shrink-0"
+    >
+      <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5a.5.5 0 0 1 .77-.42l9 5.5a.5.5 0 0 1 0 .84l-9 5.5A.5.5 0 0 1 4 13.5v-11Z" /></svg>
+      Play
+    </button>
   );
 }

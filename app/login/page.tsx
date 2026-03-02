@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Logo from "@/components/Logo";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const searchParams = useSearchParams();
+  const initialMode = searchParams.get("mode") === "signup" ? "signup" : "login";
+  const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -93,8 +96,8 @@ export default function LoginPage() {
     <main className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
       <div className="max-w-sm w-full space-y-6">
         <div className="text-center">
-          <Link href="/" className="text-2xl font-bold text-gray-900 tracking-tight">
-            Yap<span className="text-brand-primary">Score</span>
+          <Link href="/" className="text-2xl font-bold text-gray-900 tracking-tight flex items-center justify-center">
+            <Logo size={28} className="text-brand-primary mr-1.5" />Yap<span className="text-brand-primary">Score</span>
           </Link>
           <h1 className="text-xl font-bold tracking-tight text-gray-900 mt-6">
             {mode === "login" ? "Welcome back" : "Create an account"}
@@ -178,7 +181,7 @@ export default function LoginPage() {
             <>
               Don&apos;t have an account?{" "}
               <button
-                onClick={() => { setMode("signup"); setError(null); }}
+                onClick={() => { setMode("signup"); setError(null); setEmail(""); setPassword(""); router.replace("/login?mode=signup"); }}
                 className="text-brand-primary hover:text-brand-primary/80 font-medium transition"
               >
                 Sign up
@@ -188,7 +191,7 @@ export default function LoginPage() {
             <>
               Already have an account?{" "}
               <button
-                onClick={() => { setMode("login"); setError(null); }}
+                onClick={() => { setMode("login"); setError(null); setEmail(""); setPassword(""); router.replace("/login"); }}
                 className="text-brand-primary hover:text-brand-primary/80 font-medium transition"
               >
                 Sign in

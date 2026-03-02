@@ -248,7 +248,7 @@ export default function ScoreViewer({
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Info bar: metadata + jazz/straight + playback + download */}
+      {/* Info bar: metadata + controls */}
       <div className="flex flex-wrap items-center gap-2 px-4 py-1.5 border-b border-gray-200 bg-gray-50">
         <div className="flex-1 min-w-0">
           <ScoreInfoBar
@@ -260,49 +260,44 @@ export default function ScoreViewer({
             } : undefined}
           />
         </div>
-        {/* Jazz / Straight toggle */}
-        {midiSrc && (
-          <button
-            onClick={() => setSwingEnabled(s => { capture("swing_toggled", { enabled: !s }); return !s; })}
-            title={swingEnabled ? "Switch to straight" : "Switch to jazz swing"}
-            className={`text-xs px-2 py-1 rounded-lg transition shrink-0 ${
-              swingEnabled
-                ? "bg-brand-accent hover:bg-brand-accent/90 text-gray-900 font-medium"
-                : "bg-gray-100 hover:bg-gray-200 text-gray-500"
-            }`}
-          >
-            {swingEnabled ? "Jazz" : "Straight"}
-          </button>
-        )}
-        {/* Play — desktop only (mobile uses FAB) */}
-        <div className="hidden md:flex items-center gap-2 shrink-0">
-          {midiSrc ? (
-            <MidiPlayer
-              src={midiSrc}
-              channelInstruments={channelInstruments}
-              measureStartsMs={measureStartsMs}
-              selectedMeasures={selectedMeasures}
-              onMeasureChange={setPlayingMeasure}
-            />
-          ) : (
-            <span className="text-xs text-brand-secondary">Rendering…</span>
+        {/* Controls — grouped with consistent style */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Jazz / Straight toggle */}
+          {midiSrc && (
+            <button
+              onClick={() => setSwingEnabled(s => { capture("swing_toggled", { enabled: !s }); return !s; })}
+              title={swingEnabled ? "Switch to straight" : "Switch to jazz swing"}
+              className={`text-xs px-3 py-1 rounded-lg transition ${
+                swingEnabled
+                  ? "bg-brand-accent hover:bg-brand-accent/90 text-gray-900 font-medium"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-500"
+              }`}
+            >
+              {swingEnabled ? "Jazz" : "Straight"}
+            </button>
           )}
+          {/* Play — desktop only (mobile uses FAB) */}
+          <div className="hidden md:contents">
+            {midiSrc ? (
+              <MidiPlayer
+                src={midiSrc}
+                channelInstruments={channelInstruments}
+                measureStartsMs={measureStartsMs}
+                selectedMeasures={selectedMeasures}
+                onMeasureChange={setPlayingMeasure}
+              />
+            ) : (
+              <span className="text-xs px-3 py-1 rounded-lg bg-gray-100 text-gray-400">Rendering…</span>
+            )}
+          </div>
+          {/* Export */}
           <button
             onClick={downloadMusicXml}
-            className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
+            className="text-xs px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
             title="Download as MusicXML"
           >
-            ⬇ Export
-          </button>
-        </div>
-        {/* Mobile: download only (play is a FAB) */}
-        <div className="flex md:hidden items-center gap-2 shrink-0">
-          <button
-            onClick={downloadMusicXml}
-            className="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
-            title="Download as MusicXML"
-          >
-            ⬇
+            <span className="hidden md:inline">⬇ Export</span>
+            <span className="md:hidden">⬇</span>
           </button>
         </div>
       </div>

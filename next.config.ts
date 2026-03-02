@@ -2,15 +2,14 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Disable Next.js DevTools (segment explorer) — crashes intermittently in 15.5.x
-  devTools: false,
   // Keep heavy Node-only packages out of the browser bundle
-  serverExternalPackages: ["adm-zip", "webmscore"],
+  serverExternalPackages: ["adm-zip", "webmscore", "verovio"],
 
-  // Include webmscore's WASM + data binaries in the serverless function bundle
+  // Include WASM + data binaries in serverless function bundles
   // (Next.js file tracing only follows JS imports, skips binary files)
   outputFileTracingIncludes: {
-    "/api/load": ["./node_modules/webmscore/**"],
+    "/api/load":       ["./node_modules/webmscore/**"],
+    "/api/v1/render":  ["./node_modules/verovio/**"],
   },
 
   async headers() {

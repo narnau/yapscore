@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Logo from "@/components/Logo";
 import { capture } from "@/lib/posthog";
 
 export type Message = {
@@ -9,47 +8,44 @@ export type Message = {
   text: string;
 };
 
-type Usage = {
-  plan: "free" | "pro";
-  used: number;
-  limit: number | null;
-};
-
 type Props = {
   currentMusicXml: string | null;
-  fileName: string;
-  onFileNameChange: (name: string) => void;
   selectedMeasures: Set<number>;
   messages: Message[];
   onMessagesChange: (messages: Message[]) => void;
   onClearSelection: () => void;
   onScoreReady: (musicXml: string, name?: string) => void;
-  onNew: () => void;
-  usage: Usage | null;
   onUsageRefresh: () => void;
+  onSingClick?: () => void;
 };
 
 export default function ChatPanel({
   currentMusicXml,
-  fileName,
-  onFileNameChange,
   selectedMeasures,
   messages,
   onMessagesChange,
   onClearSelection,
   onScoreReady,
-  onNew,
-  usage,
   onUsageRefresh,
+  onSingClick,
 }: Props) {
   const [instruction, setInstruction] = useState("");
   const [loading, setLoading] = useState(false);
   const [paywallHit, setPaywallHit] = useState(false);
+  const [usage, setUsage] = useState<{ plan: string; used: number; limit: number | null } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {});
+  }, []);
 
   const isAtLimit = paywallHit || (
     usage !== null && usage.plan === "free" && usage.limit !== null && usage.used >= usage.limit
   );
-  const [editingName, setEditingName] = useState(false);
+
+  function refreshUsage() {
+    fetch("/api/usage").then(r => r.json()).then(u => { setUsage(u); onUsageRefresh(); }).catch(() => {});
+  }
+
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -58,9 +54,7 @@ export default function ChatPanel({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [micSupported, setMicSupported] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     setMicSupported(!!navigator.mediaDevices?.getUserMedia);
@@ -129,33 +123,6 @@ export default function ChatPanel({
     }
   }, [recording]);
 
-  async function handleFileUpload(file: File) {
-    capture("file_uploaded", {
-      fileType: file.name.split(".").pop()?.toLowerCase(),
-      fileSizeKb: Math.round(file.size / 1024),
-    });
-    setUploading(true);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/load", { method: "POST", body: form });
-      const data = await res.json();
-      if (data.error) {
-        addMessage({ role: "system", text: `Error loading file: ${data.error}` });
-      } else {
-        const name = file.name.replace(/\.(mscz|mxl|xml|musicxml)$/i, "");
-        onFileNameChange(name);
-        onScoreReady(data.musicXml, name);
-        addMessage({ role: "system", text: `Loaded: ${file.name}` });
-      }
-    } catch {
-      addMessage({ role: "system", text: "Failed to upload file." });
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }
-
   async function handleUpgrade() {
     capture("upgrade_clicked");
     try {
@@ -223,17 +190,17 @@ export default function ChatPanel({
         onMessagesChange([...next, { role: "system", text: `Error: ${data.error}` }]);
       } else if (data.type === "chat") {
         onMessagesChange([...next, { role: "system", text: data.message }]);
-        onUsageRefresh();
+        refreshUsage();
       } else if (data.type === "load") {
         onMessagesChange([...next, { role: "system", text: `Loaded: ${data.name ?? "score"}` }]);
         onScoreReady(data.musicXml, data.name);
         onClearSelection();
-        onUsageRefresh();
+        refreshUsage();
       } else if (data.type === "modify") {
         onMessagesChange([...next, { role: "system", text: data.message || "Score updated." }]);
         onScoreReady(data.musicXml, text);
         onClearSelection();
-        onUsageRefresh();
+        refreshUsage();
       }
     } catch {
       onMessagesChange([...next, { role: "system", text: "Network error." }]);
@@ -244,53 +211,6 @@ export default function ChatPanel({
 
   return (
     <div className="flex flex-col h-full bg-white">
-      <div className="px-4 py-3 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-bold tracking-tight text-gray-900 flex items-center gap-1.5"><Logo size={20} className="text-brand-primary" />Yap<span className="text-brand-primary">Score</span></h1>
-          <div className="flex items-center gap-1.5">
-            {usage && usage.limit !== null && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-brand-secondary">
-                {usage.used}/{usage.limit}
-              </span>
-            )}
-            {usage?.plan === "pro" && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary font-medium">
-                Pro
-              </span>
-            )}
-            {currentMusicXml && (
-              <button
-                onClick={() => { onMessagesChange([]); onNew(); }}
-                className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-red-50 text-brand-secondary hover:text-red-600 transition"
-                title="Clear score and start fresh"
-              >
-                New
-              </button>
-            )}
-          </div>
-        </div>
-        {/* Inline-editable file name */}
-        {editingName ? (
-          <input
-            autoFocus
-            type="text"
-            value={fileName}
-            onChange={(e) => onFileNameChange(e.target.value)}
-            onBlur={() => setEditingName(false)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingName(false); }}
-            className="mt-0.5 w-full bg-gray-50 border border-gray-200 text-xs text-gray-900 px-1.5 py-0.5 rounded outline-none focus:ring-1 focus:ring-brand-primary"
-          />
-        ) : (
-          <button
-            onClick={() => setEditingName(true)}
-            className="mt-0.5 text-xs text-brand-secondary hover:text-gray-900 truncate max-w-full text-left transition"
-            title="Click to rename"
-          >
-            {fileName}
-          </button>
-        )}
-      </div>
-
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-hide bg-gray-50" style={{ scrollbarWidth: "none" }}>
         {messages.map((m, i) => (
           <div
@@ -338,17 +258,6 @@ export default function ChatPanel({
         <div ref={chatEndRef} />
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".mscz,.mxl,.xml,.musicxml"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFileUpload(file);
-        }}
-      />
-
       <form ref={formRef} onSubmit={handleSubmit} className="border-t border-gray-200 p-3 space-y-2 bg-white">
         {/* Selection badge */}
         {selectedMeasures.size > 0 && (
@@ -384,7 +293,7 @@ export default function ChatPanel({
                 ? "Recording…"
                 : currentMusicXml
                 ? "Modify, transpose, ask anything…"
-                : "Ask me to create a score, or upload a file with 📎…"
+                : "Ask me to create a score…"
             }
             disabled={loading || isAtLimit || recording}
             rows={3}
@@ -405,24 +314,20 @@ export default function ChatPanel({
               </button>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={loading || uploading}
-                  className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-700 hover:bg-gray-200"
-                  title="Upload .mscz or .mxl file"
-                >
-                  {uploading ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 animate-spin">
-                      <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clipRule="evenodd" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                      <path fillRule="evenodd" d="M15.621 4.379a3 3 0 0 0-4.242 0l-7 7a3 3 0 0 0 4.241 4.243h.001l.497-.5a.75.75 0 0 1 1.064 1.057l-.498.501-.002.002a4.5 4.5 0 0 1-6.364-6.364l7-7a4.5 4.5 0 0 1 6.368 6.36l-3.455 3.553A2.625 2.625 0 1 1 9.52 9.52l3.45-3.451a.75.75 0 1 1 1.061 1.06l-3.45 3.451a1.125 1.125 0 0 0 1.587 1.595l3.454-3.553a3 3 0 0 0 0-4.242Z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </button>
                 <div className="flex-1" />
+                {onSingClick && (
+                  <button
+                    type="button"
+                    onClick={() => { capture("sing_opened"); onSingClick(); }}
+                    disabled={loading || isAtLimit}
+                    className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-700 hover:bg-gray-200"
+                    title="Sing a melody"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                      <path d="M17.721 1.599a.75.75 0 0 1 .279.583v12.568a.75.75 0 0 1-.773.75 9.033 9.033 0 0 0-1.727.189c-.6.122-1.187.316-1.623.569-.437.253-.727.53-.727.796 0 .265.29.543.727.796.436.253 1.024.447 1.623.57a9.035 9.035 0 0 0 1.727.188.75.75 0 0 1 .773.75V20a.75.75 0 0 1-.75.75h-.003a10.54 10.54 0 0 1-2.065-.228c-.747-.152-1.535-.4-2.17-.753C12.376 19.416 12 18.87 12 18.25c0-.62.376-1.166 1.012-1.52.635-.352 1.423-.6 2.17-.752A10.539 10.539 0 0 1 17 15.75V4.832l-10 2.5v10.918a.75.75 0 0 1-.773.75 9.032 9.032 0 0 0-1.727.189c-.6.122-1.187.316-1.623.569C2.44 20.011 2.15 20.288 2.15 20.554c0 .265.29.543.727.796.436.253 1.024.447 1.623.57.593.12 1.186.178 1.727.188A.75.75 0 0 1 7 22.857V10a.75.75 0 0 1 .553-.724l12-3a.75.75 0 0 1 .947.723V1.6a.75.75 0 0 1-.779-.001Z" />
+                    </svg>
+                  </button>
+                )}
                 {micSupported && (
                   <button
                     type="button"

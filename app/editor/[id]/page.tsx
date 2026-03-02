@@ -5,6 +5,8 @@ import { use } from "react";
 import { useRouter } from "next/navigation";
 import ChatPanel, { type Message } from "@/components/ChatPanel";
 import ScoreViewer from "@/components/ScoreViewer";
+import EditorTopBar from "@/components/EditorTopBar";
+import MobileTabBar, { type MobileTab } from "@/components/MobileTabBar";
 import SingModal from "@/components/SingModal";
 import type { HistoryEntry } from "@/lib/files";
 import { historyReducer, messagesAtIndex } from "@/lib/editor-history";
@@ -32,6 +34,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [loaded, setLoaded] = useState(false);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [singOpen, setSingOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("score");
 
   // Refs that are always up-to-date (synchronous) — used in callbacks with stale closures
   const messagesRef = useRef<Message[]>([]);
@@ -213,7 +216,6 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
   const [leaveModalOpen, setLeaveModalOpen] = useState(false);
 
-  const isEmpty = !musicXml && messages.length === 0;
   const isUntitled = fileName === "Untitled" || fileName === "";
 
   function handleBack() {
@@ -277,54 +279,66 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   );
 
   return (
-    <main className="flex h-full bg-white text-gray-900">
-      {/* Save indicator */}
-      <div className="fixed top-2 right-3 z-50 text-[10px] text-brand-secondary pointer-events-none">
-        {saveStatus === "saving"  && "Saving…"}
-        {saveStatus === "unsaved" && "Unsaved"}
+    <main className="flex flex-col h-full bg-white text-gray-900">
+      {/* Top bar */}
+      <EditorTopBar
+        fileName={fileName}
+        onFileNameChange={setFileName}
+        saveStatus={saveStatus}
+        usage={usage}
+        onBack={handleBack}
+        onNew={() => { setMessages([]); handleNew(); }}
+        currentMusicXml={musicXml}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        historyIndex={hs.index}
+        historyLength={hs.entries.length}
+        historyEntries={hs.entries.map((e, i) => ({
+          name: e.name ?? (i === 0 ? "Original" : `Edit ${i}`),
+          timestamp: e.timestamp,
+        }))}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        onJumpTo={navigateTo}
+      />
+
+      {/* Mobile tab bar */}
+      <MobileTabBar activeTab={mobileTab} onTabChange={setMobileTab} />
+
+      {/* Main content */}
+      <div className="flex-1 flex min-h-0">
+        {/* Chat — 34% on desktop, full width on mobile when chat tab active */}
+        <div className={`${
+          mobileTab === "chat" ? "flex" : "hidden"
+        } md:flex w-full md:w-[34%] md:min-w-[280px] border-r border-gray-200 flex-col`}>
+          <ChatPanel
+            currentMusicXml={musicXml}
+            selectedMeasures={selectedMeasures}
+            messages={messages}
+            onMessagesChange={setMessages}
+            onClearSelection={() => setSelectedMeasures(new Set())}
+            onScoreReady={handleScoreReady}
+            onUsageRefresh={() => fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {})}
+            onSingClick={musicXml ? () => setSingOpen(true) : undefined}
+          />
+        </div>
+
+        {/* Score viewer — 66% on desktop, full width on mobile when score tab active */}
+        <div className={`${
+          mobileTab === "score" ? "flex" : "hidden"
+        } md:flex flex-1 flex-col`}>
+          <ScoreViewer
+            musicXml={musicXml}
+            scoreName={fileName}
+            selectedMeasures={selectedMeasures}
+            onMeasureClick={handleMeasureClick}
+            onPlaybackStop={() => setSelectedMeasures(new Set())}
+            onMusicXmlChange={(xml, label) => handleScoreReady(xml, label)}
+            isMobile={mobileTab === "score"}
+          />
+        </div>
       </div>
 
-      {/* Chat — 34% */}
-      <div className="w-[34%] min-w-[280px] border-r border-gray-200 flex flex-col">
-        <ChatPanel
-          currentMusicXml={musicXml}
-          fileName={fileName}
-          onFileNameChange={setFileName}
-          selectedMeasures={selectedMeasures}
-          messages={messages}
-          onMessagesChange={setMessages}
-          onClearSelection={() => setSelectedMeasures(new Set())}
-          onScoreReady={handleScoreReady}
-          onNew={handleNew}
-          usage={usage}
-          onUsageRefresh={() => fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {})}
-        />
-      </div>
-
-      {/* Score viewer — 66% */}
-      <div className="flex-1 flex flex-col">
-        <ScoreViewer
-          musicXml={musicXml}
-          scoreName={fileName}
-          selectedMeasures={selectedMeasures}
-          onMeasureClick={handleMeasureClick}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          historyIndex={hs.index}
-          historyLength={hs.entries.length}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          onJumpTo={navigateTo}
-          historyEntries={hs.entries.map((e, i) => ({
-            name: e.name ?? (i === 0 ? "Original" : `Edit ${i}`),
-            timestamp: e.timestamp,
-          }))}
-          onPlaybackStop={() => setSelectedMeasures(new Set())}
-          onSingClick={musicXml ? () => setSingOpen(true) : undefined}
-          onBack={handleBack}
-          onMusicXmlChange={(xml, label) => handleScoreReady(xml, label)}
-        />
-      </div>
       {singOpen && musicXml && (
         <SingModal
           bpm={(() => {
