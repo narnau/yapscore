@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PublicNavbar from "@/components/PublicNavbar";
+import { createClient } from "@/lib/supabase/server";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -10,10 +11,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export default function DocsPage() {
+export default async function DocsPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900">
-      <PublicNavbar />
+      <PublicNavbar loggedIn={!!user} />
 
       <div className="pt-28 pb-20 px-6">
         <div className="max-w-3xl mx-auto">

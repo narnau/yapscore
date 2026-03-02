@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PublicNavbar from "@/components/PublicNavbar";
+import { createClient } from "@/lib/supabase/server";
 
 type EntryGroup = {
   label: "Added" | "Improved" | "Fixed";
@@ -78,10 +79,12 @@ const GROUP_STYLES: Record<EntryGroup["label"], { dot: string; text: string; bg:
   Fixed:    { dot: "bg-amber-500",   text: "text-amber-700",   bg: "bg-amber-50 border-amber-100" },
 };
 
-export default function ChangelogPage() {
+export default async function ChangelogPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900">
-      <PublicNavbar />
+      <PublicNavbar loggedIn={!!user} />
 
       <div className="pt-28 pb-20 px-6">
         <div className="max-w-2xl mx-auto">

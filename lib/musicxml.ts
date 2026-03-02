@@ -1240,15 +1240,20 @@ export function setMeasureNotes(
   const measure = findMeasure(part, measureNumber);
   if (!measure) return musicXml;
 
+  // Detect if this part actually has multiple staves
+  const partStaves = part.measures[0]?.attributes?.staves ?? 1;
+  // If the part is single-staff, ignore the staff parameter
+  const effectiveStaff = partStaves > 1 ? staff : undefined;
+
   // Preserve non-note entries
   const preserved = measure.entries.filter(e =>
     e.type === "direction" || e.type === "attributes" || e.type === "harmony"
   );
   const preservedBarlines = measure.barlines;
 
-  const noteEntries = notes.map(n => noteSpecToEntry(n, divisions, staff));
+  const noteEntries = notes.map(n => noteSpecToEntry(n, divisions, effectiveStaff));
 
-  if (!staff) {
+  if (!effectiveStaff) {
     measure.entries = [...preserved, ...noteEntries];
   } else {
     // Staff-aware: keep other staff's notes

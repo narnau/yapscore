@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo") || "/editor";
   const initialMode = searchParams.get("mode") === "signup" ? "signup" : "login";
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [email, setEmail] = useState("");
@@ -19,10 +20,11 @@ export default function LoginPage() {
 
   async function handleGoogleLogin() {
     const supabase = createClient();
+    const callbackUrl = `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(returnTo)}`;
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
+        redirectTo: callbackUrl,
       },
     });
   }
@@ -48,7 +50,7 @@ export default function LoginPage() {
         setError(error.message);
       } else if (data.session) {
         await fetch("/api/auth/profile", { method: "POST" });
-        router.push("/editor");
+        router.push(returnTo);
       } else {
         setEmailSent(true);
       }
@@ -61,7 +63,7 @@ export default function LoginPage() {
         setError(error.message);
       } else {
         await fetch("/api/auth/profile", { method: "POST" });
-        router.push("/editor");
+        router.push(returnTo);
       }
     }
 

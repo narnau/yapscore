@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Logo from "./Logo";
 
 type Usage = { plan: "free" | "pro"; used: number; limit: number | null };
 
@@ -34,7 +35,8 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
-const BTN = "text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-30 transition shrink-0";
+const GHOST_BTN =
+  "p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-900 disabled:opacity-30 transition shrink-0";
 
 export default function EditorTopBar({
   fileName,
@@ -73,20 +75,21 @@ export default function EditorTopBar({
       : "Unsaved";
 
   return (
-    <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-200 bg-white shrink-0">
-      {/* Back */}
-      <button
-        onClick={onBack}
-        className={BTN}
-        title="All files"
-      >
-        <span className="hidden md:inline">← Files</span>
-        <span className="md:hidden">←</span>
-      </button>
+    <div className="relative flex items-center px-3 py-2 border-b border-gray-200 bg-white shrink-0">
+      {/* Centered logo (absolute so it doesn't affect layout) */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <Logo size={16} className="text-brand-primary" />
+      </div>
+      {/* Left zone — Back */}
+      <div className="flex items-center shrink-0">
+        <button onClick={onBack} className={GHOST_BTN} title="All files">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+            <path fillRule="evenodd" d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 3.96a.75.75 0 1 1-1.04 1.08l-5.5-5.25a.75.75 0 0 1 0-1.08l5.5-5.25a.75.75 0 1 1 1.04 1.08L5.612 9.25H16.25A.75.75 0 0 1 17 10Z" clipRule="evenodd" />
+          </svg>
+        </button>
+      </div>
 
-      <span className="text-gray-300 hidden md:inline text-xs">|</span>
-
-      {/* File name (editable) */}
+      {/* Center zone — File name + save status */}
       <div className="flex-1 min-w-0 flex items-center gap-2">
         {editing ? (
           <input
@@ -99,7 +102,7 @@ export default function EditorTopBar({
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === "Escape") setEditing(false);
             }}
-            className="flex-1 min-w-0 bg-gray-50 border border-gray-200 text-sm text-gray-900 px-2 py-0.5 rounded outline-none focus:ring-1 focus:ring-brand-primary"
+            className="max-w-[200px] md:max-w-[300px] bg-gray-50 border border-gray-200 text-sm text-gray-900 px-2 py-0.5 rounded outline-none focus:ring-1 focus:ring-brand-primary"
           />
         ) : (
           <button
@@ -111,7 +114,6 @@ export default function EditorTopBar({
           </button>
         )}
 
-        {/* Save status dot */}
         <div className="flex items-center gap-1 shrink-0" title={statusLabel}>
           <span className={`w-2 h-2 rounded-full ${statusColor}`} />
           <span className="hidden md:inline text-xs text-brand-secondary">
@@ -120,80 +122,95 @@ export default function EditorTopBar({
         </div>
       </div>
 
-      <span className="text-gray-300 hidden md:inline text-xs">|</span>
-
-      {/* Undo / Redo */}
-      <button onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)" className={BTN}>↩</button>
-      <button onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Y)" className={BTN}>↪</button>
-
-      {/* History dropdown */}
-      {historyLength > 0 && (
-        <div className="relative shrink-0">
+      {/* Right zone — Undo, Redo, History, Pro badge, New */}
+      <div className="flex items-center gap-1 shrink-0">
+        {/* Unified history group: Undo + Redo + Version dropdown */}
+        <div className="hidden md:flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
           <button
-            onClick={() => setHistoryOpen((o) => !o)}
-            title="Version history"
-            className={BTN}
+            onClick={onUndo}
+            disabled={!canUndo}
+            title="Undo (Ctrl+Z)"
+            className="p-1 rounded-md hover:bg-white text-gray-500 hover:text-gray-900 disabled:opacity-30 transition"
           >
-            v{historyIndex + 1}/{historyLength}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M7.793 2.232a.75.75 0 0 1-.025 1.06L3.622 7.25h10.003a5.375 5.375 0 0 1 0 10.75H10.75a.75.75 0 0 1 0-1.5h2.875a3.875 3.875 0 0 0 0-7.75H3.622l4.146 3.957a.75.75 0 0 1-1.036 1.085l-5.5-5.25a.75.75 0 0 1 0-1.085l5.5-5.25a.75.75 0 0 1 1.06.025Z" clipRule="evenodd" />
+            </svg>
           </button>
-          {historyOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setHistoryOpen(false)}
-              />
-              <div ref={historyListRef} className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
-                {historyEntries.map((entry, i) => (
-                  <button
-                    key={i}
-                    {...(i === historyIndex ? { "data-active": "" } : {})}
-                    onClick={() => { onJumpTo(i); setHistoryOpen(false); }}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition flex items-center gap-2 ${
-                      i === historyIndex ? "text-brand-primary font-semibold" : "text-gray-700"
-                    }`}
-                  >
-                    <span className="text-brand-secondary tabular-nums w-5 shrink-0">{i + 1}.</span>
-                    <span className="truncate flex-1">{entry.name}</span>
-                    <span className="text-brand-secondary shrink-0 tabular-nums">
-                      {timeAgo(entry.timestamp)}
-                    </span>
-                    {i === historyIndex && <span className="text-brand-primary">←</span>}
-                  </button>
-                ))}
-              </div>
-            </>
+
+          <button
+            onClick={onRedo}
+            disabled={!canRedo}
+            title="Redo (Ctrl+Y)"
+            className="p-1 rounded-md hover:bg-white text-gray-500 hover:text-gray-900 disabled:opacity-30 transition"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M12.207 2.232a.75.75 0 0 1 1.06-.025l5.5 5.25a.75.75 0 0 1 0 1.085l-5.5 5.25a.75.75 0 0 1-1.036-1.085l4.146-3.957H6.375a3.875 3.875 0 0 0 0 7.75h2.875a.75.75 0 0 1 0 1.5H6.375a5.375 5.375 0 0 1 0-10.75h10.003L12.232 3.293a.75.75 0 0 1-.025-1.06Z" clipRule="evenodd" />
+            </svg>
+          </button>
+
+          {historyLength > 0 && (
+            <div className="relative shrink-0">
+              <div className="w-px h-4 bg-gray-300 mx-0.5" />
+            </div>
+          )}
+
+          {historyLength > 0 && (
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setHistoryOpen((o) => !o)}
+                title={`Version history (${historyIndex + 1}/${historyLength})`}
+                className="p-1 rounded-md hover:bg-white text-gray-500 hover:text-gray-900 transition"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5Z" clipRule="evenodd" />
+                </svg>
+              </button>
+              {historyOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setHistoryOpen(false)}
+                  />
+                  <div ref={historyListRef} className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
+                    {historyEntries.map((entry, i) => (
+                      <button
+                        key={i}
+                        {...(i === historyIndex ? { "data-active": "" } : {})}
+                        onClick={() => { onJumpTo(i); setHistoryOpen(false); }}
+                        className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition flex items-center gap-2 ${
+                          i === historyIndex ? "text-brand-primary font-semibold" : "text-gray-700"
+                        }`}
+                      >
+                        <span className="text-brand-secondary tabular-nums w-5 shrink-0">{i + 1}.</span>
+                        <span className="truncate flex-1">{entry.name}</span>
+                        <span className="text-brand-secondary shrink-0 tabular-nums">
+                          {timeAgo(entry.timestamp)}
+                        </span>
+                        {i === historyIndex && <span className="text-brand-primary">←</span>}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
-      )}
 
-      <span className="text-gray-300 hidden md:inline text-xs">|</span>
-
-      {/* Usage badge */}
-      {usage && usage.plan === "pro" && (
-        <span className="text-xs px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary font-medium shrink-0 hidden md:inline">
-          Pro
-        </span>
-      )}
-      {usage && usage.limit !== null && usage.plan === "free" && (
-        <span
-          className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-brand-secondary shrink-0 hidden md:inline"
-          title={`${usage.used} of ${usage.limit} free edits used`}
-        >
-          {usage.used}/{usage.limit} edits
-        </span>
-      )}
-
-      {/* + New */}
-      {currentMusicXml && (
-        <button
-          onClick={onNew}
-          className={BTN}
-          title="New score"
-        >
-          <span className="hidden md:inline">+ New</span>
-          <span className="md:hidden">+</span>
-        </button>
-      )}
+        {/* Pro badge */}
+        {usage && usage.plan === "pro" && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary font-medium shrink-0 hidden md:inline">
+            Pro
+          </span>
+        )}
+        {usage && usage.limit !== null && usage.plan === "free" && (
+          <span
+            className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-brand-secondary shrink-0 hidden md:inline"
+            title={`${usage.used} of ${usage.limit} free edits used`}
+          >
+            {usage.used}/{usage.limit} edits
+          </span>
+        )}
+      </div>
     </div>
   );
 }

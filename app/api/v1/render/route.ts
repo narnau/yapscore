@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiKeyUser } from "@/lib/apiKeyAuth";
+import { getApiKeyUser, checkApiAccess } from "@/lib/apiKeyAuth";
 
-// No usage counting — pure rendering, no LLM
 export async function POST(req: NextRequest) {
   const auth = await getApiKeyUser(req);
   if (!auth.ok) return auth.response;
 
+  const access = await checkApiAccess(auth.userId);
+  if (!access.ok) return access.response;
+
   const body = await req.json().catch(() => ({}));
   const musicxml = typeof body.musicxml === "string" ? body.musicxml : null;
-  const page = typeof body.page === "number" ? body.page : 1;
+  const page     = typeof body.page     === "number" ? body.page     : 1;
 
-  if (!musicxml) {
-    return NextResponse.json({ error: "musicxml is required" }, { status: 400 });
-  }
+  if (!musicxml) return NextResponse.json({ error: "musicxml is required" }, { status: 400 });
 
   try {
-    // Server-side Verovio (in serverExternalPackages — runs in Node, not browser)
     const { default: createVerovioModule } = await import("verovio/wasm");
     const { VerovioToolkit } = await import("verovio/esm");
 
@@ -31,9 +30,9 @@ export async function POST(req: NextRequest) {
     });
 
     tk.loadData(musicxml);
-    const totalPages = tk.getPageCount();
+    const totalPages  = tk.getPageCount();
     const clampedPage = Math.max(1, Math.min(page, totalPages));
-    const svg = tk.renderToSVG(clampedPage);
+    const svg         = tk.renderToSVG(clampedPage);
 
     return new NextResponse(svg, {
       status: 200,

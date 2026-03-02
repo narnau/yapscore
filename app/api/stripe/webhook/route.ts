@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       // Downgrade user to free
       const { data: downgraded } = await admin
         .from("profiles")
-        .update({ plan: "free", interactions_used: 0 })
+        .update({ plan: "free" })
         .eq("stripe_customer_id", customerId)
         .select("id")
         .single();

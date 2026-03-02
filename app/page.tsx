@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ScoreAnimation from "@/components/ScoreAnimation";
 import PublicNavbar from "@/components/PublicNavbar";
+import { createClient } from "@/lib/supabase/server";
 
 function Hero() {
   return (
@@ -297,7 +298,7 @@ function Pricing() {
               </li>
             </ul>
             <Link
-              href="/editor"
+              href="/editor?plan=pro"
               className="mt-8 block text-center py-3 rounded-xl bg-brand-primary text-white text-sm font-semibold hover:bg-brand-primary/90 transition shadow-md shadow-brand-primary/20"
             >
               Try Pro Free for 3 Days
@@ -357,7 +358,7 @@ function Contact() {
   );
 }
 
-function Footer() {
+function Footer({ loggedIn }: { loggedIn: boolean }) {
   return (
     <footer className="py-10 px-6 border-t border-gray-100">
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -367,17 +368,25 @@ function Footer() {
         <div className="flex items-center gap-6 text-sm text-brand-secondary">
           <Link href="/docs" className="hover:text-gray-900 transition">Docs</Link>
           <Link href="/changelog" className="hover:text-gray-900 transition">Changelog</Link>
-          <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
+          {loggedIn ? (
+            <Link href="/editor" className="hover:text-gray-900 transition">Editor</Link>
+          ) : (
+            <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
+          )}
         </div>
       </div>
     </footer>
   );
 }
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const loggedIn = !!user;
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <PublicNavbar />
+      <PublicNavbar loggedIn={loggedIn} />
       <Hero />
       <HowItWorks />
       <Features />
@@ -385,7 +394,7 @@ export default function LandingPage() {
       <Pricing />
       <CTA />
       <Contact />
-      <Footer />
+      <Footer loggedIn={loggedIn} />
     </main>
   );
 }

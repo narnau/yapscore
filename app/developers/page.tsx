@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PublicNavbar from "@/components/PublicNavbar";
+import { createClient } from "@/lib/supabase/server";
 
 // ─── Code block ──────────────────────────────────────────────────────────────
 
@@ -92,10 +93,12 @@ const NAV = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function DevelopersPage() {
+export default async function DevelopersPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900">
-      <PublicNavbar />
+      <PublicNavbar loggedIn={!!user} />
 
       <div className="pt-16">
         <div className="max-w-6xl mx-auto px-6 flex gap-10 py-14">
@@ -131,14 +134,22 @@ export default function DevelopersPage() {
 
             {/* Header */}
             <div>
-              <span className="text-xs font-semibold text-brand-primary uppercase tracking-wider">
-                Developer Docs
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-brand-primary uppercase tracking-wider">
+                  Developer Docs
+                </span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                  Beta
+                </span>
+              </div>
               <h1 className="mt-2 text-4xl font-extrabold text-gray-900 tracking-tight">
                 YapScore API
               </h1>
               <p className="mt-3 text-lg text-brand-secondary max-w-xl">
                 Generate and modify sheet music programmatically with a simple REST API.
+              </p>
+              <p className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 max-w-xl">
+                The API is in beta. Limits and pricing may change as we gather usage data.
               </p>
               <div className="mt-5">
                 <Link
@@ -168,9 +179,26 @@ export default function DevelopersPage() {
                   </div>
                 ))}
               </div>
-              <p className="mt-2">
-                Generate and modify calls use your interaction quota (same as the editor). Render is free — no LLM involved.
-              </p>
+              <div className="mt-2 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr className="text-left text-gray-500 border-b border-gray-100">
+                      <th className="px-5 py-3 font-medium">Requirement</th>
+                      <th className="px-5 py-3 font-medium">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    <tr>
+                      <td className="px-5 py-3 text-brand-secondary">Plan required</td>
+                      <td className="px-5 py-3 font-medium text-gray-900">Pro only</td>
+                    </tr>
+                    <tr>
+                      <td className="px-5 py-3 text-brand-secondary">Daily call limit</td>
+                      <td className="px-5 py-3 font-medium text-gray-900">20 calls / day (resets midnight UTC)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </Section>
 
             {/* Authentication */}
@@ -274,7 +302,6 @@ export default function DevelopersPage() {
                 method="POST"
                 path="/api/v1/render"
                 description="Render a MusicXML score to SVG. Returns image/svg+xml directly — not JSON."
-                note="This endpoint does not count toward your interaction quota. Use it freely to preview scores."
                 request={`# Save SVG to file
 curl -X POST https://yapscore.ai/api/v1/render \\
   -H "Authorization: Bearer ys_..." \\
@@ -327,7 +354,8 @@ curl -X POST https://yapscore.ai/api/v1/render \\
                     {[
                       { code: "400", meaning: "Bad request — missing or invalid parameters." },
                       { code: "401", meaning: "Unauthorized — API key missing, invalid, or revoked." },
-                      { code: "402", meaning: 'Usage limit reached. Upgrade to Pro for unlimited access. Response includes { "error": "limit_reached", "usage": { "used": 5, "limit": 5 } }.' },
+                      { code: "403", meaning: "Forbidden — API access requires a Pro subscription." },
+                      { code: "429", meaning: 'Daily limit reached (20 calls/day). Resets at midnight UTC. Response includes { "error": "Daily API limit reached", "limit": 20, "resets": "midnight UTC" }.' },
                       { code: "500", meaning: "Internal server error — try again later." },
                     ].map(({ code, meaning }) => (
                       <tr key={code}>

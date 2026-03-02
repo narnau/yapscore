@@ -31,10 +31,14 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Redirect unauthenticated users away from protected routes
-  const isProtected = request.nextUrl.pathname.startsWith("/editor");
+  const isProtected =
+    request.nextUrl.pathname.startsWith("/editor") ||
+    request.nextUrl.pathname.startsWith("/settings");
   if (!user && isProtected) {
     const url = request.nextUrl.clone();
+    const returnTo = request.nextUrl.pathname + request.nextUrl.search;
     url.pathname = "/login";
+    url.search = returnTo !== "/editor" ? `?returnTo=${encodeURIComponent(returnTo)}` : "";
     return NextResponse.redirect(url);
   }
 

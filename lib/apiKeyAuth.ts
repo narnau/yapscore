@@ -2,11 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createHash, randomBytes } from "crypto";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+// API is Pro-only. Free users get a 403 before any LLM call.
+// Daily cap protects against runaway scripts from Pro users.
+// At ~$0.006/call (Gemini 2.5 Flash, ~3 agent steps avg), 20 calls/day = ~$3.60/mo worst case.
+// Revisit once real usage data is available — this is a beta limit.
+export const API_DAILY_LIMIT = 20;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ApiKeyAuthSuccess = { ok: true; userId: string };
-type ApiKeyAuthFailure = { ok: false; response: NextResponse };
-export type ApiKeyAuthResult = ApiKeyAuthSuccess | ApiKeyAuthFailure;
+type AuthSuccess = { ok: true; userId: string };
+type AuthFailure = { ok: false; response: NextResponse };
+export type ApiKeyAuthResult = AuthSuccess | AuthFailure;
+
+type AccessOk  = { ok: true };
+type AccessFail = { ok: false; response: NextResponse };
+export type ApiAccessResult = AccessOk | AccessFail;
 
 // ─── Key generation ───────────────────────────────────────────────────────────
 
@@ -19,7 +31,7 @@ export function generateApiKey(): { key: string; hash: string; prefix: string } 
   return { key, hash, prefix };
 }
 
-// ─── Request validation ───────────────────────────────────────────────────────
+// ─── Step 1: validate the API key → get userId ───────────────────────────────
 
 export async function getApiKeyUser(req: NextRequest): Promise<ApiKeyAuthResult> {
   const authHeader = req.headers.get("authorization");
@@ -61,4 +73,45 @@ export async function getApiKeyUser(req: NextRequest): Promise<ApiKeyAuthResult>
     .eq("id", apiKey.id);
 
   return { ok: true, userId: apiKey.user_id };
+}
+
+// ─── Step 2: Pro-only gate + daily rate limit ─────────────────────────────────
+
+export async function checkApiAccess(userId: string): Promise<ApiAccessResult> {
+  const admin = createAdminClient();
+
+  // Pro-only — free users cannot use the API
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("plan")
+    .eq("id", userId)
+    .single();
+
+  if (profile?.plan !== "pro") {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "API access requires a Pro subscription", upgrade_url: "https://yapscore.ai/settings" },
+        { status: 403 }
+      ),
+    };
+  }
+
+  // Atomic daily rate limit check + increment (resets at midnight UTC)
+  const { data: allowed } = await admin.rpc("check_and_increment_api_calls", {
+    p_user_id:     userId,
+    p_daily_limit: API_DAILY_LIMIT,
+  });
+
+  if (!allowed) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Daily API limit reached", limit: API_DAILY_LIMIT, resets: "midnight UTC" },
+        { status: 429 }
+      ),
+    };
+  }
+
+  return { ok: true };
 }

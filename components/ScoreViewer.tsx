@@ -14,6 +14,7 @@ type Props = {
   onPlaybackStop?: () => void;
   onMusicXmlChange?: (xml: string, label: string) => void;
   isMobile?: boolean;
+  loading?: boolean;
 };
 
 // General MIDI program → soundfont-player instrument name (programs 1–128)
@@ -45,7 +46,7 @@ const GM_INSTRUMENTS: string[] = [
 
 export default function ScoreViewer({
   musicXml, scoreName, selectedMeasures, onMeasureClick,
-  onPlaybackStop, onMusicXmlChange, isMobile,
+  onPlaybackStop, onMusicXmlChange, isMobile, loading,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -227,8 +228,17 @@ export default function ScoreViewer({
   if (!musicXml) {
     return (
       <div className="flex flex-col h-full">
-        <div className="flex-1 flex items-center justify-center text-brand-secondary text-sm">
-          Upload a score and send an instruction to see it here.
+        <div className="flex-1 flex items-center justify-center">
+          {loading ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-6 h-6 border-2 border-gray-300 border-t-brand-primary rounded-full animate-spin" />
+              <span className="text-xs text-gray-400">Loading score…</span>
+            </div>
+          ) : (
+            <span className="text-brand-secondary text-sm">
+              Upload a score and send an instruction to see it here.
+            </span>
+          )}
         </div>
       </div>
     );
@@ -293,11 +303,14 @@ export default function ScoreViewer({
           {/* Export */}
           <button
             onClick={downloadMusicXml}
-            className="text-xs px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
+            className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
             title="Download as MusicXML"
           >
-            <span className="hidden md:inline">⬇ Export</span>
-            <span className="md:hidden">⬇</span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+              <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+              <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+            </svg>
+            <span className="hidden md:inline">Export</span>
           </button>
         </div>
       </div>

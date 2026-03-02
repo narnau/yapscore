@@ -61,6 +61,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   useEffect(() => {
     async function load() {
       // 1. Try localStorage cache first (instant)
+      let hasCachedData = false;
       try {
         const cached = localStorage.getItem(localKey(id));
         if (cached) {
@@ -68,10 +69,12 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           if (Array.isArray(history) && history.length > 0) {
             dispatch({ type: "restore", entries: history, index });
             setMessages(messagesAtIndex(history, index));
+            hasCachedData = true;
           }
           if (name) setFileName(name);
         }
       } catch { /* ignore */ }
+      if (hasCachedData) setLoaded(true);
 
       // 2. Load from DB (source of truth)
       try {
@@ -335,6 +338,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             onPlaybackStop={() => setSelectedMeasures(new Set())}
             onMusicXmlChange={(xml, label) => handleScoreReady(xml, label)}
             isMobile={mobileTab === "score"}
+            loading={!loaded}
           />
         </div>
       </div>

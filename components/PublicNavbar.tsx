@@ -9,7 +9,7 @@ const NAV_LINKS = [
   { href: "/developers", label: "Developers" },
 ];
 
-export default function PublicNavbar() {
+export default function PublicNavbar({ loggedIn = false }: { loggedIn?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -32,12 +32,21 @@ export default function PublicNavbar() {
               {label}
             </Link>
           ))}
-          <Link
-            href="/login"
-            className="text-sm px-5 py-2 bg-brand-primary hover:bg-brand-primary/90 text-white rounded-lg font-medium transition shadow-sm"
-          >
-            Sign In
-          </Link>
+          {loggedIn ? (
+            <Link
+              href="/editor"
+              className="text-sm px-5 py-2 bg-brand-primary hover:bg-brand-primary/90 text-white rounded-lg font-medium transition shadow-sm"
+            >
+              Go to Editor
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="text-sm px-5 py-2 bg-brand-primary hover:bg-brand-primary/90 text-white rounded-lg font-medium transition shadow-sm"
+            >
+              Sign In
+            </Link>
+          )}
         </div>
       </div>
     </nav>

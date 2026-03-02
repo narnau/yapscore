@@ -35,8 +35,13 @@ export default function FilesPage() {
   useEffect(() => {
     if (searchParams.get("upgraded") === "true") {
       setUpgraded(true);
-      // Remove the query param from the URL without a page reload
       window.history.replaceState({}, "", "/editor");
+    }
+    if (searchParams.get("plan") === "pro") {
+      window.history.replaceState({}, "", "/editor");
+      fetch("/api/stripe/checkout", { method: "POST" })
+        .then((r) => r.json())
+        .then(({ url }) => { if (url) window.location.href = url; });
     }
   }, [searchParams]);
 
@@ -141,6 +146,12 @@ export default function FilesPage() {
           >
             + New file
           </button>
+          <Link
+            href="/settings"
+            className="px-3 py-2 rounded-lg text-brand-secondary hover:text-gray-900 hover:bg-gray-50 text-sm transition"
+          >
+            Settings
+          </Link>
           <form action="/api/auth/logout" method="POST">
             <button
               type="submit"
