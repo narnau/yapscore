@@ -52,6 +52,7 @@ import {
 import type { DynamicMarking, ArticulationMarking, NoteSpec, ScoreInstrument, ChordSymbol, SwingInfo, NavigationMarkType } from "./musicxml";
 import { addAccidentals, fixChordSymbols } from "./accidentals";
 import { addBeams } from "./beams";
+import { logger } from "./logger";
 
 export type AgentResult =
   | { type: "load";   musicXml: string; name: string }
@@ -153,6 +154,18 @@ export async function runAgent(
         console.log(`│ [agent] text        : ${stepText.slice(0, 200)}${stepText.length > 200 ? "…" : ""}`);
       }
       console.log("└──────────────────────────────────────────────────────────────");
+
+      logger.info("agent.step", {
+        userId,
+        model: modelName,
+        stepType,
+        finishReason,
+        inputTokens:  usage?.promptTokens,
+        outputTokens: usage?.completionTokens,
+        totalTokens:  usage?.totalTokens,
+        tools: (toolCalls ?? []).map((tc: any) => tc.toolName).join(",") || undefined,
+        text: stepText ? stepText.slice(0, 200) : undefined,
+      });
     },
     system: `You are a music score editor assistant. Always use tools — never just describe what you would do.
 
