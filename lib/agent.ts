@@ -1139,7 +1139,8 @@ Rules:
         msg.includes("unavailable tool") ||
         msg.includes("No such tool") ||
         msg.includes("Invalid arguments for tool") ||
-        msg.includes("Type validation failed");
+        msg.includes("Type validation failed") ||
+        msg.includes("Invalid JSON");
       if (!isRetryable) break;
     }
   }
