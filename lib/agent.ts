@@ -131,6 +131,10 @@ export async function runAgent(
   const { text } = await generateText({
     model,
     maxSteps: 15,
+    experimental_telemetry: {
+      isEnabled: true,
+      metadata: { posthogDistinctId: userId ?? "anonymous" },
+    },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onStepFinish({ stepType, toolCalls, toolResults, finishReason, usage, text: stepText }: any) {
       console.log("┌──────────────────────────────────────────────────────────────");

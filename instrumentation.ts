@@ -19,23 +19,41 @@ export async function register() {
       const { OTLPLogExporter } = await import("@opentelemetry/exporter-logs-otlp-http");
       const { logs } = await import("@opentelemetry/api-logs");
       const { resourceFromAttributes } = await import("@opentelemetry/resources");
+      const { BasicTracerProvider } = await import("@opentelemetry/sdk-trace-base");
+      const { AsyncLocalStorageContextManager } = await import("@opentelemetry/context-async-hooks");
+      const { trace } = await import("@opentelemetry/api");
+      const { PostHog } = await import("posthog-node");
+      const { PostHogSpanProcessor } = await import("@posthog/ai/otel");
 
+      const key  = process.env.NEXT_PUBLIC_POSTHOG_KEY  ?? "";
+      const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://eu.i.posthog.com";
+      const resource = resourceFromAttributes({ "service.name": "yapscore" });
+
+      // ── Logs (OTLP → PostHog) ────────────────────────────────────────────
       _loggerProvider = new LoggerProvider({
-        resource: resourceFromAttributes({ "service.name": "yapscore" }),
+        resource,
         processors: [
           new BatchLogRecordProcessor(
             new OTLPLogExporter({
-              url: `${process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://eu.i.posthog.com"}/i/v1/logs`,
-              headers: {
-                Authorization: `Bearer ${process.env.NEXT_PUBLIC_POSTHOG_KEY ?? ""}`,
-                "Content-Type": "application/json",
-              },
+              url: `${host}/i/v1/logs`,
+              headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
             })
           ),
         ],
       });
-
       logs.setGlobalLoggerProvider(_loggerProvider);
+
+      // ── Traces (PostHog AI / LLM analytics) ─────────────────────────────
+      const { context: otelContext } = await import("@opentelemetry/api");
+      const phClient = new PostHog(key, { host, flushAt: 1, flushInterval: 0 });
+      const tracerProvider = new BasicTracerProvider({
+        resource,
+        spanProcessors: [new PostHogSpanProcessor(phClient)],
+      });
+      const contextManager = new AsyncLocalStorageContextManager();
+      contextManager.enable();
+      otelContext.setGlobalContextManager(contextManager);
+      trace.setGlobalTracerProvider(tracerProvider);
     }
   }
 
