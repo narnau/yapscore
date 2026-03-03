@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { runAgent } from "@/lib/agent";
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -127,6 +128,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[agent] fatal error:", msg);
+    Sentry.captureException(err, { extra: { userId: auth.userId } });
     logger.error("agent.error", { userId: auth.userId, error: msg });
     after(() => logger.flush());
     // Never surface raw errors to the user — return as a chat message
