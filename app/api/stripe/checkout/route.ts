@@ -16,18 +16,24 @@ export async function POST(req: NextRequest) {
   const currency = currencyForCountry(country);
   const priceId = stripePriceId(currency);
 
-  const customerId = await createOrGetCustomer(auth.userId, user.email);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  try {
+    const customerId = await createOrGetCustomer(auth.userId, user.email);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: "subscription",
-    line_items: [{ price: priceId, quantity: 1 }],
-    allow_promotion_codes: true,
-    subscription_data: { trial_period_days: 3 },
-    success_url: `${appUrl}/editor?upgraded=true`,
-    cancel_url: `${appUrl}/editor`,
-  });
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      allow_promotion_codes: true,
+      subscription_data: { trial_period_days: 3 },
+      success_url: `${appUrl}/editor?upgraded=true`,
+      cancel_url: `${appUrl}/editor`,
+    });
 
-  return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[stripe/checkout] error:", msg, "priceId:", priceId, "country:", country);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

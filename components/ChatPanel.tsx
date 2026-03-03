@@ -128,7 +128,11 @@ export default function ChatPanel({
     try {
       const res = await fetch("/api/stripe/checkout", { method: "POST" });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        addMessage({ role: "system", text: `Checkout error: ${data.error ?? "unknown error"}` });
+      }
     } catch {
       addMessage({ role: "system", text: "Failed to start checkout." });
     }
