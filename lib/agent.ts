@@ -78,7 +78,7 @@ export async function runAgent(
     baseURL: "https://openrouter.ai/api/v1",
     apiKey,
   });
-  const modelName = process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash-preview";
+  const modelName = (process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash-preview").trim();
 
   const phClient = getPostHogServer();
   const baseModel = openrouter(modelName);

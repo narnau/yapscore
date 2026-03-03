@@ -49,9 +49,9 @@ function SupabaseIdentify() {
 }
 
 export default function PHProvider({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    initPostHog();
-  }, []);
+  // Initialize synchronously so posthog is ready before any child effects fire.
+  // isProduction already guards against SSR (typeof window check) and dev.
+  initPostHog();
 
   if (process.env.NODE_ENV !== "production") {
     return <>{children}</>;
