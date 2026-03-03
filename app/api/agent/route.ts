@@ -111,7 +111,13 @@ export async function POST(req: NextRequest) {
 
   try {
     setLlmUserId(auth.userId);
-    logger.info("agent.request", { userId: auth.userId, plan, used });
+    const msgPreview = message.length > 120 ? message.slice(0, 120) + "…" : message;
+    logger.info("agent.request", {
+      userId: auth.userId, plan, used,
+      message: msgPreview,
+      hasScore: !!currentMusicXml,
+      selectedMeasures: selectedMeasures?.length ?? 0,
+    });
     const result = await runAgent(message, currentMusicXml, selectedMeasures, history, auth.userId);
 
     await admin.rpc("increment_interactions", { user_id: auth.userId });
