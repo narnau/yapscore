@@ -8,6 +8,7 @@ import ScoreViewer from "@/components/ScoreViewer";
 import EditorTopBar from "@/components/EditorTopBar";
 import MobileTabBar, { type MobileTab } from "@/components/MobileTabBar";
 import SingModal from "@/components/SingModal";
+import DocsModal from "@/components/DocsModal";
 import type { HistoryEntry } from "@/lib/files";
 import { historyReducer, messagesAtIndex } from "@/lib/editor-history";
 import { capture } from "@/lib/posthog";
@@ -33,7 +34,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
   const [loaded, setLoaded] = useState(false);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [swingEnabled, setSwingEnabled] = useState<boolean | null>(null);
   const [singOpen, setSingOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("score");
 
   // Refs that are always up-to-date (synchronous) — used in callbacks with stale closures
@@ -86,6 +89,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         const index = history.length > 0 ? history.length - 1 : -1;
 
         setFileName(file.name ?? "Untitled");
+        if (typeof file.swing === "boolean") setSwingEnabled(file.swing);
 
         // Backward compat: migrate global messages into the latest entry
         if (file.messages?.length > 0 && index >= 0 && !history[index].messages?.length) {
@@ -218,6 +222,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   }, []);
 
   const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+  const [newModalOpen, setNewModalOpen] = useState(false);
 
   const isUntitled = fileName === "Untitled" || fileName === "";
 
@@ -262,8 +267,30 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   }
 
   const handleNew = useCallback(() => {
-    router.push("/editor");
-  }, [router]);
+    setNewModalOpen(true);
+  }, []);
+
+  async function createNewFile(name: string) {
+    capture("file_created");
+    try {
+      const res = await fetch("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const { id: newId } = await res.json();
+      router.push(`/editor/${newId}`);
+    } catch { /* ignore */ }
+  }
+
+  const handleSwingChange = useCallback((enabled: boolean) => {
+    setSwingEnabled(enabled);
+    fetch(`/api/files/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ swing: enabled }),
+    }).catch(() => {});
+  }, [id]);
 
   const handleScoreReady = useCallback(
     (xml: string, label?: string) => {
@@ -290,7 +317,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         saveStatus={saveStatus}
         usage={usage}
         onBack={handleBack}
-        onNew={() => { setMessages([]); handleNew(); }}
+        onNew={handleNew}
         currentMusicXml={musicXml}
         canUndo={canUndo}
         canRedo={canRedo}
@@ -303,6 +330,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         onUndo={handleUndo}
         onRedo={handleRedo}
         onJumpTo={navigateTo}
+        onDocsOpen={() => setDocsOpen(true)}
       />
 
       {/* Mobile tab bar */}
@@ -322,7 +350,6 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             onClearSelection={() => setSelectedMeasures(new Set())}
             onScoreReady={handleScoreReady}
             onUsageRefresh={() => fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {})}
-            onSingClick={musicXml ? () => setSingOpen(true) : undefined}
           />
         </div>
 
@@ -339,6 +366,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             onMusicXmlChange={(xml, label) => handleScoreReady(xml, label)}
             isMobile={mobileTab === "score"}
             loading={!loaded}
+            swingEnabled={swingEnabled ?? undefined}
+            onSwingChange={handleSwingChange}
           />
         </div>
       </div>
@@ -365,6 +394,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         />
       )}
 
+      {docsOpen && <DocsModal onClose={() => setDocsOpen(false)} />}
+
       {/* Leave confirmation modal */}
       {leaveModalOpen && (
         <LeaveModal
@@ -373,16 +404,31 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           onClose={() => setLeaveModalOpen(false)}
         />
       )}
+
+      {/* New file modal */}
+      {newModalOpen && (
+        <LeaveModal
+          title="New score"
+          description="Give it a name to get started."
+          deleteLabel="Skip"
+          onDelete={() => { setNewModalOpen(false); createNewFile("Untitled"); }}
+          onRename={(name) => { setNewModalOpen(false); createNewFile(name); }}
+          onClose={() => setNewModalOpen(false)}
+        />
+      )}
     </main>
   );
 }
 
 // ── Leave modal ───────────────────────────────────────────────────────────────
 
-function LeaveModal({ onDelete, onRename, onClose }: {
+function LeaveModal({ onDelete, onRename, onClose, title, description, deleteLabel }: {
   onDelete: () => void;
   onRename: (name: string) => void;
   onClose: () => void;
+  title?: string;
+  description?: string;
+  deleteLabel?: string;
 }) {
   const [name, setName] = useState("");
 
@@ -391,8 +437,8 @@ function LeaveModal({ onDelete, onRename, onClose }: {
       <div className="bg-white border border-gray-200 rounded-xl p-6 w-80 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-900">Untitled file</p>
-            <p className="text-xs text-brand-secondary">Give it a name or delete it.</p>
+            <p className="text-sm font-medium text-gray-900">{title ?? "Untitled file"}</p>
+            <p className="text-xs text-brand-secondary">{description ?? "Give it a name or delete it."}</p>
           </div>
           <button
             onClick={onClose}
@@ -419,7 +465,7 @@ function LeaveModal({ onDelete, onRename, onClose }: {
             onClick={onDelete}
             className="flex-1 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-sm transition"
           >
-            Delete
+            {deleteLabel ?? "Delete"}
           </button>
           <button
             onClick={() => { if (name.trim()) onRename(name.trim()); }}

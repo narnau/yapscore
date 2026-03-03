@@ -51,8 +51,16 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  webpack: (config, { isServer, webpack }) => {
+  webpack: (config, { dev, isServer, webpack }) => {
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
+
+    // In development, webpack's filesystem cache serializes large CSS source
+    // maps as strings (188–188kiB), triggering "Serializing big strings" warnings.
+    // Memory cache avoids disk serialization entirely — faster HMR, no warnings.
+    // (Cache is lost on dev server restart, same trade-off as no cache.)
+    if (dev) {
+      config.cache = { type: "memory" };
+    }
 
     if (!isServer) {
       // Verovio uses node: imports inside an ENVIRONMENT_IS_NODE guard,

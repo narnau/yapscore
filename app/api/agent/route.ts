@@ -1,12 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { runAgent } from "@/lib/agent";
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { setLlmUserId } from "@/lib/llm";
+import { logger } from "@/lib/logger";
+import { getLoggerProvider } from "@/instrumentation";
 
 export const maxDuration = 300;
 
 const FREE_LIMIT = 5;
+const PRO_DAILY_LIMIT = 200; // soft cap — stops scripts, never hit by normal human use
 
 // In-process burst rate limiter: max 5 requests per user per 10 seconds.
 // Prevents rapid-fire requests from burning LLM API credits.
@@ -56,6 +59,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (plan === "pro") {
+    const { data: allowed } = await admin.rpc("check_and_increment_api_calls", {
+      p_user_id:     auth.userId,
+      p_daily_limit: PRO_DAILY_LIMIT,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Daily limit reached. Resets at midnight UTC.", limit: PRO_DAILY_LIMIT },
+        { status: 429 }
+      );
+    }
+  }
+
   const formData = await req.formData();
   const message = formData.get("message") as string | null;
   const currentMusicXml = formData.get("musicXml") as string | null;
@@ -64,6 +80,14 @@ export async function POST(req: NextRequest) {
 
   if (!message) {
     return NextResponse.json({ error: "Missing message" }, { status: 400 });
+  }
+
+  // Reject oversized payloads — protects against expensive LLM calls even within daily cap
+  if (message.length > 2_000) {
+    return NextResponse.json({ error: "Message too long (max 2000 chars)" }, { status: 413 });
+  }
+  if (currentMusicXml && currentMusicXml.length > 500_000) {
+    return NextResponse.json({ error: "Score too large" }, { status: 413 });
   }
 
   // Safe JSON parsing — malformed input must not crash the route
@@ -87,9 +111,14 @@ export async function POST(req: NextRequest) {
 
   try {
     setLlmUserId(auth.userId);
-    const result = await runAgent(message, currentMusicXml, selectedMeasures, history);
+    logger.info("agent.request", { userId: auth.userId, plan, used });
+    const result = await runAgent(message, currentMusicXml, selectedMeasures, history, auth.userId);
 
     await admin.rpc("increment_interactions", { user_id: auth.userId });
+
+    logger.info("agent.response", { userId: auth.userId, type: result.type });
+
+    after(async () => { await getLoggerProvider()?.forceFlush(); });
 
     if (result.type === "chat")   return NextResponse.json({ type: "chat",   message: result.message });
     if (result.type === "load")   return NextResponse.json({ type: "load",   musicXml: result.musicXml, name: result.name });
@@ -99,6 +128,8 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[agent] fatal error:", msg);
+    logger.error("agent.error", { userId: auth.userId, error: msg });
+    after(async () => { await getLoggerProvider()?.forceFlush(); });
     // Never surface raw errors to the user — return as a chat message
     return NextResponse.json({
       type: "chat",

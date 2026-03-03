@@ -383,17 +383,22 @@ export default function SingModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-brand-secondary mb-1">BPM (tempo)</label>
+                  <label className="block text-xs text-brand-secondary mb-1">
+                    BPM (tempo)
+                    {bpm > 80 && (
+                      <span className="ml-2 text-amber-600 font-normal">↓ slower = better</span>
+                    )}
+                  </label>
                   <input
                     type="number"
                     min={40}
-                    max={240}
+                    max={80}
                     value={bpm}
                     onChange={e => {
                       const v = parseInt(e.target.value);
                       setBpm(isNaN(v) ? 0 : v);
                     }}
-                    onBlur={() => setBpm(prev => Math.max(40, Math.min(240, prev || 120)))}
+                    onBlur={() => setBpm(prev => Math.max(40, Math.min(80, prev || 60)))}
                     className="w-full px-3 py-2 rounded bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-brand-primary"
                   />
                 </div>
@@ -472,10 +477,9 @@ export default function SingModal({
                 </div>
               </div>
 
-              <div className="text-xs text-brand-secondary bg-gray-50 rounded p-3">
-                <strong className="text-gray-700">How it works:</strong> Listen to the reference pitch,
-                click Start, hear the count-in ({beats} clicks), then sing or hum your melody.
-                Recording stops automatically after {measuresToRecord} measure{measuresToRecord > 1 ? "s" : ""}.
+              <div className="text-xs text-brand-secondary bg-gray-50 rounded p-3 space-y-1">
+                <div><strong className="text-gray-700">How it works:</strong> Listen to the reference pitch, click Start, hear the count-in ({beats} clicks), then sing or hum your melody. Recording stops automatically after {measuresToRecord} measure{measuresToRecord > 1 ? "s" : ""}.</div>
+                <div className="text-amber-700">Tip: use a slow tempo (≤ 80 BPM) for best rhythm detection.</div>
               </div>
 
               <button

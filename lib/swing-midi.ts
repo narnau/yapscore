@@ -192,6 +192,15 @@ export function applySwingToMidi(base64: string, ratio = 2 / 3): string {
       a.absoluteTick !== b.absoluteTick ? a.absoluteTick - b.absoluteTick : a.order - b.order
     );
 
+    // End-of-Track (FF 2F 00) must always be the last event.
+    // Swing can push note-off events past it, so re-pin it to the end.
+    const eotIdx = events.findIndex(ev => ev.bytes[0] === 0xff && ev.bytes[1] === 0x2f);
+    if (eotIdx !== -1 && eotIdx !== events.length - 1) {
+      const [eot] = events.splice(eotIdx, 1);
+      eot.absoluteTick = Math.max(eot.absoluteTick, events[events.length - 1]?.absoluteTick ?? 0);
+      events.push(eot);
+    }
+
     const trackBytes = serializeTrack(events);
     output.push(0x4d, 0x54, 0x72, 0x6b); // "MTrk"
     output.push(...writeUint32BE(trackBytes.length));

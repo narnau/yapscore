@@ -42,6 +42,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     if ("current_xml" in body) patch.current_xml = body.current_xml;
     if ("history"     in body) patch.history     = body.history;
     if ("messages"    in body) patch.messages    = body.messages;
+    if ("swing"       in body) patch.swing       = body.swing;
 
     const admin = createAdminClient();
     await saveFile(admin, auth.userId, id, patch);

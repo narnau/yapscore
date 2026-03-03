@@ -1,5 +1,7 @@
 import { generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
+import { withTracing } from "@posthog/ai/vercel";
+import { getPostHogServer } from "./posthog-server";
 import { z } from "zod";
 import { toMusicXml } from "./mscore";
 import {
@@ -47,6 +49,7 @@ import {
   addTremolo,
   addGlissando,
   addBreathMark,
+  extractChordMap,
 } from "./musicxml";
 import type { DynamicMarking, ArticulationMarking, NoteSpec, ScoreInstrument, ChordSymbol, SwingInfo, NavigationMarkType } from "./musicxml";
 import { addAccidentals, fixChordSymbols } from "./accidentals";
@@ -65,7 +68,8 @@ export async function runAgent(
   message: string,
   currentMusicXml: string | null,
   selectedMeasures: number[] | null,
-  history: { role: "user" | "assistant"; content: string }[] = []
+  history: { role: "user" | "assistant"; content: string }[] = [],
+  userId?: string
 ): Promise<AgentResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
@@ -74,7 +78,16 @@ export async function runAgent(
     baseURL: "https://openrouter.ai/api/v1",
     apiKey,
   });
-  const model = process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash-preview";
+  const modelName = process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash-preview";
+
+  const phClient = getPostHogServer();
+  const baseModel = openrouter(modelName);
+  const model = phClient
+    ? withTracing(baseModel, phClient, {
+        posthogDistinctId: userId ?? "anonymous",
+        posthogProperties: { modelName },
+      })
+    : baseModel;
 
   // If measures are selected, only show those measures to the model
   const currentScoreCtx = (() => {
@@ -93,12 +106,17 @@ export async function runAgent(
       ? `\nSelected measures: ${selectedMeasures.join(", ")}`
       : "";
 
+  // Extract chord symbols already in the score and present them as a clean
+  // table so the LLM doesn't have to parse them out of raw MusicXML.
+  const chordMap = currentMusicXml ? extractChordMap(currentMusicXml) : "";
+  const chordCtx = chordMap ? `\nChord map: ${chordMap}` : "";
+
   type ScoreCapture = { musicXml: string; name?: string; resultType: "load" | "modify" };
 
   // Truncate message in logs to avoid leaking sensitive user content
   const msgPreview = message.length > 120 ? message.slice(0, 120) + "…" : message;
   console.log("╔══════════════════════════════════════════════════════════════");
-  console.log(`║ [agent] model   : ${model}`);
+  console.log(`║ [agent] model   : ${modelName}`);
   console.log(`║ [agent] message : ${msgPreview}`);
   const logCtx = currentMusicXml
     ? (() => { try { return extractParts(currentMusicXml).context; } catch { return "loaded"; } })()
@@ -120,7 +138,7 @@ export async function runAgent(
 
     try {
   const { text } = await generateText({
-    model: openrouter(model),
+    model,
     maxSteps: 15,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onStepFinish({ stepType, toolCalls, toolResults, finishReason, usage, text: stepText }: any) {
@@ -143,7 +161,7 @@ export async function runAgent(
     },
     system: `You are a music score editor assistant. Always use tools — never just describe what you would do.
 
-Current score: ${currentScoreCtx}${selectionCtx}
+Current score: ${currentScoreCtx}${selectionCtx}${chordCtx}
 
 Rules:
 - ALWAYS call tools immediately. Never ask for clarification. Make sensible musical assumptions and proceed.
@@ -153,8 +171,12 @@ Rules:
 - For piano or any 2-staff instrument: staff 1 = right hand, staff 2 = left hand.
 - If the score doesn't have enough measures, call insertEmptyMeasures first.
 - To change an instrument (e.g. "make it a piano"), use changeInstrument. NEVER use removePart + addPart for this — it destroys the notes.
-- Only respond with plain text (no tool calls) when the user asks a pure question that requires no score changes.
-- CRITICAL for writeNotes: the total duration of all notes in a measure must EXACTLY match the time signature. For 3/4: exactly 3 quarter-note beats (e.g. quarter+quarter+quarter, or dotted-half, or eighth+eighth+quarter+quarter). For 4/4: exactly 4 beats. NEVER overflow a measure — this causes rendering and playback errors.
+- Only respond with plain text (no tool calls) when the user asks a pure question that requires no score changes. If the user gives feedback implying something is wrong (e.g. "the B natural doesn't fit", "that note is off", "this chord is wrong"), treat it as a modification request and call writeNotes or the appropriate tool to fix it. NEVER claim you made a change without having called a tool — your words have no effect on the score, only tool calls do.
+- When composing melodies, use musically interesting and varied rhythms — mix quarter, eighth, half, dotted notes, rests, etc. Never default to all-quarter notes unless explicitly requested. Good melodies have rhythmic character.
+- TWO-PHASE COMPOSITION: When asked to write/compose a melody (with or without chords), always work in two phases: PHASE 1 — add chord symbols to all measures first using addChordSymbols (decide the full progression before writing a single note); PHASE 2 — write melody notes with writeNotes, using the chord tones you just established. Never write notes before the chords are set.
+- When chord symbols are present (see "Chord map" above), melody notes MUST respect those chords. Use chord tones and appropriate passing tones. Example: C7 = C E G Bb (NOT B♮); F7 = F A C Eb; G7 = G B D F. Dominant 7th chords always have a flat 7th. The "Chord map" line above is the ground truth — read it before writing any notes.
+- CRITICAL for writeNotes: the total duration of all notes in a measure must EXACTLY match the time signature. For 3/4: exactly 3 quarter-note beats. For 4/4: exactly 4 beats. NEVER overflow a measure — this causes rendering and playback errors.
+- Triplet beat values: eighth-triplet = 1/3 beat (12 per 4/4 measure), quarter-triplet = 2/3 beat (6 per 4/4 measure), half-triplet = 4/3 beat (3 per 4/4 measure). "Eighth note triplets" (tresillos de corchea) = eighth-triplet, 12 per 4/4 measure. Always add tuplet:"start" on the first and tuplet:"stop" on the last note of each triplet group of 3.
 - For pickup (anacrusis) measures at the start of a song, use the pickupBeats option in createScore, then write only the pickup notes (e.g. 1 beat for a 1-beat pickup in 3/4). All other measures must be full.`,
     messages: [...history, { role: "user" as const, content: message }],
     tools: {
@@ -610,7 +632,12 @@ Rules:
           "Call once per measure. Each note specifies step, octave, duration, and optional " +
           "accidental (alter) or chord flag. Use rest: true for rests. " +
           "Durations: whole, half, quarter, eighth, 16th, dotted-whole, dotted-half, " +
-          "dotted-quarter, dotted-eighth. For chords, set chord: true on the 2nd+ notes.",
+          "dotted-quarter, dotted-eighth. " +
+          "Triplet durations: eighth-triplet (1/3 beat, 'tresillos de corchea' — 12 per 4/4 bar), " +
+          "quarter-triplet (2/3 beat, 'tresillos de negra' — 6 per 4/4 bar), " +
+          "half-triplet (4/3 beat — 3 per 4/4 bar), 16th-triplet (1/6 beat — 24 per 4/4 bar). " +
+          "For triplets, add tuplet:'start' on note 1 and tuplet:'stop' on note 3 of each group. " +
+          "For chords, set chord: true on the 2nd+ notes.",
         parameters: z.object({
           measureNumber: z.number().describe("Measure number to write notes into."),
           partId: z.string().optional().describe(
@@ -620,16 +647,31 @@ Rules:
             "Staff number: 1 = right hand / treble, 2 = left hand / bass. " +
             "Required for piano or any instrument with 2 staves. Omit for single-staff instruments."
           ),
-          notes: z.array(z.object({
+          notes: z.preprocess(
+            (val) => {
+              if (!Array.isArray(val)) return val;
+              return val.map((note: any) => {
+                if (typeof note !== "object" || !note || typeof note.step !== "string") return note;
+                const flat = note.step.match(/^([A-G])b$/i);
+                const sharp = note.step.match(/^([A-G])#$/i);
+                if (flat) return { ...note, step: flat[1].toUpperCase(), alter: note.alter ?? -1 };
+                if (sharp) return { ...note, step: sharp[1].toUpperCase(), alter: note.alter ?? 1 };
+                return { ...note, step: note.step[0].toUpperCase() };
+              });
+            },
+            z.array(z.object({
             step: z.enum(["C", "D", "E", "F", "G", "A", "B"] as const).optional()
-              .describe("Note name (required for pitched notes, omit for rests)."),
+              .describe("Note letter name (C–B). For accidentals use alter: -1 (flat) or 1 (sharp)."),
             octave: z.number().optional().describe("Octave number (default 4)."),
             alter: z.number().optional().describe("-1 for flat, 1 for sharp, 0 or omit for natural."),
             duration: z.enum([
               "whole", "half", "quarter", "eighth", "16th",
               "dotted-whole", "dotted-half", "dotted-quarter", "dotted-eighth",
               "half-triplet", "quarter-triplet", "eighth-triplet", "16th-triplet",
-            ] as const).describe("Note duration."),
+            ] as const).describe(
+              "Note duration. Use varied rhythms — mix quarters, eighths, halves, dotted values, etc. " +
+              "Do NOT default to all-quarter notes unless the user specifically asks for it."
+            ),
             chord: z.boolean().optional().describe("True if this note is simultaneous with the previous note (chord)."),
             rest: z.boolean().optional().describe("True for a rest (omit step/octave)."),
             tie: z.enum(["start", "stop", "both"]).optional().describe("Tie this note to the next/previous note of the same pitch."),
@@ -638,7 +680,7 @@ Rules:
             ornament: z.enum(["trill", "mordent", "inverted-mordent", "turn"]).optional().describe("Ornament to attach to this note."),
             articulation: z.enum(["staccato", "accent", "tenuto", "marcato", "staccatissimo"]).optional().describe("Articulation marking on this specific note. Use accent for > marks, staccato for dots, tenuto for dashes."),
             lyric: z.object({ text: z.string(), syllabic: z.enum(["single", "begin", "middle", "end"]).optional(), verse: z.number().optional() }).optional().describe("Lyric syllable for vocal parts."),
-          })).describe("Array of notes to write into the measure, in order."),
+          }))).describe("Array of notes to write into the measure, in order."),
         }),
         execute: async ({ measureNumber, partId, staff, notes }) => {
           if (!liveXml) throw new Error("No score is currently loaded");
@@ -657,8 +699,20 @@ Rules:
             `<measure\\b[^>]*number="${targetMeasure}"[^>]*implicit="yes"`
           ).test(liveXml);
 
-          const timeSigBeats    = parseInt(liveXml.match(/<beats>(\d+)<\/beats>/)?.[1] ?? "4");
-          const timeSigBeatType = parseInt(liveXml.match(/<beat-type>(\d+)<\/beat-type>/)?.[1] ?? "4");
+          // Find effective time signature at targetMeasure (last change on or before it)
+          const { timeSigBeats, timeSigBeatType } = (() => {
+            // Walk measures in order, tracking the last seen time signature
+            let beats = 4, beatType = 4;
+            const measureRe = /<measure\b[^>]*number="(\d+)"[\s\S]*?(?=<measure\b|$)/g;
+            let m: RegExpExecArray | null;
+            while ((m = measureRe.exec(liveXml)) !== null) {
+              const mNum = parseInt(m[1]);
+              if (mNum > targetMeasure) break;
+              const timeSig = m[0].match(/<beats>(\d+)<\/beats>[\s\S]*?<beat-type>(\d+)<\/beat-type>/);
+              if (timeSig) { beats = parseInt(timeSig[1]); beatType = parseInt(timeSig[2]); }
+            }
+            return { timeSigBeats: beats, timeSigBeatType: beatType };
+          })();
           const measureCapacity = timeSigBeats * (4 / timeSigBeatType); // in quarter-note beats
 
           const total = notesTotalBeats(notes as NoteSpec[]);
@@ -1085,8 +1139,13 @@ Rules:
       const msg = err instanceof Error ? err.message : String(err);
       console.log(`│ [agent] ⚠ attempt ${attempt} failed: ${msg}`);
       lastError = err;
-      // Only retry on tool-name errors (model hallucinated a wrong tool name)
-      if (!msg.includes("unavailable tool") && !msg.includes("No such tool")) break;
+      // Retry on tool-name errors or tool argument validation errors (LLM can self-correct)
+      const isRetryable =
+        msg.includes("unavailable tool") ||
+        msg.includes("No such tool") ||
+        msg.includes("Invalid arguments for tool") ||
+        msg.includes("Type validation failed");
+      if (!isRetryable) break;
     }
   }
 

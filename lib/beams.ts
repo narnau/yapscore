@@ -25,6 +25,8 @@ interface NoteData {
   type: string | null;
   hasDot: boolean;
   beamable: boolean;
+  /** actual-notes / normal-notes ratio from <time-modification>, e.g. 3/2 for triplets */
+  tupletRatio: number;
 }
 
 type Element =
@@ -49,9 +51,13 @@ function processMeasure(measureXml: string): string {
       const isChord  = xml.includes('<chord');
       const type     = xml.match(/<type>([^<]+)<\/type>/)?.[1].trim() ?? null;
       const hasDot   = xml.includes('<dot');
+      const actualNotes  = parseInt(xml.match(/<actual-notes>(\d+)<\/actual-notes>/)?.[1] ?? '1');
+      const normalNotes  = parseInt(xml.match(/<normal-notes>(\d+)<\/normal-notes>/)?.[1] ?? '1');
+      const tupletRatio  = actualNotes / normalNotes;  // e.g. 3/2 for triplets
       const data: NoteData = {
         original: xml, stripped, isRest, isChord, type, hasDot,
         beamable: !isRest && type !== null && BEAMABLE_TYPES.has(type),
+        tupletRatio,
       };
       elements.push({ kind: 'note', data, noteIdx: notes.length });
       notes.push(data);
@@ -95,9 +101,12 @@ function processMeasure(measureXml: string): string {
 
     if (data.isChord) continue;  // chord notes share position with the previous note
 
-    const beat = Math.floor(pos);
-    const adv  = TYPE_QN[data.type ?? 'quarter'] ?? 1;
-    pos += data.hasDot ? adv * 1.5 : adv;
+    // Round to 9 decimal places before floor to avoid accumulated float drift
+    // (e.g. 1.9999999999999998 must snap to 2, not floor to 1)
+    const beat = Math.floor(Math.round(pos * 1e9) / 1e9);
+    const baseAdv = TYPE_QN[data.type ?? 'quarter'] ?? 1;
+    const adv  = (data.hasDot ? baseAdv * 1.5 : baseAdv) / data.tupletRatio;
+    pos += adv;
 
     if (data.isRest || !data.beamable) {
       flushGroup();

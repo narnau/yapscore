@@ -173,9 +173,12 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, JSON.stringify(channelInstruments)]);
 
-  // Keep latest handlers in refs so the Space keydown listener never goes stale
+  // Keep latest handlers and state in refs so the Space listener never goes stale
+  // and is registered only once (no re-registration races on state change).
   const handlePlayRef = useRef<() => void>(() => {});
   const handleStopRef = useRef<() => void>(() => {});
+  const stateRef      = useRef<State>(state);
+  stateRef.current    = state;
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -183,12 +186,12 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       e.preventDefault();
-      if (state === "playing") handleStopRef.current();
-      else if (state === "ready" || state === "stopped") handlePlayRef.current();
+      if (stateRef.current === "playing") handleStopRef.current();
+      else if (stateRef.current === "ready" || stateRef.current === "stopped") handlePlayRef.current();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [state]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handlePlay() {
     const player = playerRef.current;
@@ -249,7 +252,7 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
 
   return state === "playing" ? (
     <button
-      onClick={handleStop}
+      onClick={(e) => { (e.currentTarget as HTMLButtonElement).blur(); handleStop(); }}
       className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition shrink-0"
     >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
@@ -259,7 +262,7 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
     </button>
   ) : (
     <button
-      onClick={handlePlay}
+      onClick={(e) => { (e.currentTarget as HTMLButtonElement).blur(); handlePlay(); }}
       className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg bg-brand-primary hover:bg-brand-primary/90 text-white transition shrink-0"
     >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">

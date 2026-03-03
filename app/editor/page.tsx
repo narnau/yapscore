@@ -137,7 +137,7 @@ export default function FilesPage() {
       )}
       {/* Header */}
       <header className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold tracking-tight flex items-center"><Logo size={24} className="text-brand-primary mr-1.5" />Yap<span className="text-brand-primary">Score</span></h1>
+        <h1 className="text-xl font-bold tracking-tight flex items-center"><Logo size={24} className="text-brand-primary mr-1.5" />Yap<span className="text-brand-primary">Score</span><span className="ml-2 text-[10px] font-semibold tracking-wide uppercase px-1.5 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-amber-700">Beta</span></h1>
         <div className="flex items-center gap-2">
           <button
             onClick={createBlank}

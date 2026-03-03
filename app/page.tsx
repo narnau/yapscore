@@ -2,6 +2,7 @@ import Link from "next/link";
 import ScoreAnimation from "@/components/ScoreAnimation";
 import PublicNavbar from "@/components/PublicNavbar";
 import { createClient } from "@/lib/supabase/server";
+import { detectCurrency, type Currency } from "@/lib/currency";
 
 function Hero() {
   return (
@@ -234,7 +235,7 @@ function UseCases() {
   );
 }
 
-function Pricing() {
+function Pricing({ currency }: { currency: Currency }) {
   return (
     <section className="py-20 px-6">
       <div className="max-w-4xl mx-auto text-center">
@@ -249,7 +250,7 @@ function Pricing() {
           <div className="bg-white rounded-2xl p-8 border border-gray-200 text-left">
             <h3 className="text-lg font-bold text-gray-900">Free</h3>
             <div className="mt-3">
-              <span className="text-4xl font-extrabold text-gray-900">€0</span>
+              <span className="text-4xl font-extrabold text-gray-900">{currency.freeFormatted}</span>
               <span className="text-brand-secondary ml-1">/month</span>
             </div>
             <ul className="mt-6 space-y-3 text-sm text-gray-700">
@@ -280,7 +281,7 @@ function Pricing() {
             </div>
             <h3 className="text-lg font-bold text-gray-900">Pro</h3>
             <div className="mt-3">
-              <span className="text-4xl font-extrabold text-gray-900">€9.90</span>
+              <span className="text-4xl font-extrabold text-gray-900">{currency.proFormatted}</span>
               <span className="text-brand-secondary ml-1">/month</span>
             </div>
             <ul className="mt-6 space-y-3 text-sm text-gray-700">
@@ -367,8 +368,7 @@ function Footer({ loggedIn }: { loggedIn: boolean }) {
         </div>
         <div className="flex items-center gap-6 text-sm text-brand-secondary">
           <Link href="/docs" className="hover:text-gray-900 transition">Docs</Link>
-          <Link href="/changelog" className="hover:text-gray-900 transition">Changelog</Link>
-          {loggedIn ? (
+{loggedIn ? (
             <Link href="/editor" className="hover:text-gray-900 transition">Editor</Link>
           ) : (
             <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
@@ -380,7 +380,7 @@ function Footer({ loggedIn }: { loggedIn: boolean }) {
 }
 
 export default async function LandingPage() {
-  const supabase = await createClient();
+  const [supabase, currency] = await Promise.all([createClient(), detectCurrency()]);
   const { data: { user } } = await supabase.auth.getUser();
   const loggedIn = !!user;
 
@@ -391,7 +391,7 @@ export default async function LandingPage() {
       <HowItWorks />
       <Features />
       <UseCases />
-      <Pricing />
+      <Pricing currency={currency} />
       <CTA />
       <Contact />
       <Footer loggedIn={loggedIn} />

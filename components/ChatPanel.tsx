@@ -176,7 +176,12 @@ export default function ChatPanel({
         form.append("history", JSON.stringify(history));
       }
 
-      const res = await fetch("/api/agent", { method: "POST", body: form });
+      let res: Response | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * attempt));
+        try { res = await fetch("/api/agent", { method: "POST", body: form }); break; } catch { /* retry */ }
+      }
+      if (!res) throw new Error("network");
       const data = await res.json();
 
       if (res.status === 402) {
@@ -203,7 +208,7 @@ export default function ChatPanel({
         refreshUsage();
       }
     } catch {
-      onMessagesChange([...next, { role: "system", text: "Network error." }]);
+      onMessagesChange([...next, { role: "system", text: "Connection error — please check your internet and try again." }]);
     } finally {
       setLoading(false);
     }

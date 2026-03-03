@@ -89,6 +89,7 @@ const NAV = [
   { id: "render",         label: "POST /v1/render" },
   { id: "errors",         label: "Errors" },
   { id: "typescript",     label: "TypeScript example" },
+  { id: "enterprise",     label: "Custom & Enterprise" },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -365,6 +366,28 @@ curl -X POST https://yapscore.ai/api/v1/render \\
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </Section>
+
+            {/* Enterprise */}
+            <Section id="enterprise" title="Custom & Enterprise">
+              <p>
+                Need higher limits, a dedicated integration, or a custom deployment?
+                We&apos;re happy to work something out.
+              </p>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <p className="font-semibold text-gray-900">Talk to us</p>
+                  <p className="text-sm text-brand-secondary mt-1">
+                    Higher daily limits · Custom pricing · Private deployments · SLA support
+                  </p>
+                </div>
+                <a
+                  href="mailto:hello@yapscore.ai"
+                  className="shrink-0 text-sm px-5 py-2.5 rounded-lg bg-brand-primary text-white font-medium hover:bg-brand-primary/90 transition shadow-sm"
+                >
+                  Contact us →
+                </a>
               </div>
             </Section>
 

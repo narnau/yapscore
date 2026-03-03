@@ -19,6 +19,7 @@ export type FileData = FileEntry & {
   current_xml: string | null;
   history: HistoryEntry[];
   messages: Message[];
+  swing: boolean | null;
 };
 
 const MAX_HISTORY = 30;
@@ -59,7 +60,7 @@ export async function getFile(
 ): Promise<FileData | null> {
   const { data, error } = await supabase
     .from("files")
-    .select("id, name, current_xml, history, messages, created_at, updated_at")
+    .select("id, name, current_xml, history, messages, swing, created_at, updated_at")
     .eq("id", id)
     .eq("user_id", userId)
     .single();
@@ -77,6 +78,7 @@ export async function saveFile(
     current_xml?: string | null;
     history?: HistoryEntry[];
     messages?: Message[];
+    swing?: boolean | null;
   }
 ): Promise<void> {
   // Cap history at MAX_HISTORY

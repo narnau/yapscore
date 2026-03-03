@@ -1,6 +1,7 @@
 import Link from "next/link";
 import PublicNavbar from "@/components/PublicNavbar";
 import { createClient } from "@/lib/supabase/server";
+import { detectCurrency } from "@/lib/currency";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -12,7 +13,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default async function DocsPage() {
-  const supabase = await createClient();
+  const [supabase, currency] = await Promise.all([createClient(), detectCurrency()]);
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
@@ -100,7 +101,7 @@ export default async function DocsPage() {
                   </ul>
                 </div>
                 <div className="bg-brand-primary/5 rounded-xl p-5 border border-brand-primary/20">
-                  <h3 className="font-bold text-gray-900">Pro — €9.90/month</h3>
+                  <h3 className="font-bold text-gray-900">Pro — {currency.proFormatted}/month</h3>
                   <p className="text-xs text-brand-primary font-medium mt-1">3-day free trial included</p>
                   <ul className="mt-3 space-y-1.5 text-sm">
                     <li>Unlimited AI interactions</li>
@@ -125,19 +126,6 @@ export default async function DocsPage() {
               </Link>
             </div>
 
-            {/* Changelog link */}
-            <div className="flex items-center justify-between px-6 py-4 bg-gray-50 rounded-2xl border border-gray-100">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Looking for what&apos;s new?</p>
-                <p className="text-xs text-brand-secondary mt-0.5">See every feature and fix, version by version.</p>
-              </div>
-              <Link
-                href="/changelog"
-                className="shrink-0 text-sm px-4 py-2 rounded-lg bg-white border border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-900 transition shadow-sm"
-              >
-                View Changelog →
-              </Link>
-            </div>
           </div>
         </div>
       </div>

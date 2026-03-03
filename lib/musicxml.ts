@@ -895,16 +895,6 @@ export function addHairpin(
 
 // ─── changeKey ──────────────────────────────────────────────────────────────
 
-const KEY_NAME_TO_FIFTHS: Record<string, number> = {
-  "Cb major": -7, "Gb major": -6, "Db major": -5, "Ab major": -4,
-  "Eb major": -3, "Bb major": -2, "F major": -1, "C major": 0,
-  "G major": 1, "D major": 2, "A major": 3, "E major": 4,
-  "B major": 5, "F# major": 6, "C# major": 7,
-  "Ab minor": -7, "Eb minor": -6, "Bb minor": -5, "F minor": -4,
-  "C minor": -3, "G minor": -2, "D minor": -1, "A minor": 0,
-  "E minor": 1, "B minor": 2, "F# minor": 3, "C# minor": 4,
-  "G# minor": 5, "D# minor": 6, "A# minor": 7,
-};
 
 function fifthsToSemitones(oldFifths: number, newFifths: number): number {
   let semitones = ((newFifths - oldFifths) * 7) % 12;
@@ -1175,10 +1165,15 @@ function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number): Not
     notations.push({ type: "articulation", articulation: note.articulation });
   }
   if (note.tuplet === "start") {
-    notations.push({ type: "tuplet", tupletType: "start", bracket: true });
+    notations.push({
+      type: "tuplet", tupletType: "start", number: 1, bracket: true,
+      showNumber: "actual",
+      tupletActual: { tupletNumber: 3, tupletType: info.type },
+      tupletNormal: { tupletNumber: 2, tupletType: info.type },
+    });
   }
   if (note.tuplet === "stop") {
-    notations.push({ type: "tuplet", tupletType: "stop" });
+    notations.push({ type: "tuplet", tupletType: "stop", number: 1 });
   }
 
   if (notations.length > 0) entry.notations = notations;
@@ -1210,6 +1205,48 @@ function ensureTripletDivisions(musicXml: string): string {
     }
   }
   return mxlSerialize(score);
+}
+
+/**
+ * Auto-inject tuplet start/stop notations on consecutive triplet note groups.
+ * Groups of 3 notes sharing the same timeModification get a tuplet bracket
+ * automatically — the LLM doesn't need to specify tuplet:"start"/"stop" manually.
+ */
+function autoTupletNotations(entries: NoteEntry[]): NoteEntry[] {
+  // Only consider non-chord notes for grouping (chords share a beat with their root)
+  const nonChord = entries.filter(e => !e.chord);
+  let i = 0;
+  while (i < nonChord.length) {
+    const e = nonChord[i];
+    if (e.timeModification?.actualNotes === 3) {
+      // Check if the next 2 non-chord notes are also triplets of the same duration
+      const j1 = nonChord[i + 1];
+      const j2 = nonChord[i + 2];
+      if (
+        j1?.timeModification?.actualNotes === 3 &&
+        j2?.timeModification?.actualNotes === 3 &&
+        e.noteType === j1.noteType && e.noteType === j2.noteType
+      ) {
+        // Only add if not already set
+        const hasTuplet = (n: NoteEntry) => n.notations?.some(x => x.type === "tuplet");
+        if (!hasTuplet(e)) {
+          e.notations = [{
+            type: "tuplet", tupletType: "start", number: 1, bracket: true,
+            showNumber: "actual",
+            tupletActual: { tupletNumber: 3, tupletType: e.noteType },
+            tupletNormal: { tupletNumber: 2, tupletType: e.noteType },
+          }, ...(e.notations ?? [])];
+        }
+        if (!hasTuplet(j2)) {
+          j2.notations = [{ type: "tuplet", tupletType: "stop", number: 1 }, ...(j2.notations ?? [])];
+        }
+        i += 3;
+        continue;
+      }
+    }
+    i++;
+  }
+  return entries;
 }
 
 export function setMeasureNotes(
@@ -1251,7 +1288,7 @@ export function setMeasureNotes(
   );
   const preservedBarlines = measure.barlines;
 
-  const noteEntries = notes.map(n => noteSpecToEntry(n, divisions, effectiveStaff));
+  const noteEntries = autoTupletNotations(notes.map(n => noteSpecToEntry(n, divisions, effectiveStaff)));
 
   if (!effectiveStaff) {
     measure.entries = [...preserved, ...noteEntries];
@@ -1571,6 +1608,54 @@ export function addChordSymbols(
     }
   }
   return { xml: mxlSerialize(score) };
+}
+
+// ─── extractChordMap ────────────────────────────────────────────────────────
+
+/** Reverse map: MusicXML kind string → display text (e.g. "dominant" → "7") */
+const XML_KIND_TO_TEXT: Record<string, string> = Object.fromEntries(
+  Object.entries(CHORD_KIND_MAP)
+    .filter(([k]) => !["M", "major", "minor"].includes(k)) // keep canonical keys only
+    .map(([, v]) => [v.xml, v.text])
+);
+
+/**
+ * Extracts chord symbols from the score and returns a compact string the LLM
+ * can use as a reference when composing.
+ * Example: "m1: C7 | m2: C7 | m5: F7 | m9: G7"
+ * Returns "" if no chords are found.
+ */
+export function extractChordMap(musicXml: string): string {
+  try {
+    const score = mxlParse(musicXml);
+    const part = score.parts[0];
+    if (!part) return "";
+
+    const entries: string[] = [];
+
+    for (let i = 0; i < part.measures.length; i++) {
+      const measure = part.measures[i];
+      const harmonies = measure.entries.filter(
+        (e): e is HarmonyEntry => e.type === "harmony"
+      );
+      if (harmonies.length === 0) continue;
+
+      const chordStrs = harmonies.map((h) => {
+        let root = h.root.rootStep;
+        if (h.root.rootAlter === 1) root += "#";
+        else if (h.root.rootAlter === -1) root += "b";
+        const kindText = h.kindText ?? XML_KIND_TO_TEXT[h.kind] ?? h.kind;
+        const bass = h.bass ? `/${h.bass.bassStep}` : "";
+        return `${root}${kindText}${bass}`;
+      });
+
+      entries.push(`m${i + 1}: ${chordStrs.join(" ")}`);
+    }
+
+    return entries.length > 0 ? entries.join(" | ") : "";
+  } catch {
+    return "";
+  }
 }
 
 // ─── renamePart ─────────────────────────────────────────────────────────────

@@ -15,6 +15,8 @@ type Props = {
   onMusicXmlChange?: (xml: string, label: string) => void;
   isMobile?: boolean;
   loading?: boolean;
+  swingEnabled?: boolean;
+  onSwingChange?: (enabled: boolean) => void;
 };
 
 // General MIDI program → soundfont-player instrument name (programs 1–128)
@@ -47,6 +49,7 @@ const GM_INSTRUMENTS: string[] = [
 export default function ScoreViewer({
   musicXml, scoreName, selectedMeasures, onMeasureClick,
   onPlaybackStop, onMusicXmlChange, isMobile, loading,
+  swingEnabled: swingProp, onSwingChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -59,12 +62,19 @@ export default function ScoreViewer({
   const [rendering, setRendering] = useState(false);
 
   // Swing: "jazz" = 66% triplet swing (2:1), "straight" = no swing
-  const [swingEnabled, setSwingEnabled] = useState(() => !!musicXml && !!getSwing(musicXml));
+  // When swingProp is provided (controlled from parent), use it; otherwise auto-detect from MusicXML.
+  const [swingLocal, setSwingLocal] = useState(() => !!musicXml && !!getSwing(musicXml));
+  const swingEnabled = swingProp ?? swingLocal;
 
-  // Re-detect swing when musicXml changes (e.g. agent sets/removes it)
+  const setSwingEnabled = (enabled: boolean) => {
+    setSwingLocal(enabled);
+    onSwingChange?.(enabled);
+  };
+
+  // Re-detect swing from MusicXML only when no parent control is present
   useEffect(() => {
-    setSwingEnabled(!!musicXml && !!getSwing(musicXml));
-  }, [musicXml]);
+    if (swingProp === undefined) setSwingLocal(!!musicXml && !!getSwing(musicXml));
+  }, [musicXml, swingProp]);
 
   // Recompute midiSrc whenever swing toggle changes (no Verovio re-render needed)
   useEffect(() => {
@@ -275,7 +285,7 @@ export default function ScoreViewer({
           {/* Jazz / Straight toggle */}
           {midiSrc && (
             <button
-              onClick={() => setSwingEnabled(s => { capture("swing_toggled", { enabled: !s }); return !s; })}
+              onClick={() => { capture("swing_toggled", { enabled: !swingEnabled }); setSwingEnabled(!swingEnabled); }}
               title={swingEnabled ? "Switch to straight" : "Switch to jazz swing"}
               className={`text-xs px-3 py-1 rounded-lg transition ${
                 swingEnabled
@@ -371,33 +381,27 @@ function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: string; onTempoCh
     : 0;
 
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [draft, setDraft] = useState(tempo);
 
   function startEdit() {
     if (!onTempoChange) return;
-    setDraft(String(tempo));
+    setDraft(tempo);
     setEditing(true);
-    setTimeout(() => { inputRef.current?.select(); }, 0);
   }
 
-  function commit() {
-    const bpm = parseInt(draft, 10);
-    if (!isNaN(bpm) && bpm >= 20 && bpm <= 400 && bpm !== tempo) {
+  function commit(value: number) {
+    const bpm = Math.round(value);
+    if (bpm >= 20 && bpm <= 300 && bpm !== tempo) {
       onTempoChange?.(bpm);
     }
     setEditing(false);
-  }
-
-  function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter") commit();
-    if (e.key === "Escape") setEditing(false);
   }
 
   // Reset editing state when musicXml changes (e.g. after a commit re-render)
   const prevTempoRef = useRef(tempo);
   if (prevTempoRef.current !== tempo) {
     prevTempoRef.current = tempo;
+    setDraft(tempo);
     if (editing) setEditing(false);
   }
 
@@ -415,19 +419,25 @@ function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: string; onTempoCh
           {i > 0 && <span className="text-gray-300">·</span>}
           {item.isTempoSlot && onTempoChange ? (
             editing ? (
-              <span className="flex items-center gap-1">
-                <span>♩ =</span>
+              <span className="flex items-center gap-2">
+                <span className="shrink-0">♩ =</span>
                 <input
-                  ref={inputRef}
-                  type="number"
+                  type="range"
                   min={20}
-                  max={400}
+                  max={300}
+                  step={1}
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onBlur={commit}
-                  onKeyDown={onKeyDown}
-                  className="w-14 px-1 py-0 rounded bg-white text-gray-900 text-[11px] border border-gray-200 focus:outline-none focus:border-brand-primary tabular-nums"
+                  onChange={(e) => setDraft(Number(e.target.value))}
+                  onMouseUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
+                  onTouchEnd={(e) => commit(Number((e.target as HTMLInputElement).value))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setEditing(false);
+                    if (e.key === "Enter") commit(draft);
+                  }}
+                  onBlur={() => commit(draft)}
+                  className="w-24 accent-brand-primary cursor-pointer"
                 />
+                <span className="tabular-nums text-gray-900 w-7 shrink-0">{draft}</span>
               </span>
             ) : (
               <button
