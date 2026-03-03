@@ -1,7 +1,5 @@
 import { generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
-import { withTracing } from "@posthog/ai/vercel";
-import { getPostHogServer } from "./posthog-server";
 import { z } from "zod";
 import { toMusicXml } from "./mscore";
 import {
@@ -80,14 +78,7 @@ export async function runAgent(
   });
   const modelName = (process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash-preview").trim();
 
-  const phClient = getPostHogServer();
-  const baseModel = openrouter(modelName);
-  const model = phClient
-    ? withTracing(baseModel, phClient, {
-        posthogDistinctId: userId ?? "anonymous",
-        posthogProperties: { modelName },
-      })
-    : baseModel;
+  const model = openrouter(modelName);
 
   // If measures are selected, only show those measures to the model
   const currentScoreCtx = (() => {
