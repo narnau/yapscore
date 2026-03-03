@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { AxiomWebVitals } from "next-axiom";
 import PHProvider from "./providers";
 import "./globals.css";
 
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="h-full">
       <body className="h-full bg-white text-gray-900" suppressHydrationWarning>
+        <AxiomWebVitals />
         <Suspense>
           <PHProvider>{children}</PHProvider>
         </Suspense>

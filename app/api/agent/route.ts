@@ -4,7 +4,6 @@ import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { setLlmUserId } from "@/lib/llm";
 import { logger } from "@/lib/logger";
-import { getLoggerProvider } from "@/instrumentation";
 
 export const maxDuration = 300;
 
@@ -118,7 +117,7 @@ export async function POST(req: NextRequest) {
 
     logger.info("agent.response", { userId: auth.userId, type: result.type });
 
-    after(async () => { await getLoggerProvider()?.forceFlush(); });
+    after(() => logger.flush());
 
     if (result.type === "chat")   return NextResponse.json({ type: "chat",   message: result.message });
     if (result.type === "load")   return NextResponse.json({ type: "load",   musicXml: result.musicXml, name: result.name });
@@ -129,7 +128,7 @@ export async function POST(req: NextRequest) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[agent] fatal error:", msg);
     logger.error("agent.error", { userId: auth.userId, error: msg });
-    after(async () => { await getLoggerProvider()?.forceFlush(); });
+    after(() => logger.flush());
     // Never surface raw errors to the user — return as a chat message
     return NextResponse.json({
       type: "chat",
