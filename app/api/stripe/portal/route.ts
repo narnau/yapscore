@@ -18,7 +18,7 @@ export async function POST() {
     return NextResponse.json({ error: "No subscription found" }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").trim();
 
   const session = await stripe.billingPortal.sessions.create({
     customer: profile.stripe_customer_id,

@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const customerId = await createOrGetCustomer(auth.userId, user.email);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").trim();
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
