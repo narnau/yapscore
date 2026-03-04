@@ -580,12 +580,27 @@ Rules:
             "E minor": 1,   "B minor": 2,   "F# minor": 3,  "C# minor": 4,
             "G# minor": 5,  "D# minor": 6,  "A# minor": 7,
           };
-          const fifths = KEY_MAP[key];
+          // Normalize: title-case, expand shorthand "Am"→"A minor", bare note→major
+          const normalizeKey = (k: string): string => {
+            k = k.trim();
+            // "Am", "F#m", "Bbm" → minor shorthand
+            const minorShort = k.match(/^([A-Ga-g][b#]?)m$/);
+            if (minorShort) k = `${minorShort[1]} minor`;
+            // Bare note name "F", "Bb", "G#" → assume major
+            const bareNote = k.match(/^([A-Ga-g][b#]?)$/);
+            if (bareNote) k = `${bareNote[1]} major`;
+            // Title-case the note, lowercase the mode
+            k = k.replace(/^([a-g])/, c => c.toUpperCase());
+            k = k.replace(/(major|minor)/i, m => m.toLowerCase());
+            return k;
+          };
+          const normalized = normalizeKey(key);
+          const fifths = KEY_MAP[normalized];
           if (fifths === undefined) throw new Error(`Unknown key: ${key}`);
           const result = changeKey(liveXml, fifths, fromMeasure);
           liveXml = result;
           capture.result = { musicXml: result, resultType: "modify" };
-          return { ok: true, key, fromMeasure: fromMeasure ?? "all" };
+          return { ok: true, key: normalized, fromMeasure: fromMeasure ?? "all" };
         },
       },
 
