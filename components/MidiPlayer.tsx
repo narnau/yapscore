@@ -193,12 +193,12 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handlePlay() {
+  async function handlePlay() {
     const player = playerRef.current;
     const ctx = audioCtxRef.current;
     if (!player || !ctx) return;
     activeRef.current = true;
-    ctx.resume();
+    await ctx.resume();
 
     if (selectedMeasures.size > 0) {
       const startMeasure = Math.min(...selectedMeasures);
