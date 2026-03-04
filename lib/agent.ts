@@ -1142,6 +1142,8 @@ Rules:
         return { type: "load", musicXml: r.musicXml, name: r.name! };
       }
 
+      if (!text.trim()) throw new Error("Empty response from model");
+
       console.log(`╔══ [agent] result: chat — "${text.slice(0, 120)}${text.length > 120 ? "…" : ""}"`);
       return { type: "chat", message: text };
 
@@ -1155,7 +1157,8 @@ Rules:
         msg.includes("No such tool") ||
         msg.includes("Invalid arguments for tool") ||
         msg.includes("Type validation failed") ||
-        msg.includes("Invalid JSON");
+        msg.includes("Invalid JSON") ||
+        msg.includes("Empty response from model");
       if (!isRetryable) break;
     }
   }
