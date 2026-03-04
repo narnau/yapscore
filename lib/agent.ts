@@ -561,9 +561,12 @@ Rules:
           "'change to a different key'. Common keys: C major, G major, D major, " +
           "A major, F major, Bb major, Eb major, A minor, E minor, D minor.",
         parameters: z.object({
-          key: z.string().describe(
-            "Target key name, e.g. 'G major', 'D minor', 'Bb major', 'F# minor'."
-          ),
+          key: z.enum([
+            "Cb major", "Gb major", "Db major", "Ab major", "Eb major", "Bb major", "F major",
+            "C major", "G major", "D major", "A major", "E major", "B major", "F# major", "C# major",
+            "Ab minor", "Eb minor", "Bb minor", "F minor", "C minor", "G minor", "D minor", "A minor",
+            "E minor", "B minor", "F# minor", "C# minor", "G# minor", "D# minor", "A# minor",
+          ]).describe("Target key signature."),
           fromMeasure: z.number().optional().describe(
             "Start the key change from this measure. Omit to change the whole score."
           ),
@@ -580,27 +583,11 @@ Rules:
             "E minor": 1,   "B minor": 2,   "F# minor": 3,  "C# minor": 4,
             "G# minor": 5,  "D# minor": 6,  "A# minor": 7,
           };
-          // Normalize: title-case, expand shorthand "Am"→"A minor", bare note→major
-          const normalizeKey = (k: string): string => {
-            k = k.trim();
-            // "Am", "F#m", "Bbm" → minor shorthand
-            const minorShort = k.match(/^([A-Ga-g][b#]?)m$/);
-            if (minorShort) k = `${minorShort[1]} minor`;
-            // Bare note name "F", "Bb", "G#" → assume major
-            const bareNote = k.match(/^([A-Ga-g][b#]?)$/);
-            if (bareNote) k = `${bareNote[1]} major`;
-            // Title-case the note, lowercase the mode
-            k = k.replace(/^([a-g])/, c => c.toUpperCase());
-            k = k.replace(/(major|minor)/i, m => m.toLowerCase());
-            return k;
-          };
-          const normalized = normalizeKey(key);
-          const fifths = KEY_MAP[normalized];
-          if (fifths === undefined) throw new Error(`Unknown key: ${key}`);
+          const fifths = KEY_MAP[key];
           const result = changeKey(liveXml, fifths, fromMeasure);
           liveXml = result;
           capture.result = { musicXml: result, resultType: "modify" };
-          return { ok: true, key: normalized, fromMeasure: fromMeasure ?? "all" };
+          return { ok: true, key, fromMeasure: fromMeasure ?? "all" };
         },
       },
 
