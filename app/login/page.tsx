@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/Logo";
@@ -7,10 +8,42 @@ import { createClient } from "@/lib/supabase/client";
 
 type OAuthProvider = "google" | "azure" | "apple";
 
+const isDev = process.env.NODE_ENV === "development";
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo") || "/editor";
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [devMode, setDevMode] = useState<"signin" | "signup">("signin");
+
+  async function handleEmailSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !password.trim()) return;
+    setLoading(true);
+    setError(null);
+    const supabase = createClient();
+    if (devMode === "signin") {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setError(error.message);
+      } else {
+        await fetch("/api/auth/profile", { method: "POST" });
+        router.push(returnTo);
+      }
+    } else {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        setError(error.message);
+      } else {
+        setError("Check your email to confirm your account.");
+      }
+    }
+    setLoading(false);
+  }
 
   async function handleOAuth(provider: OAuthProvider) {
     const supabase = createClient();
@@ -72,6 +105,46 @@ export default function LoginPage() {
             Continue with Apple
           </button>
         </div>
+
+        {isDev && (
+          <>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-brand-secondary">dev only</span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+            <div className="flex rounded-xl overflow-hidden border border-gray-200 text-xs font-medium">
+              <button type="button" onClick={() => { setDevMode("signin"); setError(null); }} className={`flex-1 py-2 transition ${devMode === "signin" ? "bg-gray-800 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>Sign in</button>
+              <button type="button" onClick={() => { setDevMode("signup"); setError(null); }} className={`flex-1 py-2 transition ${devMode === "signup" ? "bg-gray-800 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>Sign up</button>
+            </div>
+            <form onSubmit={handleEmailSubmit} className="space-y-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                required
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                required
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition"
+              />
+              {error && <p className="text-red-500 text-xs">{error}</p>}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full px-4 py-3 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white rounded-xl text-sm font-medium transition"
+              >
+                {loading ? (devMode === "signin" ? "Signing in…" : "Signing up…") : (devMode === "signin" ? "Sign in" : "Sign up")}
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </main>
   );
