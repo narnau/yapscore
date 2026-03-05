@@ -85,13 +85,18 @@ export default function FilesPage() {
         body: JSON.stringify({ name }),
       });
       const { id } = await res.json();
+      const welcomeMsg = {
+        role: "system" as const,
+        text: `I've loaded "${name}" for you! Ask me to make any changes.`,
+        suggestions: ["Transpose to G major", "Change the tempo to 120 BPM", "Add a forte at measure 1", "Add a crescendo from measure 1 to 4"],
+      };
       await fetch(`/api/files/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           current_xml: xml,
-          history: [{ musicXml: xml, name, timestamp: new Date().toISOString(), messages: [] }],
-          messages: [],
+          history: [{ musicXml: xml, name, timestamp: new Date().toISOString(), messages: [welcomeMsg] }],
+          messages: [welcomeMsg],
         }),
       });
       router.push(`/editor/${id}`);
@@ -127,13 +132,18 @@ export default function FilesPage() {
       const { id } = await res.json();
 
       // Save the XML immediately
+      const uploadWelcomeMsg = {
+        role: "system" as const,
+        text: `I've loaded "${name}" for you! Ask me to make any changes.`,
+        suggestions: ["Transpose to G major", "Change the tempo to 120 BPM", "Add a forte at measure 1", "Add a crescendo from measure 1 to 4"],
+      };
       await fetch(`/api/files/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           current_xml: musicXml,
-          history: [{ musicXml, name, timestamp: new Date().toISOString() }],
-          messages: [],
+          history: [{ musicXml, name, timestamp: new Date().toISOString(), messages: [uploadWelcomeMsg] }],
+          messages: [uploadWelcomeMsg],
         }),
       });
 

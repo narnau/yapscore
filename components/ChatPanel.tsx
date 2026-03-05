@@ -6,6 +6,7 @@ import { capture } from "@/lib/posthog";
 export type Message = {
   role: "user" | "system";
   text: string;
+  suggestions?: string[];
 };
 
 type Props = {
@@ -285,6 +286,28 @@ export default function ChatPanel({
         )}
         <div ref={chatEndRef} />
       </div>
+
+      {/* Suggestion chips — shown above input until first user message */}
+      {(() => {
+        const hasUserMsg = messages.some(m => m.role === "user");
+        if (hasUserMsg || loading || isAtLimit) return null;
+        const suggestions = [...messages].reverse().find(m => m.suggestions?.length)?.suggestions;
+        if (!suggestions?.length) return null;
+        return (
+          <div className="px-3 py-2 flex flex-wrap gap-1.5 border-t border-gray-100 bg-white">
+            {suggestions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => sendMessage(s, selectedMeasures)}
+                className="text-xs px-2.5 py-1 rounded-full bg-white border border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5 transition shadow-sm"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       <form ref={formRef} onSubmit={handleSubmit} className="border-t border-gray-200 p-3 space-y-2 bg-white">
         {/* Selection badge */}
