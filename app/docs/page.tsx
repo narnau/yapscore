@@ -45,7 +45,7 @@ export default async function DocsPage() {
               <ul className="list-disc list-inside space-y-1.5 ml-1">
                 <li>Click measures in the score to select them for targeted edits</li>
                 <li>Hold <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Shift</kbd> or <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Cmd</kbd> to select multiple measures</li>
-                <li>Type instructions like &ldquo;transpose up a major third&rdquo; or &ldquo;add a drum part&rdquo;</li>
+                <li>Type instructions like &ldquo;transpose up a major third&rdquo; or &ldquo;change the tempo&rdquo;</li>
                 <li>Use <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Ctrl+Z</kbd> / <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Ctrl+Y</kbd> to undo/redo changes</li>
               </ul>
             </Section>

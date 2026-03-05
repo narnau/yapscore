@@ -57,9 +57,54 @@ export default function DocsModal({ onClose }: { onClose: () => void }) {
             <ul className="list-disc list-inside space-y-1 ml-1">
               <li>Click measures in the score to select them for targeted edits</li>
               <li>Hold <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Shift</kbd> or <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Cmd</kbd> to select multiple measures</li>
-              <li>Type instructions like "transpose up a major third" or "add a drum part"</li>
+              <li>Type instructions like "transpose up a major third" or "change the tempo"</li>
               <li>Use <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Ctrl+Z</kbd> / <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Ctrl+Y</kbd> to undo/redo</li>
             </ul>
+          </Section>
+
+          <Section title="Direct Editing">
+            <p>Click a note or rest to select it, then use keyboard shortcuts:</p>
+
+            <p className="font-semibold text-gray-800 mt-3">Note shortcuts</p>
+            <table className="w-full text-xs border-collapse mt-1.5">
+              <tbody>
+                {[
+                  [["↑", "↓"], "Move note up / down one semitone"],
+                  [["Ctrl+↑", "Ctrl+↓"], "Move note up / down one octave"],
+                  [["Delete", "Backspace"], "Replace note with a rest"],
+                  [["1","2","3","4","5","6","7"], "Duration: 1=64th 2=32nd 3=16th 4=eighth 5=quarter 6=half 7=whole"],
+                ].map(([keys, desc], i) => (
+                  <tr key={i} className="border-t border-gray-100">
+                    <td className="py-1.5 pr-3 align-top whitespace-nowrap">
+                      {(keys as string[]).map((k) => (
+                        <kbd key={k} className="mr-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">{k}</kbd>
+                      ))}
+                    </td>
+                    <td className="py-1.5 text-brand-secondary">{desc as string}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <p className="font-semibold text-gray-800 mt-3">Measure shortcuts</p>
+            <table className="w-full text-xs border-collapse mt-1.5">
+              <tbody>
+                {[
+                  [["Ctrl+C"], "Copy selected measures"],
+                  [["Ctrl+V"], "Paste onto selected measures"],
+                  [["Ctrl+D"], "Duplicate selected measures (inserts after)"],
+                ].map(([keys, desc], i) => (
+                  <tr key={i} className="border-t border-gray-100">
+                    <td className="py-1.5 pr-3 align-top whitespace-nowrap">
+                      {(keys as string[]).map((k) => (
+                        <kbd key={k} className="mr-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">{k}</kbd>
+                      ))}
+                    </td>
+                    <td className="py-1.5 text-brand-secondary">{desc as string}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </Section>
 
           <Section title="Example Prompts">
