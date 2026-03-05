@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/Logo";
+import NewScoreModal from "@/components/NewScoreModal";
 import { capture } from "@/lib/posthog";
 
 type FileEntry = {
@@ -30,6 +31,7 @@ export default function FilesPage() {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [newModalOpen, setNewModalOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export default function FilesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function createBlank() {
+  async function createBlank(prompt?: string) {
     capture("file_created");
     setCreating(true);
     try {
@@ -66,6 +68,32 @@ export default function FilesPage() {
         body: JSON.stringify({ name: "Untitled" }),
       });
       const { id } = await res.json();
+      const url = prompt ? `/editor/${id}?prompt=${encodeURIComponent(prompt)}` : `/editor/${id}`;
+      router.push(url);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function createFromMelody(xml: string, name: string) {
+    capture("file_created_from_melody", { melody: name });
+    setCreating(true);
+    try {
+      const res = await fetch("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const { id } = await res.json();
+      await fetch(`/api/files/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_xml: xml,
+          history: [{ musicXml: xml, name, timestamp: new Date().toISOString(), messages: [] }],
+          messages: [],
+        }),
+      });
       router.push(`/editor/${id}`);
     } finally {
       setCreating(false);
@@ -140,7 +168,7 @@ export default function FilesPage() {
         <h1 className="text-xl font-bold tracking-tight flex items-center"><Logo size={24} className="text-brand-primary mr-1.5" />Yap<span className="text-brand-primary">Score</span><span className="ml-2 text-[10px] font-semibold tracking-wide uppercase px-1.5 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-amber-700">Beta</span></h1>
         <div className="flex items-center gap-1">
           <button
-            onClick={createBlank}
+            onClick={() => setNewModalOpen(true)}
             disabled={creating}
             title="New file"
             className="flex items-center gap-1.5 px-2 md:px-4 py-2 rounded-lg bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-50 text-white text-sm font-medium transition shadow-sm"
@@ -236,6 +264,14 @@ export default function FilesPage() {
           </div>
         )}
       </main>
+
+      {newModalOpen && (
+        <NewScoreModal
+          onPrompt={(p) => { setNewModalOpen(false); createBlank(p); }}
+          onMelody={(xml, name) => { setNewModalOpen(false); createFromMelody(xml, name); }}
+          onClose={() => setNewModalOpen(false)}
+        />
+      )}
 
       {creating && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50">

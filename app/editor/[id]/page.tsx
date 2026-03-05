@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ChatPanel, { type Message } from "@/components/ChatPanel";
 import ScoreViewer from "@/components/ScoreViewer";
 import EditorTopBar from "@/components/EditorTopBar";
 import MobileTabBar, { type MobileTab } from "@/components/MobileTabBar";
 import SingModal from "@/components/SingModal";
 import DocsModal from "@/components/DocsModal";
+import NewScoreModal from "@/components/NewScoreModal";
 import type { HistoryEntry } from "@/lib/files";
 import { historyReducer, messagesAtIndex } from "@/lib/editor-history";
 import { capture } from "@/lib/posthog";
@@ -26,6 +27,9 @@ type Usage = { plan: "free" | "pro"; used: number; limit: number | null };
 export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialPrompt = searchParams.get("prompt") ?? undefined;
+  const [waitingForInitialScore, setWaitingForInitialScore] = useState(!!initialPrompt);
 
   const [hs, dispatch] = useReducer(historyReducer, { entries: [], index: -1 });
   const [messages, setMessagesRaw] = useState<Message[]>([]);
@@ -88,6 +92,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         const history: HistoryEntry[] = file.history ?? [];
         const index = history.length > 0 ? history.length - 1 : -1;
 
+        if (cancelled) return;
+
         setFileName(file.name ?? "Untitled");
         if (typeof file.swing === "boolean") setSwingEnabled(file.swing);
 
@@ -122,7 +128,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       setLoaded(true);
       capture("score_opened", { fileId: id, fileName });
     }
+    let cancelled = false;
     load();
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -270,8 +278,22 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     setNewModalOpen(true);
   }, []);
 
-  async function createNewFile(name: string) {
+  async function createNewFile(prompt?: string) {
     capture("file_created");
+    try {
+      const res = await fetch("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Untitled" }),
+      });
+      const { id: newId } = await res.json();
+      const url = prompt ? `/editor/${newId}?prompt=${encodeURIComponent(prompt)}` : `/editor/${newId}`;
+      router.push(url);
+    } catch { /* ignore */ }
+  }
+
+  async function createNewFileFromMelody(xml: string, name: string) {
+    capture("file_created_from_melody", { melody: name });
     try {
       const res = await fetch("/api/files", {
         method: "POST",
@@ -279,6 +301,15 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         body: JSON.stringify({ name }),
       });
       const { id: newId } = await res.json();
+      await fetch(`/api/files/${newId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_xml: xml,
+          history: [{ musicXml: xml, name, timestamp: new Date().toISOString(), messages: [] }],
+          messages: [],
+        }),
+      });
       router.push(`/editor/${newId}`);
     } catch { /* ignore */ }
   }
@@ -294,6 +325,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
   const handleScoreReady = useCallback(
     (xml: string, label?: string) => {
+      setWaitingForInitialScore(false);
       dispatch({
         type: "push",
         entry: {
@@ -349,6 +381,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             onMessagesChange={setMessages}
             onClearSelection={() => setSelectedMeasures(new Set())}
             onScoreReady={handleScoreReady}
+            initialPrompt={initialPrompt}
             onUsageRefresh={() => fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {})}
           />
         </div>
@@ -362,10 +395,10 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             scoreName={fileName}
             selectedMeasures={selectedMeasures}
             onMeasureClick={handleMeasureClick}
+            onClearMeasureSelection={() => setSelectedMeasures(new Set())}
             onPlaybackStop={() => setSelectedMeasures(new Set())}
             onMusicXmlChange={(xml, label) => handleScoreReady(xml, label)}
-            isMobile={mobileTab === "score"}
-            loading={!loaded}
+            loading={!loaded || waitingForInitialScore}
             swingEnabled={swingEnabled ?? undefined}
             onSwingChange={handleSwingChange}
           />
@@ -407,12 +440,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
       {/* New file modal */}
       {newModalOpen && (
-        <LeaveModal
-          title="New score"
-          description="Give it a name to get started."
-          deleteLabel="Skip"
-          onDelete={() => { setNewModalOpen(false); createNewFile("Untitled"); }}
-          onRename={(name) => { setNewModalOpen(false); createNewFile(name); }}
+        <NewScoreModal
+          onPrompt={(p) => { setNewModalOpen(false); createNewFile(p); }}
+          onMelody={(xml, name) => { setNewModalOpen(false); createNewFileFromMelody(xml, name); }}
           onClose={() => setNewModalOpen(false)}
         />
       )}

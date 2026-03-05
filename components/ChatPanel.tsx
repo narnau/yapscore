@@ -17,6 +17,7 @@ type Props = {
   onScoreReady: (musicXml: string, name?: string) => void;
   onUsageRefresh: () => void;
   onSingClick?: () => void;
+  initialPrompt?: string;
 };
 
 export default function ChatPanel({
@@ -28,8 +29,9 @@ export default function ChatPanel({
   onScoreReady,
   onUsageRefresh,
   onSingClick,
+  initialPrompt,
 }: Props) {
-  const [instruction, setInstruction] = useState("");
+  const [instruction, setInstruction] = useState(initialPrompt ?? "");
   const [loading, setLoading] = useState(false);
   const [paywallHit, setPaywallHit] = useState(false);
   const [usage, setUsage] = useState<{ plan: string; used: number; limit: number | null } | null>(null);
@@ -45,6 +47,10 @@ export default function ChatPanel({
   function refreshUsage() {
     fetch("/api/usage").then(r => r.json()).then(u => { setUsage(u); onUsageRefresh(); }).catch(() => {});
   }
+
+  // Always-current ref so sendMessage never uses stale messages
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [recording, setRecording] = useState(false);
@@ -138,17 +144,25 @@ export default function ChatPanel({
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!instruction.trim()) return;
+  const autoSubmittedRef = useRef(false);
 
-    const text = instruction;
+  // Auto-submit initialPrompt once the score is ready
+  useEffect(() => {
+    if (!initialPrompt || autoSubmittedRef.current || !currentMusicXml) return;
+    autoSubmittedRef.current = true;
+    sendMessage(initialPrompt, new Set());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt, currentMusicXml]);
+
+  async function sendMessage(text: string, selection: Set<number>) {
+    if (!text.trim()) return;
+
     const selectionNote =
-      selectedMeasures.size > 0
-        ? ` [measures ${[...selectedMeasures].sort((a, b) => a - b).join(", ")}]`
+      selection.size > 0
+        ? ` [measures ${[...selection].sort((a, b) => a - b).join(", ")}]`
         : "";
 
-    const next: Message[] = [...messages, { role: "user", text: text + selectionNote }];
+    const next: Message[] = [...messagesRef.current, { role: "user", text: text + selectionNote }];
     onMessagesChange(next);
     setInstruction("");
     onClearSelection();
@@ -156,17 +170,17 @@ export default function ChatPanel({
     capture("chat_message_sent", {
       messageLength: text.length,
       hasScore: !!currentMusicXml,
-      selectedMeasureCount: selectedMeasures.size,
+      selectedMeasureCount: selection.size,
     });
 
     try {
       const form = new FormData();
       form.append("message", text);
       if (currentMusicXml) form.append("musicXml", currentMusicXml);
-      if (selectedMeasures.size > 0) {
+      if (selection.size > 0) {
         form.append(
           "selectedMeasures",
-          JSON.stringify([...selectedMeasures].sort((a, b) => a - b))
+          JSON.stringify([...selection].sort((a, b) => a - b))
         );
       }
       // Send chat history (user messages without [measures] suffix, system→assistant)
@@ -216,6 +230,11 @@ export default function ChatPanel({
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await sendMessage(instruction, selectedMeasures);
   }
 
   return (

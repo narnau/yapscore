@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import MidiPlayer from "./MidiPlayer";
 import { applySwingToMidi } from "@/lib/swing-midi";
-import { getSwing, setTempo } from "@/lib/musicxml";
+import { getSwing, setTempo, buildNoteMap, changeNotePitch, deleteNote, changeNoteDuration, duplicateMeasures, pasteMeasures, deleteMeasures } from "@/lib/musicxml";
+import type { NotePosition } from "@/lib/musicxml";
 import { capture } from "@/lib/posthog";
 
 type Props = {
@@ -11,9 +12,9 @@ type Props = {
   scoreName: string | null;
   selectedMeasures: Set<number>;
   onMeasureClick: (measureNumber: number, addToSelection: boolean) => void;
+  onClearMeasureSelection?: () => void;
   onPlaybackStop?: () => void;
   onMusicXmlChange?: (xml: string, label: string) => void;
-  isMobile?: boolean;
   loading?: boolean;
   swingEnabled?: boolean;
   onSwingChange?: (enabled: boolean) => void;
@@ -47,8 +48,8 @@ const GM_INSTRUMENTS: string[] = [
 ];
 
 export default function ScoreViewer({
-  musicXml, scoreName, selectedMeasures, onMeasureClick,
-  onPlaybackStop, onMusicXmlChange, isMobile, loading,
+  musicXml, scoreName, selectedMeasures, onMeasureClick, onClearMeasureSelection,
+  onPlaybackStop, onMusicXmlChange, loading,
   swingEnabled: swingProp, onSwingChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -60,6 +61,27 @@ export default function ScoreViewer({
   const [measureStartsMs, setMeasureStartsMs] = useState<number[]>([]);
   const [playingMeasure, setPlayingMeasure] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
+
+  // Note selection
+  const [selectedNoteIndex, setSelectedNoteIndex] = useState<number | null>(null);
+  const noteMapRef = useRef<NotePosition[]>([]);
+  const selectedNoteIndexRef = useRef<number | null>(null);
+  selectedNoteIndexRef.current = selectedNoteIndex;
+
+  // Measure clipboard
+  const [copiedMeasures, setCopiedMeasures] = useState<Set<number>>(new Set());
+
+  // Refs for stable keyboard handler (avoid stale closures)
+  const musicXmlRef = useRef(musicXml);
+  musicXmlRef.current = musicXml;
+  const onMusicXmlChangeRef = useRef(onMusicXmlChange);
+  onMusicXmlChangeRef.current = onMusicXmlChange;
+  const selectedMeasuresRef = useRef(selectedMeasures);
+  selectedMeasuresRef.current = selectedMeasures;
+  const copiedMeasuresRef = useRef(copiedMeasures);
+  copiedMeasuresRef.current = copiedMeasures;
+  const onClearMeasureSelectionRef = useRef(onClearMeasureSelection);
+  onClearMeasureSelectionRef.current = onClearMeasureSelection;
 
   // Swing: "jazz" = 66% triplet swing (2:1), "straight" = no swing
   // When swingProp is provided (controlled from parent), use it; otherwise auto-detect from MusicXML.
@@ -91,7 +113,10 @@ export default function ScoreViewer({
     for (const block of musicXml.matchAll(blockRe)) {
       const channel = parseInt(block[0].match(/<midi-channel>(\d+)<\/midi-channel>/)?.[1] ?? "0");
       const program = parseInt(block[0].match(/<midi-program>(\d+)<\/midi-program>/)?.[1] ?? "1");
-      if (channel > 0) channelInstruments[channel] = GM_INSTRUMENTS[program - 1] ?? "acoustic_grand_piano";
+      if (channel > 0 && channel !== 10) {
+        // Skip channel 10 (GM percussion) — no matching soundfont available in this player
+        channelInstruments[channel] = GM_INSTRUMENTS[program - 1] ?? "acoustic_grand_piano";
+      }
     }
   }
 
@@ -176,15 +201,114 @@ export default function ScoreViewer({
 
           measureEl.addEventListener("click", (e) => {
             e.stopPropagation();
+            setSelectedNoteIndex(null);
             onClickRef.current(measureNum, (e as MouseEvent).shiftKey || (e as MouseEvent).metaKey);
           });
         });
+
+        // Build note/rest map and set up click handlers
+        noteMapRef.current = buildNoteMap(musicXml!);
+        containerRef.current.querySelectorAll<SVGGElement>("g.note, g.rest").forEach((el, i) => {
+          el.dataset.ysIndex = String(i);
+          el.style.cursor = "pointer";
+          el.addEventListener("click", (e) => {
+            e.stopPropagation();
+            onClearMeasureSelection?.();
+            setSelectedNoteIndex(i);
+          });
+        });
+
+        // Re-apply highlight if a note/rest was already selected (after re-render)
+        const currentIdx = selectedNoteIndexRef.current;
+        if (currentIdx !== null) {
+          const el = containerRef.current?.querySelector<SVGGElement>(`[data-ys-index="${currentIdx}"]`);
+          if (el) applyNoteHighlight(el);
+        }
       });
     }
 
     render().catch((err) => { console.error(err); setRendering(false); });
     return () => { cancelled = true; setRendering(false); };
   }, [musicXml]);
+
+  // ── note highlight helper ─────────────────────────────────────────────────
+  function applyNoteHighlight(noteEl: SVGGElement) {
+    const bbox = noteEl.getBBox();
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x",      String(bbox.x));
+    rect.setAttribute("y",      String(bbox.y));
+    rect.setAttribute("width",  String(bbox.width));
+    rect.setAttribute("height", String(bbox.height));
+    rect.setAttribute("fill",   "rgba(99,102,241,0.35)");
+    rect.setAttribute("pointer-events", "none");
+    rect.setAttribute("data-ys-note-hl", "1");
+    noteEl.insertBefore(rect, noteEl.firstChild);
+  }
+
+  // ── note selection highlight ──────────────────────────────────────────────
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.querySelectorAll("[data-ys-note-hl]").forEach(el => el.remove());
+    if (selectedNoteIndex === null) return;
+    const noteEl = container.querySelector<SVGGElement>(`[data-ys-index="${selectedNoteIndex}"]`);
+    if (!noteEl) return;
+    applyNoteHighlight(noteEl);
+  }, [selectedNoteIndex]);
+
+  // ── keyboard shortcuts (note + measure editing) ───────────────────────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const ctrl = e.ctrlKey || e.metaKey;
+      const xml = musicXmlRef.current;
+      const onChange = onMusicXmlChangeRef.current;
+      const idx = selectedNoteIndexRef.current;
+      const measures = selectedMeasuresRef.current;
+      const copied = copiedMeasuresRef.current;
+
+      // ── Note actions ──
+      if (idx !== null && xml) {
+        const position = noteMapRef.current[idx];
+        if (position) {
+          if (!position.isRest && !position.isDrum && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+            e.preventDefault();
+            const semitones = (e.key === "ArrowUp" ? 1 : -1) * (ctrl ? 12 : 1);
+            onChange?.(changeNotePitch(xml, position, semitones),
+              ctrl ? (e.key === "ArrowUp" ? "Octave up" : "Octave down")
+                   : (e.key === "ArrowUp" ? "Move note up" : "Move note down"));
+            return;
+          }
+          if (!ctrl && (e.key === "Delete" || e.key === "Backspace")) {
+            e.preventDefault();
+            onChange?.(deleteNote(xml, position), "Delete note");
+            setSelectedNoteIndex(null);
+            return;
+          }
+          if (!ctrl && /^[1-7]$/.test(e.key)) {
+            e.preventDefault();
+            onChange?.(changeNoteDuration(xml, position, e.key as "1"|"2"|"3"|"4"|"5"|"6"|"7"), "Change duration");
+            return;
+          }
+        }
+      }
+
+      // ── Measure actions ──
+      if (ctrl && xml) {
+        if (e.key === "c" && measures.size > 0) {
+          e.preventDefault();
+          setCopiedMeasures(new Set(measures));
+        } else if (e.key === "v" && copied.size > 0 && measures.size > 0) {
+          e.preventDefault();
+          onChange?.(pasteMeasures(xml, [...copied], Math.min(...measures)), "Paste measures");
+        } else if (e.key === "d" && measures.size > 0) {
+          e.preventDefault();
+          onChange?.(duplicateMeasures(xml, [...measures].sort((a, b) => a - b)), "Duplicate measures");
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []); // stable — all mutable values accessed via refs
 
   // ── selection + playback highlight ───────────────────────────────────────
   useEffect(() => {
@@ -235,7 +359,7 @@ export default function ScoreViewer({
     }
   }, [playingMeasure]);
 
-  if (!musicXml) {
+  if (!musicXml || loading) {
     return (
       <div className="flex flex-col h-full">
         <div className="flex-1 flex items-center justify-center">
@@ -296,20 +420,19 @@ export default function ScoreViewer({
               {swingEnabled ? "Jazz" : "Straight"}
             </button>
           )}
-          {/* Play — desktop only (mobile uses FAB) */}
-          <div className="hidden md:contents">
-            {midiSrc ? (
-              <MidiPlayer
-                src={midiSrc}
-                channelInstruments={channelInstruments}
-                measureStartsMs={measureStartsMs}
-                selectedMeasures={selectedMeasures}
-                onMeasureChange={setPlayingMeasure}
-              />
-            ) : (
-              <span className="text-xs px-3 py-1 rounded-lg bg-gray-100 text-gray-400">Rendering…</span>
-            )}
-          </div>
+          {/* Play */}
+          {midiSrc ? (
+            <MidiPlayer
+              src={midiSrc}
+              channelInstruments={channelInstruments}
+              measureStartsMs={measureStartsMs}
+              selectedMeasures={selectedMeasures}
+              playFromMeasure={selectedNoteIndex !== null ? noteMapRef.current[selectedNoteIndex]?.measureNumber : undefined}
+              onMeasureChange={setPlayingMeasure}
+            />
+          ) : (
+            <span className="text-xs px-3 py-1 rounded-lg bg-gray-100 text-gray-400">Rendering…</span>
+          )}
           {/* Export */}
           <button
             onClick={downloadMusicXml}
@@ -325,6 +448,47 @@ export default function ScoreViewer({
         </div>
       </div>
 
+      {/* Contextual editing toolbar — desktop only */}
+      {(selectedNoteIndex !== null || selectedMeasures.size > 0) && onMusicXmlChange && (
+        <div className="hidden md:flex items-center gap-1 px-3 py-1 border-b border-gray-100 bg-gray-50 flex-wrap">
+          {selectedNoteIndex !== null && (<>
+            <span className="text-[10px] text-gray-400 mr-0.5 shrink-0">{noteMapRef.current[selectedNoteIndex]?.isRest ? "Rest:" : "Note:"}</span>
+            {!noteMapRef.current[selectedNoteIndex]?.isRest && !noteMapRef.current[selectedNoteIndex]?.isDrum && (<>
+              <ToolBtn onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) onMusicXmlChange(changeNotePitch(musicXml, p, -12), "Octave down"); }} title="Octave down (Ctrl+↓)">↓ 8va</ToolBtn>
+              <ToolBtn onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) onMusicXmlChange(changeNotePitch(musicXml, p, -1), "Move note down"); }} title="Semitone down (↓)">↓</ToolBtn>
+              <ToolBtn onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) onMusicXmlChange(changeNotePitch(musicXml, p, 1), "Move note up"); }} title="Semitone up (↑)">↑</ToolBtn>
+              <ToolBtn onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) onMusicXmlChange(changeNotePitch(musicXml, p, 12), "Octave up"); }} title="Octave up (Ctrl+↑)">↑ 8va</ToolBtn>
+              <div className="w-px h-3.5 bg-gray-200 mx-0.5" />
+            </>)}
+            {([1,2,3,4,5,6,7] as const).map((dur) => (
+              <ToolBtn key={dur} onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) onMusicXmlChange(changeNoteDuration(musicXml, p, String(dur) as "1"|"2"|"3"|"4"|"5"|"6"|"7"), "Change duration"); }} title={["64th","32nd","16th","Eighth","Quarter","Half","Whole"][dur - 1]}><NoteSymbol dur={dur} /></ToolBtn>
+            ))}
+            <div className="w-px h-3.5 bg-gray-200 mx-0.5" />
+            <ToolBtn danger onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) { onMusicXmlChange(deleteNote(musicXml, p), "Delete note"); setSelectedNoteIndex(null); } }} title="Delete note (Delete)">✕ Delete</ToolBtn>
+          </>)}
+          {selectedMeasures.size > 0 && (<>
+            <span className="text-[10px] text-gray-400 mr-0.5 shrink-0">{selectedMeasures.size} measure{selectedMeasures.size > 1 ? "s" : ""}:</span>
+            <ToolBtn onClick={() => setCopiedMeasures(new Set(selectedMeasures))} title="Copy (Ctrl+C)">Copy</ToolBtn>
+            <ToolBtn disabled={copiedMeasures.size === 0} onClick={() => { if (musicXml && copiedMeasures.size > 0) onMusicXmlChange(pasteMeasures(musicXml, [...copiedMeasures], Math.min(...selectedMeasures)), "Paste measures"); }} title="Paste (Ctrl+V)">Paste</ToolBtn>
+            <ToolBtn onClick={() => { if (musicXml) onMusicXmlChange(duplicateMeasures(musicXml, [...selectedMeasures].sort((a,b)=>a-b)), "Duplicate measures"); }} title="Duplicate (Ctrl+D)">Duplicate</ToolBtn>
+            <ToolBtn danger onClick={() => { if (musicXml) { onMusicXmlChange(deleteMeasures(musicXml, [...selectedMeasures]), "Delete measures"); onClearMeasureSelection?.(); } }} title="Delete measures">✕ Delete</ToolBtn>
+          </>)}
+        </div>
+      )}
+
+      {/* Mobile bottom sheet — shown only on small screens */}
+      <MobileEditSheet
+        selectedNoteIndex={selectedNoteIndex}
+        noteMapRef={noteMapRef}
+        selectedMeasures={selectedMeasures}
+        copiedMeasures={copiedMeasures}
+        musicXml={musicXml}
+        onMusicXmlChange={onMusicXmlChange}
+        onClearMeasureSelection={onClearMeasureSelection}
+        setSelectedNoteIndex={setSelectedNoteIndex}
+        setCopiedMeasures={setCopiedMeasures}
+      />
+
       {/* Score */}
       <div className="flex-1 overflow-y-auto bg-white relative" ref={scrollContainerRef}>
         {rendering && (
@@ -338,18 +502,6 @@ export default function ScoreViewer({
         <div className="p-3 md:p-6" ref={containerRef} />
       </div>
 
-      {/* Mobile floating play button (FAB) */}
-      {isMobile && midiSrc && (
-        <div className="md:hidden fixed bottom-4 right-4 z-30">
-          <MidiPlayer
-            src={midiSrc}
-            channelInstruments={channelInstruments}
-            measureStartsMs={measureStartsMs}
-            selectedMeasures={selectedMeasures}
-            onMeasureChange={setPlayingMeasure}
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -382,16 +534,20 @@ function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: string; onTempoCh
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(tempo);
+  const committedRef = useRef(false);
 
   function startEdit() {
     if (!onTempoChange) return;
+    committedRef.current = false;
     setDraft(tempo);
     setEditing(true);
   }
 
   function commit(value: number) {
+    if (committedRef.current) { setEditing(false); return; }
     const bpm = Math.round(value);
     if (bpm >= 20 && bpm <= 300 && bpm !== tempo) {
+      committedRef.current = true;
       onTempoChange?.(bpm);
     }
     setEditing(false);
@@ -454,5 +610,190 @@ function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: string; onTempoCh
         </span>
       ))}
     </div>
+  );
+}
+
+// ─── NoteSymbol ───────────────────────────────────────────────────────────────
+
+function NoteSymbol({ dur }: { dur: 1|2|3|4|5|6|7 }) {
+  const numFlags = [4, 3, 2, 1, 0, 0, 0][dur - 1];
+  const filled = dur <= 5;
+  const hasStem = dur <= 6;
+  return (
+    <svg viewBox="0 0 9 16" width="9" height="16" style={{ display: "inline-block", verticalAlign: "middle" }}>
+      <ellipse
+        cx="3" cy="13" rx="2.8" ry="1.8"
+        fill={filled ? "currentColor" : "none"}
+        stroke={filled ? "none" : "currentColor"}
+        strokeWidth="1.1"
+        transform="rotate(-20 3 13)"
+      />
+      {hasStem && <line x1="5.5" y1="12" x2="5.5" y2="1" stroke="currentColor" strokeWidth="1" />}
+      {numFlags >= 1 && <path d="M5.5 1 C8.5 2.5 8 5 6.5 6" stroke="currentColor" strokeWidth="1" fill="none" />}
+      {numFlags >= 2 && <path d="M5.5 3.5 C8.5 5 8 7.5 6.5 8.5" stroke="currentColor" strokeWidth="1" fill="none" />}
+      {numFlags >= 3 && <path d="M5.5 6 C8.5 7.5 8 10 6.5 11" stroke="currentColor" strokeWidth="1" fill="none" />}
+      {numFlags >= 4 && <path d="M5.5 8.5 C8.5 9.5 8 11.5 6.5 12" stroke="currentColor" strokeWidth="1" fill="none" />}
+    </svg>
+  );
+}
+
+// ─── ToolBtn ──────────────────────────────────────────────────────────────────
+
+// ─── Mobile bottom sheet ──────────────────────────────────────────────────────
+
+function MobileEditSheet({
+  selectedNoteIndex, noteMapRef, selectedMeasures, copiedMeasures,
+  musicXml, onMusicXmlChange, onClearMeasureSelection,
+  setSelectedNoteIndex, setCopiedMeasures,
+}: {
+  selectedNoteIndex: number | null;
+  noteMapRef: React.RefObject<NotePosition[]>;
+  selectedMeasures: Set<number>;
+  copiedMeasures: Set<number>;
+  musicXml: string | null;
+  onMusicXmlChange?: (xml: string, label: string) => void;
+  onClearMeasureSelection?: () => void;
+  setSelectedNoteIndex: (i: number | null) => void;
+  setCopiedMeasures: (s: Set<number>) => void;
+}) {
+  const isOpen = (selectedNoteIndex !== null || selectedMeasures.size > 0) && !!onMusicXmlChange;
+  const note = selectedNoteIndex !== null ? noteMapRef.current[selectedNoteIndex] : null;
+
+  function dismiss() {
+    setSelectedNoteIndex(null);
+    onClearMeasureSelection?.();
+  }
+
+  return (
+    <div
+      className={`md:hidden fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out ${
+        isOpen ? "translate-y-0" : "translate-y-full"
+      }`}
+    >
+      <div className="bg-white rounded-t-2xl shadow-2xl border-t border-gray-200">
+        {/* Handle + dismiss */}
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
+          <div className="w-8" />
+          <div className="w-10 h-1 rounded-full bg-gray-300" />
+          <button onClick={dismiss} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Note editing */}
+        {selectedNoteIndex !== null && note && (
+          <div className="px-4 pb-8 space-y-3">
+            <p className="text-xs font-medium text-gray-400 text-center uppercase tracking-wide">
+              {note.isRest ? "Rest" : note.isDrum ? "Drum" : "Note"}
+            </p>
+
+            {/* Pitch row — pitched notes only (not rests, not drum notes) */}
+            {!note.isRest && !note.isDrum && (
+              <div className="grid grid-cols-4 gap-2">
+                {([
+                  { label: "↓ 8va", delta: -12, title: "Octave down" },
+                  { label: "↓", delta: -1, title: "Semitone down" },
+                  { label: "↑", delta: 1, title: "Semitone up" },
+                  { label: "↑ 8va", delta: 12, title: "Octave up" },
+                ] as const).map(({ label, delta, title }) => (
+                  <button
+                    key={label}
+                    onClick={() => { if (musicXml) onMusicXmlChange!(changeNotePitch(musicXml, note, delta), title); }}
+                    className="py-3 rounded-xl bg-gray-100 active:bg-gray-200 text-sm font-medium text-gray-700 transition active:scale-95"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Duration row */}
+            <div className="grid grid-cols-7 gap-1.5">
+              {([1, 2, 3, 4, 5, 6, 7] as const).map((dur) => (
+                <button
+                  key={dur}
+                  onClick={() => { if (musicXml) onMusicXmlChange!(changeNoteDuration(musicXml, note, String(dur) as "1"|"2"|"3"|"4"|"5"|"6"|"7"), "Change duration"); }}
+                  title={["64th","32nd","16th","Eighth","Quarter","Half","Whole"][dur - 1]}
+                  className="flex items-center justify-center py-3 rounded-xl bg-gray-100 active:bg-gray-200 text-gray-700 transition active:scale-95"
+                >
+                  <NoteSymbol dur={dur} />
+                </button>
+              ))}
+            </div>
+
+            {/* Delete */}
+            <button
+              onClick={() => { if (musicXml) { onMusicXmlChange!(deleteNote(musicXml, note), "Delete note"); setSelectedNoteIndex(null); } }}
+              className="w-full py-3 rounded-xl bg-red-50 active:bg-red-100 text-red-600 text-sm font-medium transition active:scale-95"
+            >
+              ✕ Delete note
+            </button>
+          </div>
+        )}
+
+        {/* Measure editing */}
+        {selectedMeasures.size > 0 && (
+          <div className="px-4 pb-8 space-y-3">
+            <p className="text-xs font-medium text-gray-400 text-center uppercase tracking-wide">
+              {selectedMeasures.size} measure{selectedMeasures.size > 1 ? "s" : ""} selected
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setCopiedMeasures(new Set(selectedMeasures))}
+                className="py-3 rounded-xl bg-gray-100 active:bg-gray-200 text-sm font-medium text-gray-700 transition active:scale-95"
+              >
+                Copy
+              </button>
+              <button
+                disabled={copiedMeasures.size === 0}
+                onClick={() => { if (musicXml && copiedMeasures.size > 0) onMusicXmlChange!(pasteMeasures(musicXml, [...copiedMeasures], Math.min(...selectedMeasures)), "Paste measures"); }}
+                className="py-3 rounded-xl bg-gray-100 active:bg-gray-200 disabled:opacity-30 text-sm font-medium text-gray-700 transition active:scale-95"
+              >
+                Paste
+              </button>
+              <button
+                onClick={() => { if (musicXml) onMusicXmlChange!(duplicateMeasures(musicXml, [...selectedMeasures].sort((a, b) => a - b)), "Duplicate measures"); }}
+                className="py-3 rounded-xl bg-gray-100 active:bg-gray-200 text-sm font-medium text-gray-700 transition active:scale-95"
+              >
+                Duplicate
+              </button>
+              <button
+                onClick={() => { if (musicXml) { onMusicXmlChange!(deleteMeasures(musicXml, [...selectedMeasures]), "Delete measures"); onClearMeasureSelection?.(); } }}
+                className="py-3 rounded-xl bg-red-50 active:bg-red-100 text-red-600 text-sm font-medium transition active:scale-95"
+              >
+                ✕ Delete
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── ToolBtn ──────────────────────────────────────────────────────────────────
+
+function ToolBtn({ onClick, title, danger, disabled, children }: {
+  onClick: () => void;
+  title?: string;
+  danger?: boolean;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className={`text-[11px] px-1.5 py-0.5 rounded transition shrink-0 ${
+        danger
+          ? "bg-red-50 hover:bg-red-100 text-red-600 disabled:opacity-30"
+          : "bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-30"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

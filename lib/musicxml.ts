@@ -74,6 +74,15 @@ function getFifths(score: Score): number {
   return 0;
 }
 
+const SHARP_ORDER = ["F", "C", "G", "D", "A", "E", "B"];
+const FLAT_ORDER  = ["B", "E", "A", "D", "G", "C", "F"];
+
+function stepAlteredByKey(step: string, fifths: number): boolean {
+  if (fifths > 0) return SHARP_ORDER.slice(0, fifths).includes(step);
+  if (fifths < 0) return FLAT_ORDER.slice(0, -fifths).includes(step);
+  return false;
+}
+
 function notes(entries: MeasureEntry[]): NoteEntry[] {
   return entries.filter((e): e is NoteEntry => e.type === "note");
 }
@@ -116,7 +125,9 @@ export function fixPercussionDisplayOctave(musicXml: string): string {
     if (!isPerc) continue;
     for (const m of part.measures) {
       for (const entry of m.entries) {
-        if (entry.type === "note" && entry.unpitched) {
+        // Only fix unpitched notes that don't already have a display position
+        // (notes from DRUM_CATALOG already have correct displayStep/displayOctave)
+        if (entry.type === "note" && entry.unpitched && !entry.unpitched.displayStep) {
           entry.unpitched.displayStep = "B";
           entry.unpitched.displayOctave = 4;
         }
@@ -352,7 +363,21 @@ export function deleteMeasures(musicXml: string, measureNumbers: number[]): stri
   const toDelete = new Set(measureNumbers);
   const score = mxlParse(musicXml);
   for (const part of score.parts) {
+    // Capture attributes from the first deleted measure that carries them,
+    // so we can transfer them to the new first measure if needed.
+    let orphanedAttributes: MeasureAttributes | undefined;
+    for (const m of part.measures) {
+      if (toDelete.has(measureNum(m)) && m.attributes && !orphanedAttributes) {
+        orphanedAttributes = m.attributes;
+      }
+    }
+
     part.measures = part.measures.filter(m => !toDelete.has(measureNum(m)));
+
+    // If the new first measure has no attributes, give it the ones we captured.
+    if (orphanedAttributes && part.measures.length > 0 && !part.measures[0].attributes) {
+      part.measures[0].attributes = orphanedAttributes;
+    }
   }
   return renumberMeasures(mxlSerialize(score));
 }
@@ -1069,6 +1094,8 @@ export type NoteSpec = {
   ornament?: "trill" | "mordent" | "inverted-mordent" | "turn";
   articulation?: "staccato" | "accent" | "tenuto" | "marcato" | "staccatissimo";
   lyric?: { text: string; syllabic?: "single" | "begin" | "middle" | "end"; verse?: number };
+  drumSound?: string;    // e.g. "snare", "hi-hat", "bass-drum"
+  voice?: 1 | 2;         // percussion: 1=hands (stems up), 2=feet (stems down)
 };
 
 const BASE_TYPE_MAP: Record<string, { type: NoteType; quarterMultiplier: number; dotted: boolean; triplet?: boolean }> = {
@@ -1093,7 +1120,7 @@ export function notesTotalBeats(notes: NoteSpec[]): number {
     .reduce((sum, n) => sum + (BASE_TYPE_MAP[n.duration]?.quarterMultiplier ?? 0), 0);
 }
 
-function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number): NoteEntry {
+function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number, partId?: string): NoteEntry {
   const info = BASE_TYPE_MAP[note.duration];
   if (!info) throw new Error(`Unknown duration: ${note.duration}`);
 
@@ -1107,8 +1134,24 @@ function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number): Not
 
   if (note.chord) entry.chord = true;
 
-  if (note.rest) {
+  if (note.drumSound && !note.rest) {
+    // Percussion unpitched note
+    const drum = DRUM_CATALOG[note.drumSound];
+    if (!drum) throw new Error(`Unknown drum sound: "${note.drumSound}". Valid: ${Object.keys(DRUM_CATALOG).join(", ")}`);
+    entry.unpitched = { displayStep: drum.displayStep, displayOctave: drum.displayOctave };
+    if (partId) entry.instrument = `${partId}-${drum.instrumentId}`;
+    if (drum.notehead !== "normal") {
+      entry.notehead = { value: drum.notehead as "x" | "circle-x" | "diamond" };
+    }
+    const voiceNum = note.voice ?? drum.defaultVoice;
+    entry.voice = String(voiceNum);
+    entry.stem = { value: voiceNum === 2 ? "down" : "up" };
+  } else if (note.rest) {
     entry.rest = {};
+    if (note.voice != null) {
+      entry.voice = String(note.voice);
+      entry.printObject = false; // hide percussion fill-rests from display
+    }
   } else {
     if (!note.step) throw new Error("Non-rest note must have a step");
     entry.pitch = {
@@ -1126,7 +1169,8 @@ function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number): Not
     entry.ties = [...(entry.ties ?? []), { type: "start" }];
   }
 
-  if (staff) {
+  // Staff-based voice for grand staff (skip if voice already set by percussion logic)
+  if (staff && !entry.voice) {
     entry.voice = String(staff === 2 ? 5 : 1);
     entry.staff = staff;
   }
@@ -1254,7 +1298,8 @@ export function setMeasureNotes(
   measureNumber: number,
   notes: NoteSpec[],
   partId: string = "P1",
-  staff?: number
+  staff?: number,
+  voice?: 1 | 2
 ): string {
   // Auto-insert missing measures
   const score0 = mxlParse(musicXml);
@@ -1288,9 +1333,30 @@ export function setMeasureNotes(
   );
   const preservedBarlines = measure.barlines;
 
-  const noteEntries = autoTupletNotations(notes.map(n => noteSpecToEntry(n, divisions, effectiveStaff)));
+  const noteEntries = autoTupletNotations(notes.map(n => noteSpecToEntry(n, divisions, effectiveStaff, partId)));
 
-  if (!effectiveStaff) {
+  if (voice != null) {
+    // Percussion voice-aware merge: keep the other voice's notes, discard measure rests
+    const otherVoiceNotes = measure.entries.filter(e =>
+      e.type === "note" &&
+      (e as NoteEntry).voice !== String(voice) &&
+      !((e as NoteEntry).rest?.measure)
+    );
+
+    const beats = getBeats(score);
+    const beatType = getBeatType(score);
+    const dur = Math.round(divisions * beats * (4 / beatType));
+
+    const v1Notes = voice === 1 ? noteEntries : otherVoiceNotes;
+    const v2Notes = voice === 2 ? noteEntries : otherVoiceNotes;
+
+    if (v1Notes.length > 0 && v2Notes.length > 0) {
+      const backup: BackupEntry = { _id: generateId(), type: "backup", duration: dur };
+      measure.entries = [...preserved, ...v1Notes, backup, ...v2Notes];
+    } else {
+      measure.entries = [...preserved, ...v1Notes, ...v2Notes];
+    }
+  } else if (!effectiveStaff) {
     measure.entries = [...preserved, ...noteEntries];
   } else {
     // Staff-aware: keep other staff's notes
@@ -1397,6 +1463,39 @@ function fifthsToKey(fifths: number): string {
   return (keys[fifths + 7] ?? "C") + " major";
 }
 
+// ─── Drum catalog ────────────────────────────────────────────────────────────
+
+type DrumSound = {
+  instrumentName: string;
+  instrumentId: string;
+  midiUnpitched: number;
+  displayStep: string;
+  displayOctave: number;
+  notehead: "normal" | "x" | "circle-x" | "diamond";
+  defaultVoice: 1 | 2;
+};
+
+const DRUM_CATALOG: Record<string, DrumSound> = {
+  "bass-drum":    { instrumentName: "Bass Drum 1",    instrumentId: "X36", midiUnpitched: 36, displayStep: "C", displayOctave: 4, notehead: "normal",   defaultVoice: 2 },
+  "snare":        { instrumentName: "Acoustic Snare", instrumentId: "X38", midiUnpitched: 39, displayStep: "C", displayOctave: 5, notehead: "normal",   defaultVoice: 1 },
+  "hi-hat":       { instrumentName: "Closed Hi-Hat",  instrumentId: "X42", midiUnpitched: 43, displayStep: "G", displayOctave: 5, notehead: "x",        defaultVoice: 1 },
+  "open-hi-hat":  { instrumentName: "Open Hi-Hat",    instrumentId: "X46", midiUnpitched: 47, displayStep: "G", displayOctave: 5, notehead: "circle-x", defaultVoice: 1 },
+  "hi-hat-pedal": { instrumentName: "Pedal Hi-Hat",   instrumentId: "X44", midiUnpitched: 45, displayStep: "G", displayOctave: 3, notehead: "x",        defaultVoice: 2 },
+  "floor-tom":    { instrumentName: "Low Floor Tom",  instrumentId: "X41", midiUnpitched: 42, displayStep: "A", displayOctave: 3, notehead: "normal",   defaultVoice: 2 },
+  "low-tom":      { instrumentName: "Low-Mid Tom",    instrumentId: "X47", midiUnpitched: 48, displayStep: "F", displayOctave: 4, notehead: "normal",   defaultVoice: 1 },
+  "mid-tom":      { instrumentName: "Hi-Mid Tom",     instrumentId: "X48", midiUnpitched: 49, displayStep: "A", displayOctave: 4, notehead: "normal",   defaultVoice: 1 },
+  "high-tom":     { instrumentName: "High Tom",       instrumentId: "X50", midiUnpitched: 51, displayStep: "D", displayOctave: 5, notehead: "normal",   defaultVoice: 1 },
+  "crash":        { instrumentName: "Crash Cymbal 1", instrumentId: "X49", midiUnpitched: 50, displayStep: "A", displayOctave: 5, notehead: "x",        defaultVoice: 1 },
+  "ride":         { instrumentName: "Ride Cymbal 1",  instrumentId: "X51", midiUnpitched: 52, displayStep: "F", displayOctave: 5, notehead: "x",        defaultVoice: 1 },
+};
+
+function isPercussionPart(score: Score, partId: string): boolean {
+  const part = findPart(score, partId);
+  if (!part) return false;
+  const clef = part.measures[0]?.attributes?.clef?.[0];
+  return clef?.sign === "percussion";
+}
+
 // ─── createScore ────────────────────────────────────────────────────────────
 
 const KEY_ROOT_TO_FIFTHS: Record<string, number> = {
@@ -1425,6 +1524,7 @@ export type ScoreInstrument = {
   staves?: number;
   midiProgram?: number;
   clef?: "treble" | "bass" | "alto" | "tenor";
+  percussion?: boolean;
 };
 
 export function createScore(options: {
@@ -1456,8 +1556,9 @@ export function createScore(options: {
   for (let i = 0; i < instruments.length; i++) {
     const inst = instruments[i];
     const id = `P${i + 1}`;
-    const staves = inst.staves ?? instrumentStaves(inst.name);
-    const midiChannel = (i + 1) >= 10 ? i + 2 : i + 1;
+    const isPercussion = inst.percussion === true;
+    const staves = isPercussion ? 1 : (inst.staves ?? instrumentStaves(inst.name));
+    const midiChannel = isPercussion ? 10 : ((i + 1) >= 10 ? i + 2 : i + 1);
     const midiProgram = inst.midiProgram ?? 1;
 
     // Part list entry
@@ -1466,14 +1567,25 @@ export function createScore(options: {
       type: "score-part",
       id,
       name: inst.name,
-      scoreInstruments: [{ id: `${id}-I1`, name: inst.name }],
-      midiInstruments: [{
-        id: `${id}-I1`,
-        channel: midiChannel,
-        program: midiProgram,
-        volume: 78.7402,
-        pan: 0,
-      }],
+      scoreInstruments: isPercussion
+        ? Object.entries(DRUM_CATALOG).map(([, drum]) => ({ id: `${id}-${drum.instrumentId}`, name: drum.instrumentName }))
+        : [{ id: `${id}-I1`, name: inst.name }],
+      midiInstruments: isPercussion
+        ? Object.entries(DRUM_CATALOG).map(([, drum]) => ({
+            id: `${id}-${drum.instrumentId}`,
+            channel: 10,
+            program: 1,
+            unpitched: drum.midiUnpitched,
+            volume: 78.7402,
+            pan: 0,
+          }))
+        : [{
+            id: `${id}-I1`,
+            channel: midiChannel,
+            program: midiProgram,
+            volume: 78.7402,
+            pan: 0,
+          }],
     };
     score.partList.push(partInfo);
 
@@ -1493,16 +1605,18 @@ export function createScore(options: {
       };
 
       if (isFirst) {
-        const clefs = staves === 1
-          ? [{ ...clefToSignLine(inst.clef ?? "treble") }]
-          : [
-              { sign: "G" as const, line: 2, staff: 1 },
-              { sign: "F" as const, line: 4, staff: 2 },
-            ];
+        const clefs = isPercussion
+          ? [{ sign: "percussion" as const }]
+          : staves === 1
+            ? [{ ...clefToSignLine(inst.clef ?? "treble") }]
+            : [
+                { sign: "G" as const, line: 2, staff: 1 },
+                { sign: "F" as const, line: 4, staff: 2 },
+              ];
 
         measure.attributes = {
           divisions,
-          key: { fifths },
+          ...(isPercussion ? {} : { key: { fifths } }),
           time: { beats: String(beats), beatType },
           ...(staves > 1 ? { staves } : {}),
           clef: clefs,
@@ -1763,7 +1877,8 @@ export function addPart(musicXml: string, instrument: ScoreInstrument): string {
   const existingNums = score.parts.map(p => parseInt(p.id.replace("P", "")) || 0);
   const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
   const partId = `P${nextNum}`;
-  const staves = instrument.staves ?? instrumentStaves(instrument.name);
+  const isPercussion = instrument.percussion === true;
+  const staves = isPercussion ? 1 : (instrument.staves ?? instrumentStaves(instrument.name));
 
   // Read score parameters
   const firstPart = score.parts[0];
@@ -1774,7 +1889,6 @@ export function addPart(musicXml: string, instrument: ScoreInstrument): string {
   const fifths = getFifths(score);
   const dur = Math.round(divisions * beats * (4 / beatType));
 
-  const midiChannel = nextMidiChannel(score);
   const midiProgram = instrument.midiProgram ?? 1;
 
   // Add to part-list
@@ -1783,14 +1897,25 @@ export function addPart(musicXml: string, instrument: ScoreInstrument): string {
     type: "score-part",
     id: partId,
     name: instrument.name,
-    scoreInstruments: [{ id: `${partId}-I1`, name: instrument.name }],
-    midiInstruments: [{
-      id: `${partId}-I1`,
-      channel: midiChannel,
-      program: midiProgram,
-      volume: 78.7402,
-      pan: 0,
-    }],
+    scoreInstruments: isPercussion
+      ? Object.entries(DRUM_CATALOG).map(([, drum]) => ({ id: `${partId}-${drum.instrumentId}`, name: drum.instrumentName }))
+      : [{ id: `${partId}-I1`, name: instrument.name }],
+    midiInstruments: isPercussion
+      ? Object.entries(DRUM_CATALOG).map(([, drum]) => ({
+          id: `${partId}-${drum.instrumentId}`,
+          channel: 10,
+          program: 1,
+          unpitched: drum.midiUnpitched,
+          volume: 78.7402,
+          pan: 0,
+        }))
+      : [{
+          id: `${partId}-I1`,
+          channel: nextMidiChannel(score),
+          program: midiProgram,
+          volume: 78.7402,
+          pan: 0,
+        }],
   };
   score.partList.push(partInfo);
 
@@ -1807,17 +1932,18 @@ export function addPart(musicXml: string, instrument: ScoreInstrument): string {
     };
 
     if (isFirst) {
-      const clefInfo = clefToSignLine(instrument.clef ?? "treble");
-      const clefs = staves === 1
-        ? [{ ...clefInfo }]
-        : [
-            { sign: "G" as const, line: 2, staff: 1 },
-            { sign: "F" as const, line: 4, staff: 2 },
-          ];
+      const clefs = isPercussion
+        ? [{ sign: "percussion" as const }]
+        : staves === 1
+          ? [{ ...clefToSignLine(instrument.clef ?? "treble") }]
+          : [
+              { sign: "G" as const, line: 2, staff: 1 },
+              { sign: "F" as const, line: 4, staff: 2 },
+            ];
 
       measure.attributes = {
         divisions,
-        key: { fifths },
+        ...(isPercussion ? {} : { key: { fifths } }),
         time: { beats: String(beats), beatType },
         ...(staves > 1 ? { staves } : {}),
         clef: clefs,
@@ -2449,5 +2575,290 @@ export function addBreathMark(
   if (!last.notations) last.notations = [];
   last.notations.push({ type: "articulation", articulation: "breath-mark" });
 
+  return mxlSerialize(score);
+}
+
+// ─── deleteNote ─────────────────────────────────────────────────────────────
+
+export function deleteNote(musicXml: string, position: NotePosition): string {
+  const score = mxlParse(musicXml);
+  const part = findPart(score, position.partId);
+  if (!part) return musicXml;
+  const measure = findMeasure(part, position.measureNumber);
+  if (!measure) return musicXml;
+  const entry = measure.entries[position.entryIndex];
+  if (!entry || entry.type !== "note") return musicXml;
+  const noteEntry = entry as NoteEntry;
+  if (noteEntry.rest || noteEntry.chord) return musicXml;
+  measure.entries[position.entryIndex] = {
+    _id: generateId(),
+    type: "note",
+    rest: {},
+    duration: noteEntry.duration,
+    noteType: noteEntry.noteType,
+    ...(noteEntry.voice != null ? { voice: noteEntry.voice } : {}),
+    ...(noteEntry.staff != null ? { staff: noteEntry.staff } : {}),
+  } as NoteEntry;
+  return mxlSerialize(score);
+}
+
+// ─── changeNoteDuration ─────────────────────────────────────────────────────
+
+const DURATION_KEYS: Record<string, { noteType: NoteType; quarterMultiplier: number }> = {
+  "1": { noteType: "64th",    quarterMultiplier: 1 / 16 },
+  "2": { noteType: "32nd",    quarterMultiplier: 1 / 8  },
+  "3": { noteType: "16th",    quarterMultiplier: 1 / 4  },
+  "4": { noteType: "eighth",  quarterMultiplier: 1 / 2  },
+  "5": { noteType: "quarter", quarterMultiplier: 1      },
+  "6": { noteType: "half",    quarterMultiplier: 2      },
+  "7": { noteType: "whole",   quarterMultiplier: 4      },
+};
+
+// Minimum divisions value needed to represent each key as an integer tick count
+const KEY_MIN_DIVISIONS: Record<string, number> = {
+  "1": 16, "2": 8, "3": 4, "4": 2, "5": 1, "6": 1, "7": 1,
+};
+
+/**
+ * Scale up <divisions> (and all <duration> values) so that the requested
+ * note type is representable as an integer tick count.
+ * Same pattern as ensureTripletDivisions — only changes duration magnitudes.
+ */
+function ensureMinDivisions(musicXml: string, minDiv: number): string {
+  const score = mxlParse(musicXml);
+  const current = getDivisions(score);
+  if (current >= minDiv) return musicXml;
+  const target = lcmInt(current, minDiv);
+  const factor = target / current;
+  for (const part of score.parts) {
+    for (const m of part.measures) {
+      if (m.attributes?.divisions) m.attributes.divisions = target;
+      for (const entry of m.entries) {
+        if ("duration" in entry && typeof entry.duration === "number") {
+          entry.duration = Math.round(entry.duration * factor);
+        }
+      }
+    }
+  }
+  return mxlSerialize(score);
+}
+
+/**
+ * Fill `ticks` with one or more properly-typed rests (greedy, largest first).
+ * Avoids inserting a single rest with an invalid/mismatched noteType.
+ */
+function makeFillRests(ticks: number, divisions: number, voice?: number | string, staff?: number | string): NoteEntry[] {
+  const types: Array<[number, NoteType]> = ([
+    [divisions * 4,           "whole"],
+    [divisions * 2,           "half"],
+    [divisions,               "quarter"],
+    [Math.round(divisions / 2),  "eighth"],
+    [Math.round(divisions / 4),  "16th"],
+    [Math.round(divisions / 8),  "32nd"],
+    [Math.round(divisions / 16), "64th"],
+  ] as Array<[number, NoteType]>).filter(([d]) => d >= 1);
+
+  const rests: NoteEntry[] = [];
+  let remaining = ticks;
+  for (const [dur, noteType] of types) {
+    while (remaining >= dur) {
+      rests.push({
+        _id: generateId(),
+        type: "note",
+        rest: {},
+        duration: dur,
+        noteType,
+        ...(voice != null ? { voice } : {}),
+        ...(staff != null ? { staff } : {}),
+      } as NoteEntry);
+      remaining -= dur;
+    }
+  }
+  return rests;
+}
+
+function ticksToNoteType(ticks: number, divisions: number): NoteType | undefined {
+  const q = divisions;
+  const map: Array<[number, NoteType]> = [
+    [q * 4,  "whole"],   [q * 2,  "half"],   [q,      "quarter"],
+    [q / 2,  "eighth"],  [q / 4,  "16th"],   [q / 8,  "32nd"],
+    [q / 16, "64th"],
+  ];
+  for (const [dur, type] of map) if (Math.abs(ticks - dur) < 0.5) return type;
+  return undefined;
+}
+
+export function changeNoteDuration(
+  musicXml: string,
+  position: NotePosition,
+  key: "1" | "2" | "3" | "4" | "5" | "6" | "7",
+): string {
+  // Scale up divisions first so the target note type is representable as integer ticks
+  musicXml = ensureMinDivisions(musicXml, KEY_MIN_DIVISIONS[key]);
+
+  const score = mxlParse(musicXml);
+  const divisions = getDivisions(score);
+  const part = findPart(score, position.partId);
+  if (!part) return musicXml;
+  const measure = findMeasure(part, position.measureNumber);
+  if (!measure) return musicXml;
+
+  // If user clicked a chord note, walk back to find the main note of the chord group
+  let mainIdx = position.entryIndex;
+  while (mainIdx > 0 && (measure.entries[mainIdx] as NoteEntry).chord) mainIdx--;
+
+  const entry = measure.entries[mainIdx];
+  if (!entry || entry.type !== "note") return musicXml;
+  const noteEntry = entry as NoteEntry;
+
+  const { noteType, quarterMultiplier } = DURATION_KEYS[key];
+  const newDuration = Math.round(divisions * quarterMultiplier);
+  if (newDuration <= 0) return musicXml;
+  const oldDuration = noteEntry.duration;
+  if (newDuration === oldDuration) return musicXml;
+
+  // Find the last chord note in this chord group
+  let lastChordIdx = mainIdx;
+  while (
+    lastChordIdx + 1 < measure.entries.length &&
+    (measure.entries[lastChordIdx + 1] as NoteEntry).chord
+  ) lastChordIdx++;
+
+  // Update main note and all chord notes together
+  noteEntry.noteType = noteType;
+  noteEntry.duration = newDuration;
+  for (let ci = mainIdx + 1; ci <= lastChordIdx; ci++) {
+    const cn = measure.entries[ci] as NoteEntry;
+    cn.noteType = noteType;
+    cn.duration = newDuration;
+  }
+
+  const diff = newDuration - oldDuration;
+  const insertAt = lastChordIdx + 1;
+
+  if (diff < 0) {
+    // Shorter — fill freed ticks with one or more properly-typed rests
+    const fillRests = makeFillRests(-diff, divisions, noteEntry.voice, noteEntry.staff);
+    measure.entries.splice(insertAt, 0, ...fillRests);
+  } else {
+    // Longer — consume subsequent entries of same voice (rests AND notes)
+    let remaining = diff;
+    let i = insertAt;
+    const voice = noteEntry.voice;
+    while (remaining > 0 && i < measure.entries.length) {
+      const next = measure.entries[i] as NoteEntry;
+      if (next.type !== "note") break;
+      if (next.chord) { i++; continue; } // chord notes take no independent time
+      if (voice != null && next.voice != null && next.voice !== voice) { i++; continue; }
+      if (next.duration <= remaining) {
+        // Fully consume: remove this entry plus any of its chord notes
+        remaining -= next.duration;
+        measure.entries.splice(i, 1);
+        while (i < measure.entries.length && (measure.entries[i] as NoteEntry).chord) {
+          measure.entries.splice(i, 1);
+        }
+      } else {
+        // Partially consume: replace with a rest for the leftover ticks
+        // (whether this was a pitched note or a rest, it becomes a rest)
+        const leftover = next.duration - remaining;
+        let toRemove = 1;
+        while (i + toRemove < measure.entries.length && (measure.entries[i + toRemove] as NoteEntry).chord) {
+          toRemove++;
+        }
+        const leftoverRests = makeFillRests(leftover, divisions, next.voice, next.staff);
+        measure.entries.splice(i, toRemove, ...leftoverRests);
+        remaining = 0;
+      }
+    }
+    if (remaining > 0) {
+      // Still not enough space (e.g. hit a non-note boundary) — revert
+      noteEntry.noteType = ticksToNoteType(oldDuration, divisions) ?? noteEntry.noteType;
+      noteEntry.duration = oldDuration;
+      for (let ci = mainIdx + 1; ci <= lastChordIdx; ci++) {
+        const cn = measure.entries[ci] as NoteEntry;
+        cn.noteType = ticksToNoteType(oldDuration, divisions) ?? cn.noteType;
+        cn.duration = oldDuration;
+      }
+    }
+  }
+  return mxlSerialize(score);
+}
+
+// ─── pasteMeasures ──────────────────────────────────────────────────────────
+
+export function pasteMeasures(
+  musicXml: string,
+  sourceMeasureNumbers: number[],
+  targetStartMeasure: number,
+): string {
+  const score = mxlParse(musicXml);
+  const sorted = [...sourceMeasureNumbers].sort((a, b) => a - b);
+  for (const part of score.parts) {
+    for (let i = 0; i < sorted.length; i++) {
+      const src = findMeasure(part, sorted[i]);
+      const tgt = findMeasure(part, targetStartMeasure + i);
+      if (!src || !tgt) continue;
+      tgt.entries = (JSON.parse(JSON.stringify(src.entries)) as MeasureEntry[])
+        .map((e) => ({ ...e, _id: generateId() }));
+    }
+  }
+  return mxlSerialize(score);
+}
+
+// ─── NotePosition + buildNoteMap + changeNotePitch ──────────────────────────
+
+export type NotePosition = { partId: string; measureNumber: number; entryIndex: number; isRest?: boolean; isDrum?: boolean };
+
+/** Returns an ordered array matching DOM g.note / g.rest element order in Verovio SVG output. */
+export function buildNoteMap(musicXml: string): NotePosition[] {
+  const score = mxlParse(musicXml);
+  const result: NotePosition[] = [];
+  for (const part of score.parts) {
+    for (const m of part.measures) {
+      const mNum = measureNum(m);
+      m.entries.forEach((entry, idx) => {
+        const ne = entry as NoteEntry;
+        if (entry.type === "note" && (ne.pitch || ne.rest || ne.unpitched)) {
+          result.push({ partId: part.id, measureNumber: mNum, entryIndex: idx, isRest: !!ne.rest, isDrum: !!ne.unpitched });
+        }
+      });
+    }
+  }
+  return result;
+}
+
+/** Move a single note pitch by `semitones` chromatic steps. */
+export function changeNotePitch(
+  musicXml: string,
+  position: NotePosition,
+  semitones: number,
+): string {
+  const score = mxlParse(musicXml);
+  const part = findPart(score, position.partId);
+  if (!part) return musicXml;
+  const measure = findMeasure(part, position.measureNumber);
+  if (!measure) return musicXml;
+  const entry = measure.entries[position.entryIndex];
+  if (!entry || entry.type !== "note") return musicXml;
+  const noteEntry = entry as NoteEntry;
+  if (!noteEntry.pitch) return musicXml;
+  const result = transposePitch(
+    noteEntry.pitch.step, noteEntry.pitch.alter ?? 0, noteEntry.pitch.octave, semitones
+  );
+  noteEntry.pitch.step = result.step as Pitch["step"];
+  noteEntry.pitch.alter = result.alter || undefined;
+  noteEntry.pitch.octave = result.octave;
+  // Update the display accidental so Verovio shows the correct symbol.
+  if (result.alter !== 0) {
+    noteEntry.accidental = { value: result.alter > 0 ? "sharp" : "flat" };
+  } else {
+    // Natural: show natural sign only if the key signature alters this step
+    const fifths = getFifths(score);
+    if (stepAlteredByKey(result.step, fifths)) {
+      noteEntry.accidental = { value: "natural" };
+    } else {
+      noteEntry.accidental = undefined;
+    }
+  }
   return mxlSerialize(score);
 }

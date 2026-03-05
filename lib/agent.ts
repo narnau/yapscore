@@ -78,8 +78,7 @@ export async function runAgent(
     apiKey,
   });
   const modelName = (process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash-preview").trim();
-
-  const model = openrouter(modelName);
+  const fallbackModelName = "openai/gpt-4.1-mini";
 
   // If measures are selected, only show those measures to the model
   const currentScoreCtx = (() => {
@@ -126,7 +125,9 @@ export async function runAgent(
     // liveXml tracks the current XML within this attempt — updated by createScore so
     // subsequent tools in the same multi-step turn can use the freshly created score.
     let liveXml = currentMusicXml;
-    if (attempt > 1) console.log(`│ [agent] retrying (attempt ${attempt}/${MAX_AGENT_ATTEMPTS})…`);
+    const attemptModelName = attempt === 1 ? modelName : fallbackModelName;
+    const model = openrouter(attemptModelName);
+    if (attempt > 1) console.log(`│ [agent] retrying (attempt ${attempt}/${MAX_AGENT_ATTEMPTS}) with ${attemptModelName}…`);
 
     try {
   const { text } = await generateText({
@@ -185,7 +186,8 @@ Rules:
 - When chord symbols are present (see "Chord map" above), melody notes MUST respect those chords. Use chord tones and appropriate passing tones. Example: C7 = C E G Bb (NOT B♮); F7 = F A C Eb; G7 = G B D F. Dominant 7th chords always have a flat 7th. The "Chord map" line above is the ground truth — read it before writing any notes.
 - CRITICAL for writeNotes: the total duration of all notes in a measure must EXACTLY match the time signature. For 3/4: exactly 3 quarter-note beats. For 4/4: exactly 4 beats. NEVER overflow a measure — this causes rendering and playback errors.
 - Triplet beat values: eighth-triplet = 1/3 beat (12 per 4/4 measure), quarter-triplet = 2/3 beat (6 per 4/4 measure), half-triplet = 4/3 beat (3 per 4/4 measure). "Eighth note triplets" (tresillos de corchea) = eighth-triplet, 12 per 4/4 measure. Always add tuplet:"start" on the first and tuplet:"stop" on the last note of each triplet group of 3.
-- For pickup (anacrusis) measures at the start of a song, use the pickupBeats option in createScore, then write only the pickup notes (e.g. 1 beat for a 1-beat pickup in 3/4). All other measures must be full.`,
+- For pickup (anacrusis) measures at the start of a song, use the pickupBeats option in createScore, then write only the pickup notes (e.g. 1 beat for a 1-beat pickup in 3/4). All other measures must be full.
+- PERCUSSION PARTS: When a part has percussion=true, use drumSound on every note (not step/octave). Write drums in two writeNotes calls per measure: voice=1 for hands (hi-hat, snare, cymbals — stems up), voice=2 for feet (bass drum, hi-hat pedal — stems down). Available drum sounds: bass-drum, snare, hi-hat, open-hi-hat, hi-hat-pedal, floor-tom, low-tom, mid-tom, high-tom, crash, ride. IMPORTANT: chord:true means simultaneous with the PREVIOUS note — when adding snare as a chord on a hi-hat beat, keep the hi-hat AND add snare after it with chord:true. Example rock beat (4/4): voice=1 notes array: [hi-hat eighth, hi-hat eighth, hi-hat eighth, snare eighth chord:true, hi-hat eighth, hi-hat eighth, hi-hat eighth, hi-hat eighth, snare eighth chord:true] — that is 8 hi-hats (non-chord) + 2 snare chords = 8×0.5=4 beats. voice=2: [bass-drum quarter, quarter rest, bass-drum quarter, quarter rest] = 4 beats. Do NOT use addChordSymbols for percussion parts. Do NOT use TWO-PHASE COMPOSITION for percussion — just write the pattern directly.`,
     messages: [...history, { role: "user" as const, content: message }],
     tools: {
       createScore: {
@@ -202,6 +204,10 @@ Rules:
               "Clef for single-staff instruments. Use the musically correct clef: " +
               "treble=violin/flute/trumpet/oboe/soprano; bass=tuba/cello/bass/trombone/bassoon/baritone sax; " +
               "alto=viola; tenor=cello high register. Defaults to treble if omitted."
+            ),
+            percussion: z.boolean().optional().describe(
+              "Set true for drums/percussion. Creates a drumset part with percussion clef on MIDI channel 10. " +
+              "Use writeNotes with drumSound on each note. voice=1 for hands, voice=2 for feet."
             ),
           })).describe("List of instruments/parts in the score."),
           key: z.string().optional().describe("Key root, e.g. 'C', 'G', 'Bb', 'F#'. Defaults to 'C'."),
@@ -657,6 +663,11 @@ Rules:
             "Staff number: 1 = right hand / treble, 2 = left hand / bass. " +
             "Required for piano or any instrument with 2 staves. Omit for single-staff instruments."
           ),
+          voice: z.number().optional().describe(
+            "For percussion parts: 1 = hands (hi-hat, snare, cymbals — stems up), " +
+            "2 = feet (bass drum, hi-hat pedal — stems down). " +
+            "Call writeNotes twice per measure when writing both hands and feet."
+          ),
           notes: z.preprocess(
             (val) => {
               if (!Array.isArray(val)) return val;
@@ -690,9 +701,17 @@ Rules:
             ornament: z.enum(["trill", "mordent", "inverted-mordent", "turn"]).optional().describe("Ornament to attach to this note."),
             articulation: z.enum(["staccato", "accent", "tenuto", "marcato", "staccatissimo"]).optional().describe("Articulation marking on this specific note. Use accent for > marks, staccato for dots, tenuto for dashes."),
             lyric: z.object({ text: z.string(), syllabic: z.enum(["single", "begin", "middle", "end"]).optional(), verse: z.number().optional() }).optional().describe("Lyric syllable for vocal parts."),
+            drumSound: z.string().optional().describe(
+              "For percussion parts: name of drum sound. Available: bass-drum, snare, hi-hat, open-hi-hat, " +
+              "hi-hat-pedal, floor-tom, low-tom, mid-tom, high-tom, crash, ride. " +
+              "When set, step/octave/alter are ignored — pitch is determined by the drum sound."
+            ),
+            voice: z.number().optional().describe(
+              "For percussion notes: 1 = voice 1 (hands, stems up), 2 = voice 2 (feet, stems down)."
+            ),
           }))).describe("Array of notes to write into the measure, in order."),
         }),
-        execute: async ({ measureNumber, partId, staff, notes }) => {
+        execute: async ({ measureNumber, partId, staff, voice, notes }) => {
           if (!liveXml) throw new Error("No score is currently loaded");
           // Enforce selection: if the user has selected measures, only write to those
           const targetMeasure =
@@ -725,6 +744,13 @@ Rules:
           })();
           const measureCapacity = timeSigBeats * (4 / timeSigBeatType); // in quarter-note beats
 
+          // Percussion voice calls: chord notes share a beat with the previous note,
+          // so notesTotalBeats (which skips chords) under-counts intentionally.
+          // Skip duration validation for voice calls — trust the LLM to fill the measure.
+          if (voice != null) {
+            // no validation for percussion voices
+          } else {
+
           const total = notesTotalBeats(notes as NoteSpec[]);
 
           if (isPickup) {
@@ -745,9 +771,11 @@ Rules:
               };
             }
           }
+
+          } // end: non-percussion duration validation
           // ────────────────────────────────────────────────────────────────
 
-          const result = setMeasureNotes(liveXml, targetMeasure, notes as NoteSpec[], partId ?? "P1", staff);
+          const result = setMeasureNotes(liveXml, targetMeasure, notes as NoteSpec[], partId ?? "P1", staff, voice as 1 | 2 | undefined);
           const postProcessed = addBeams(fixChordSymbols(addAccidentals(result)));
           liveXml = postProcessed;
           capture.result = { musicXml: postProcessed, resultType: "modify" };
@@ -870,19 +898,24 @@ Rules:
             "treble=violin/flute/trumpet/oboe/soprano; bass=tuba/cello/bass/trombone/bassoon/baritone sax; " +
             "alto=viola; tenor=cello high register. Defaults to treble if omitted."
           ),
-          midiProgram: z.number().int().min(1).max(128).describe(
+          midiProgram: z.number().int().min(1).max(128).optional().describe(
             "General MIDI program number (1–128). You must supply this — pick the correct GM program for the instrument. " +
             "Examples: Acoustic Grand Piano=1, Harpsichord=7, Organ=20, Acoustic Guitar=25, Electric Guitar=27, " +
             "Bass Guitar=34, Violin=41, Viola=42, Cello=43, Double Bass=44, Harp=47, " +
             "Trumpet=57, Trombone=58, Tuba=59, French Horn=61, " +
             "Soprano Sax=65, Alto Sax=66, Tenor Sax=67, Baritone Sax=68, " +
             "Oboe=69, English Horn=70, Bassoon=71, Clarinet=72, Piccolo=73, Flute=74, " +
-            "Soprano Voice=53, Choir=53, Xylophone=14, Vibraphone=12, Marimba=13."
+            "Soprano Voice=53, Choir=53, Xylophone=14, Vibraphone=12, Marimba=13. " +
+            "Omit when percussion=true (channel 10 is used instead)."
+          ),
+          percussion: z.boolean().optional().describe(
+            "Set true for drums/percussion. Creates a drumset part with percussion clef on MIDI channel 10. " +
+            "Use writeNotes with drumSound on each note. voice=1 for hands, voice=2 for feet."
           ),
         }),
-        execute: async ({ name, staves, clef, midiProgram }) => {
+        execute: async ({ name, staves, clef, midiProgram, percussion }) => {
           if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addPart(liveXml, { name, staves, clef, midiProgram });
+          const result = addPart(liveXml, { name, staves, clef, midiProgram, percussion });
           liveXml = result;
           capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, name };
