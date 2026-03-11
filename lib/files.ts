@@ -24,6 +24,8 @@ export type FileData = FileEntry & {
 
 const MAX_HISTORY = 30;
 
+const MAX_FILES_PER_PAGE = 100;
+
 export async function listFiles(
   supabase: SupabaseClient,
   userId: string
@@ -32,7 +34,8 @@ export async function listFiles(
     .from("files")
     .select("id, name, created_at, updated_at")
     .eq("user_id", userId)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .limit(MAX_FILES_PER_PAGE);
 
   if (error) throw new Error(error.message);
   return data ?? [];
