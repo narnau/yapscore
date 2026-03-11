@@ -33,5 +33,5 @@ export async function DELETE(
     return NextResponse.json({ error: "Failed to revoke key" }, { status: 500 });
   }
 
-  return new NextResponse(null, { status: 204 });
+  return NextResponse.json({ ok: true });
 }

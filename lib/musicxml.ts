@@ -1066,7 +1066,7 @@ function transposePitch(
   octave: number,
   semitones: number
 ): { step: string; alter: number; octave: number } {
-  const baseSemitone = NOTE_TO_SEMITONE[step] + alter;
+  const baseSemitone = (NOTE_TO_SEMITONE[step] ?? 0) + alter;
   let totalSemitone = baseSemitone + semitones;
   let newOctave = octave;
 
