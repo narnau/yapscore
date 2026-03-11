@@ -13,7 +13,9 @@ const isDev = process.env.NODE_ENV === "development";
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = searchParams.get("returnTo") || "/editor";
+  const returnToParam = searchParams.get("returnTo") || "/editor";
+  // Prevent open redirect — only allow relative paths within our app
+  const returnTo = returnToParam.startsWith("/") && !returnToParam.startsWith("//") ? returnToParam : "/editor";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);

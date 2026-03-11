@@ -50,6 +50,8 @@ export default function NewScoreModal({ onPrompt, onMelody, onClose }: Props) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-label="New score"
         className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >

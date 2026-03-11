@@ -25,6 +25,8 @@ export default function DocsModal({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-label="Documentation"
         className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -33,6 +35,7 @@ export default function DocsModal({ onClose }: { onClose: () => void }) {
           <h1 className="text-lg font-bold text-gray-900">Documentation</h1>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
