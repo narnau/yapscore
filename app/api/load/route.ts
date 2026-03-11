@@ -51,11 +51,11 @@ export async function POST(req: NextRequest) {
     const result = await toMusicXml(buffer);
     if (!result.ok) {
       console.error("[load] toMusicXml failed:", result.error);
-      return NextResponse.json({ error: result.error }, { status: 500 });
+      return NextResponse.json({ error: "Failed to convert file to MusicXML" }, { status: 500 });
     }
     return NextResponse.json({ musicXml: fixPercussionDisplayOctave(result.content) });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[load] error:", err instanceof Error ? err.message : String(err));
+    return NextResponse.json({ error: "Failed to process file" }, { status: 500 });
   }
 }

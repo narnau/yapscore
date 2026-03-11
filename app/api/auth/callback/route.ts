@@ -5,7 +5,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/editor";
+  const nextParam = searchParams.get("next") ?? "/editor";
+  // Prevent open redirect — only allow relative paths within our app
+  const next = nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/editor";
 
   if (code) {
     const supabase = await createClient();

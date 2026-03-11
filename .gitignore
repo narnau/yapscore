@@ -1,14 +1,26 @@
 node_modules/
 .next/
-.env
 *.tsbuildinfo
+
+# Environment — never commit secrets
+.env
+.env.*
+!.env.example
 
 # Score library — ignore uploaded files, but keep the directory and metadata
 score-library/files/*
 !score-library/files/.gitkeep
 
-# Sentry Config File
-.env.sentry-build-plugin
+# OS
+.DS_Store
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
 
 # Sentry auto-fix worktrees
 .sentry-worktrees/

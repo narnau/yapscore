@@ -8,6 +8,11 @@ function checkRateLimit(userId: string): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(userId);
   if (!entry || now > entry.resetAt) {
+    if (rateLimitMap.size > 1000) {
+      for (const [key, val] of rateLimitMap) {
+        if (now > val.resetAt) rateLimitMap.delete(key);
+      }
+    }
     rateLimitMap.set(userId, { count: 1, resetAt: now + 60_000 });
     return true;
   }

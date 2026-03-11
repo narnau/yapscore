@@ -34,6 +34,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[stripe/checkout] error:", msg, "priceId:", priceId, "country:", country);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });
   }
 }
