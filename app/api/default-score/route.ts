@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { createScore } from "@/lib/musicxml";
+import { createScore } from "@/lib/music/musicxml";
 
 export async function GET() {
   const auth = await getAuthUser();

@@ -12,7 +12,7 @@
 
 import { describe, test, expect, beforeAll } from "bun:test";
 import { runAgent } from "../lib/agent";
-import { createScore, setMeasureNotes, getTempo, getSwing, addChordSymbols } from "../lib/musicxml";
+import { createScore, setMeasureNotes, getTempo, getSwing, addChordSymbols } from "../lib/music/musicxml";
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 

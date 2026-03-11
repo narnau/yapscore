@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { toMusicXml } from "@/lib/mscore";
-import { fixPercussionDisplayOctave } from "@/lib/musicxml";
+import { fixPercussionDisplayOctave } from "@/lib/music/musicxml";
 import { getAuthUser } from "@/lib/auth";
 import AdmZip from "adm-zip";
 

@@ -13,8 +13,8 @@ import {
   type RecordingHandle,
   type MetronomeHandle,
   type PlaybackHandle,
-} from "@/lib/sing";
-import { createScore, setMeasureNotes } from "@/lib/musicxml";
+} from "@/lib/music/sing";
+import { createScore, setMeasureNotes } from "@/lib/music/musicxml";
 
 type Phase = "setup" | "countdown" | "recording" | "processing" | "review";
 

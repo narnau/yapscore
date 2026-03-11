@@ -25,8 +25,8 @@ import {
   addTextAnnotation,
   setMeasureNotes,
   setTimeSignature,
-} from "../lib/musicxml";
-import type { NoteSpec } from "../lib/musicxml";
+} from "../lib/music/musicxml";
+import type { NoteSpec } from "../lib/music/musicxml";
 
 const FIXTURE = fs.readFileSync(
   path.join(__dirname, "fixtures/simple-score.xml"),

@@ -1,10 +1,5 @@
-import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
-import { toMusicXml } from "./mscore";
 import {
-  extractParts,
-  extractSelectedMeasures,
   deleteMeasures,
   clearMeasures,
   insertEmptyMeasures,
@@ -47,149 +42,24 @@ import {
   addTremolo,
   addGlissando,
   addBreathMark,
-  extractChordMap,
-} from "./musicxml";
-import type { DynamicMarking, ArticulationMarking, NoteSpec, ScoreInstrument, ChordSymbol, SwingInfo, NavigationMarkType } from "./musicxml";
-import { addAccidentals, fixChordSymbols } from "./accidentals";
-import { addBeams } from "./beams";
-import { logger } from "./logger";
+} from "@/lib/music/musicxml";
+import type {
+  DynamicMarking,
+  ArticulationMarking,
+  NoteSpec,
+  ScoreInstrument,
+  ChordSymbol,
+  SwingInfo,
+  NavigationMarkType,
+} from "@/lib/music/musicxml";
+import { addAccidentals, fixChordSymbols } from "@/lib/music/accidentals";
+import { addBeams } from "@/lib/music/beams";
+import { logger } from "@/lib/logger";
+import type { AgentContext } from "./types";
 
-export type AgentResult =
-  | { type: "load";   musicXml: string; name: string }
-  | { type: "modify"; musicXml: string; message: string }
-  | { type: "chat";   message: string };
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-// ─── agent ───────────────────────────────────────────────────────────────────
-
-export async function runAgent(
-  message: string,
-  currentMusicXml: string | null,
-  selectedMeasures: number[] | null,
-  history: { role: "user" | "assistant"; content: string }[] = [],
-  userId?: string
-): Promise<AgentResult> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
-
-  const openrouter = createOpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKey,
-  });
-  const modelName = (process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash-preview").trim();
-  const fallbackModelName = "openai/gpt-4.1-mini";
-
-  // If measures are selected, only show those measures to the model
-  const currentScoreCtx = (() => {
-    if (!currentMusicXml) return "none";
-    if (selectedMeasures && selectedMeasures.length > 0) {
-      try {
-        const { selectedMeasures: xml } = extractSelectedMeasures(currentMusicXml, selectedMeasures);
-        return xml;
-      } catch { return currentMusicXml; }
-    }
-    return currentMusicXml;
-  })();
-
-  const selectionCtx =
-    selectedMeasures && selectedMeasures.length > 0
-      ? `\nSelected measures: ${selectedMeasures.join(", ")}`
-      : "";
-
-  // Extract chord symbols already in the score and present them as a clean
-  // table so the LLM doesn't have to parse them out of raw MusicXML.
-  const chordMap = currentMusicXml ? extractChordMap(currentMusicXml) : "";
-  const chordCtx = chordMap ? `\nChord map: ${chordMap}` : "";
-
-  type ScoreCapture = { musicXml: string; name?: string; resultType: "load" | "modify" };
-
-  // Truncate message in logs to avoid leaking sensitive user content
-  const msgPreview = message.length > 120 ? message.slice(0, 120) + "…" : message;
-  console.log("╔══════════════════════════════════════════════════════════════");
-  console.log(`║ [agent] model   : ${modelName}`);
-  console.log(`║ [agent] message : ${msgPreview}`);
-  const logCtx = currentMusicXml
-    ? (() => { try { return extractParts(currentMusicXml).context; } catch { return "loaded"; } })()
-    : "none";
-  console.log(`║ [agent] score   : ${logCtx}`);
-  if (selectionCtx) console.log(`║ [agent]${selectionCtx}`);
-  console.log("╚══════════════════════════════════════════════════════════════");
-
-  const MAX_AGENT_ATTEMPTS = 2;
-  let lastError: unknown;
-
-  for (let attempt = 1; attempt <= MAX_AGENT_ATTEMPTS; attempt++) {
-    // Reset capture on each attempt
-    const capture: { result: ScoreCapture | null } = { result: null };
-    // liveXml tracks the current XML within this attempt — updated by createScore so
-    // subsequent tools in the same multi-step turn can use the freshly created score.
-    let liveXml = currentMusicXml;
-    const attemptModelName = attempt === 1 ? modelName : fallbackModelName;
-    const model = openrouter(attemptModelName);
-    if (attempt > 1) console.log(`│ [agent] retrying (attempt ${attempt}/${MAX_AGENT_ATTEMPTS}) with ${attemptModelName}…`);
-
-    try {
-  const { text } = await generateText({
-    model,
-    maxSteps: 15,
-    experimental_telemetry: {
-      isEnabled: true,
-      metadata: { posthogDistinctId: userId ?? "anonymous" },
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onStepFinish({ stepType, toolCalls, toolResults, finishReason, usage, text: stepText }: any) {
-      console.log("┌──────────────────────────────────────────────────────────────");
-      console.log(`│ [agent] step        : ${stepType}  finish: ${finishReason}`);
-      if (usage) {
-        console.log(`│ [agent] tokens      : in=${usage.promptTokens}  out=${usage.completionTokens}  total=${usage.totalTokens}`);
-      }
-      for (const tc of toolCalls ?? []) {
-        console.log(`│ [agent] tool call   : ${tc.toolName}`);
-        console.log(`│          args       : ${JSON.stringify(tc.args)}`);
-      }
-      for (const tr of toolResults ?? []) {
-        console.log(`│ [agent] tool result : ${tr.toolName} → ${JSON.stringify(tr.result)}`);
-      }
-      if (stepText) {
-        console.log(`│ [agent] text        : ${stepText.slice(0, 200)}${stepText.length > 200 ? "…" : ""}`);
-      }
-      console.log("└──────────────────────────────────────────────────────────────");
-
-      logger.info("agent.step", {
-        userId,
-        model: modelName,
-        stepType,
-        finishReason,
-        inputTokens:  usage?.promptTokens,
-        outputTokens: usage?.completionTokens,
-        totalTokens:  usage?.totalTokens,
-        tools: (toolCalls ?? []).map((tc: any) => tc.toolName).join(",") || undefined,
-        text: stepText ? stepText.slice(0, 200) : undefined,
-      });
-    },
-    system: `You are a music score editor assistant. Always use tools — never just describe what you would do.
-
-Current score: ${currentScoreCtx}${selectionCtx}${chordCtx}
-
-Rules:
-- ALWAYS call tools immediately. Never ask for clarification. Make sensible musical assumptions and proceed.
-- If the task is large, do it all: insert enough measures first, then fill them in with writeNotes across multiple steps.
-- For large tasks, call writeNotes for multiple measures in parallel within the same step.
-- If no score is loaded, call createScore first, then writeNotes to fill in notes.
-- For piano or any 2-staff instrument: staff 1 = right hand, staff 2 = left hand.
-- If the score doesn't have enough measures, call insertEmptyMeasures first.
-- To change an instrument (e.g. "make it a piano"), use changeInstrument. NEVER use removePart + addPart for this — it destroys the notes.
-- Only respond with plain text (no tool calls) when the user asks a pure question that requires no score changes. If the user gives feedback implying something is wrong (e.g. "the B natural doesn't fit", "that note is off", "this chord is wrong"), treat it as a modification request and call writeNotes or the appropriate tool to fix it. NEVER claim you made a change without having called a tool — your words have no effect on the score, only tool calls do.
-- When composing melodies, use musically interesting and varied rhythms — mix quarter, eighth, half, dotted notes, rests, etc. Never default to all-quarter notes unless explicitly requested. Good melodies have rhythmic character.
-- TWO-PHASE COMPOSITION: When asked to write/compose a melody (with or without chords), always work in two phases: PHASE 1 — add chord symbols to all measures first using addChordSymbols (decide the full progression before writing a single note); PHASE 2 — write melody notes with writeNotes, using the chord tones you just established. Never write notes before the chords are set.
-- When chord symbols are present (see "Chord map" above), melody notes MUST respect those chords. Use chord tones and appropriate passing tones. Example: C7 = C E G Bb (NOT B♮); F7 = F A C Eb; G7 = G B D F. Dominant 7th chords always have a flat 7th. The "Chord map" line above is the ground truth — read it before writing any notes.
-- CRITICAL for writeNotes: the total duration of all notes in a measure must EXACTLY match the time signature. For 3/4: exactly 3 quarter-note beats. For 4/4: exactly 4 beats. NEVER overflow a measure — this causes rendering and playback errors.
-- Triplet beat values: eighth-triplet = 1/3 beat (12 per 4/4 measure), quarter-triplet = 2/3 beat (6 per 4/4 measure), half-triplet = 4/3 beat (3 per 4/4 measure). "Eighth note triplets" (tresillos de corchea) = eighth-triplet, 12 per 4/4 measure. Always add tuplet:"start" on the first and tuplet:"stop" on the last note of each triplet group of 3.
-- For pickup (anacrusis) measures at the start of a song, use the pickupBeats option in createScore, then write only the pickup notes (e.g. 1 beat for a 1-beat pickup in 3/4). All other measures must be full.
-- PERCUSSION PARTS: When a part has percussion=true, use drumSound on every note (not step/octave). Write drums in two writeNotes calls per measure: voice=1 for hands (hi-hat, snare, cymbals — stems up), voice=2 for feet (bass drum, hi-hat pedal — stems down). Available drum sounds: bass-drum, snare, hi-hat, open-hi-hat, hi-hat-pedal, floor-tom, low-tom, mid-tom, high-tom, crash, ride. IMPORTANT: chord:true means simultaneous with the PREVIOUS note — when adding snare as a chord on a hi-hat beat, keep the hi-hat AND add snare after it with chord:true. Example rock beat (4/4): voice=1 notes array: [hi-hat eighth, hi-hat eighth, hi-hat eighth, snare eighth chord:true, hi-hat eighth, hi-hat eighth, hi-hat eighth, hi-hat eighth, snare eighth chord:true] — that is 8 hi-hats (non-chord) + 2 snare chords = 8×0.5=4 beats. voice=2: [bass-drum quarter, quarter rest, bass-drum quarter, quarter rest] = 4 beats. Do NOT use addChordSymbols for percussion parts. Do NOT use TWO-PHASE COMPOSITION for percussion — just write the pattern directly.`,
-    messages: [...history, { role: "user" as const, content: message }],
-    tools: {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createTools(ctx: AgentContext, selectedMeasures: number[] | null) {
+  return {
       createScore: {
         description:
           "Create a new empty score scaffold with the specified instruments, key, time signature, and tempo. " +
@@ -217,14 +87,22 @@ Rules:
           measures: z.number().optional().describe("Number of empty measures to create. Defaults to 4."),
           pickupBeats: z.number().optional().describe("Number of beats in the pickup (anacrusis) measure. If set, the first measure will be a partial measure with this many beats."),
         }),
-        execute: async ({ instruments, key, beats, beatType, tempo, measures, pickupBeats }) => {
+        execute: async ({ instruments, key, beats, beatType, tempo, measures, pickupBeats }: {
+          instruments: ScoreInstrument[];
+          key?: string;
+          beats?: number;
+          beatType?: number;
+          tempo?: number;
+          measures?: number;
+          pickupBeats?: number;
+        }) => {
           const musicXml = createScore({
             instruments: instruments as ScoreInstrument[],
             key, beats, beatType, tempo, measures, pickupBeats,
           });
           const name = instruments.map((i: ScoreInstrument) => i.name).join(" + ");
-          liveXml = musicXml;
-          capture.result = { musicXml, name, resultType: "load" };
+          ctx.liveXml = musicXml;
+          ctx.capture.result = { musicXml, name, resultType: "load" };
           return { ok: true, name, measures: measures ?? 4 };
         },
       },
@@ -240,11 +118,11 @@ Rules:
             "'this measure' or 'these measures'."
           ),
         }),
-        execute: async ({ measureNumbers }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = deleteMeasures(liveXml, measureNumbers);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumbers }: { measureNumbers: number[] }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = deleteMeasures(ctx.liveXml, measureNumbers);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, deleted: measureNumbers };
         },
       },
@@ -271,11 +149,11 @@ Rules:
             "Omit to clear all staves."
           ),
         }),
-        execute: async ({ measureNumbers, partId, staff }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = clearMeasures(liveXml, measureNumbers, partId, staff);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumbers, partId, staff }: { measureNumbers: number[]; partId?: string; staff?: number }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = clearMeasures(ctx.liveXml, measureNumbers, partId, staff);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, cleared: measureNumbers, partId: partId ?? "all", staff: staff ?? "all" };
         },
       },
@@ -291,11 +169,11 @@ Rules:
           ),
           count: z.number().min(1).describe("Number of empty measures to insert"),
         }),
-        execute: async ({ afterMeasure, count }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = insertEmptyMeasures(liveXml, afterMeasure, count);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ afterMeasure, count }: { afterMeasure: number; count: number }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = insertEmptyMeasures(ctx.liveXml, afterMeasure, count);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, inserted: count, after: afterMeasure };
         },
       },
@@ -312,11 +190,11 @@ Rules:
             "2 for a 2-beat pickup, etc. Must be less than the full measure capacity."
           ),
         }),
-        execute: async ({ pickupBeats }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = insertPickupMeasure(liveXml, pickupBeats);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ pickupBeats }: { pickupBeats: number }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = insertPickupMeasure(ctx.liveXml, pickupBeats);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, pickupBeats, note: "Measure 1 is now a pickup. All previous measures shifted +1. Use writeNotes on measure 1 to fill in the anacrusis notes." };
         },
       },
@@ -330,11 +208,11 @@ Rules:
             "Measure numbers to duplicate. Use the selected measures if applicable."
           ),
         }),
-        execute: async ({ measureNumbers }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = duplicateMeasures(liveXml, measureNumbers);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumbers }: { measureNumbers: number[] }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = duplicateMeasures(ctx.liveXml, measureNumbers);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, duplicated: measureNumbers };
         },
       },
@@ -355,12 +233,12 @@ Rules:
             "Specific measures to transpose. Omit (or leave empty) when allMeasures is true."
           ),
         }),
-        execute: async ({ semitones, allMeasures, measureNumbers }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
+        execute: async ({ semitones, allMeasures, measureNumbers }: { semitones: number; allMeasures: boolean; measureNumbers?: number[] }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
           const measures = allMeasures ? null : (measureNumbers ?? null);
-          const result = transposeMeasures(liveXml, measures, semitones);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+          const result = transposeMeasures(ctx.liveXml, measures, semitones);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, semitones, measures: measureNumbers ?? "all" };
         },
       },
@@ -375,11 +253,11 @@ Rules:
           endMeasure: z.number().describe("Last measure of the section"),
           times: z.number().min(1).describe("How many additional copies to append"),
         }),
-        execute: async ({ startMeasure, endMeasure, times }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = repeatSection(liveXml, startMeasure, endMeasure, times);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ startMeasure, endMeasure, times }: { startMeasure: number; endMeasure: number; times: number }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = repeatSection(ctx.liveXml, startMeasure, endMeasure, times);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, repeated: `${startMeasure}-${endMeasure}`, times };
         },
       },
@@ -400,12 +278,12 @@ Rules:
             "Only change if the user explicitly requests a different beat unit."
           ),
         }),
-        execute: async ({ bpm, beatUnit }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const currentTempo = getTempo(liveXml);
-          const result = setTempo(liveXml, bpm, beatUnit ?? "quarter");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ bpm, beatUnit }: { bpm: number; beatUnit?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const currentTempo = getTempo(ctx.liveXml);
+          const result = setTempo(ctx.liveXml, bpm, beatUnit ?? "quarter");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, bpm, previous: currentTempo?.bpm ?? "none" };
         },
       },
@@ -419,14 +297,14 @@ Rules:
         parameters: z.object({
           enabled: z.boolean().describe("True to enable jazz swing, false for straight."),
         }),
-        execute: async ({ enabled }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
+        execute: async ({ enabled }: { enabled: boolean }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
           const swing: SwingInfo | null = enabled
             ? { first: 2, second: 1, swingType: "eighth" }
             : null;
-          const result = setSwing(liveXml, swing);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+          const result = setSwing(ctx.liveXml, swing);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, swing: enabled ? "jazz (2:1)" : "straight" };
         },
       },
@@ -443,11 +321,11 @@ Rules:
             "The dynamic marking to add."
           ),
         }),
-        execute: async ({ measureNumbers, dynamic }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addDynamics(liveXml, measureNumbers, dynamic as DynamicMarking);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumbers, dynamic }: { measureNumbers: number[]; dynamic: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addDynamics(ctx.liveXml, measureNumbers, dynamic as DynamicMarking);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, dynamic, measures: measureNumbers };
         },
       },
@@ -469,11 +347,11 @@ Rules:
             "Target a specific part (e.g. 'P1', 'P2'). Omit to apply to all parts."
           ),
         }),
-        execute: async ({ measureNumbers, articulation, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addArticulations(liveXml, measureNumbers, articulation as ArticulationMarking, partId);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumbers, articulation, partId }: { measureNumbers: number[]; articulation: string; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addArticulations(ctx.liveXml, measureNumbers, articulation as ArticulationMarking, partId);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, articulation, measures: measureNumbers, partId: partId ?? "all" };
         },
       },
@@ -495,11 +373,11 @@ Rules:
             "Target a specific part (e.g. 'P1', 'P2'). Omit to apply to all parts."
           ),
         }),
-        execute: async ({ measureNumbers, articulation, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = removeArticulations(liveXml, measureNumbers, articulation as ArticulationMarking | undefined, partId);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumbers, articulation, partId }: { measureNumbers: number[]; articulation?: string; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = removeArticulations(ctx.liveXml, measureNumbers, articulation as ArticulationMarking | undefined, partId);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, articulation: articulation ?? "all", measures: measureNumbers, partId: partId ?? "all" };
         },
       },
@@ -513,11 +391,11 @@ Rules:
           startMeasure: z.number().describe("First measure of the repeat section"),
           endMeasure: z.number().describe("Last measure of the repeat section"),
         }),
-        execute: async ({ startMeasure, endMeasure }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addRepeatBarlines(liveXml, startMeasure, endMeasure);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ startMeasure, endMeasure }: { startMeasure: number; endMeasure: number }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addRepeatBarlines(ctx.liveXml, startMeasure, endMeasure);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, section: `${startMeasure}-${endMeasure}` };
         },
       },
@@ -530,11 +408,11 @@ Rules:
           firstEndingMeasures: z.array(z.number()).describe("Measure numbers for the 1st ending."),
           secondEndingMeasures: z.array(z.number()).describe("Measure numbers for the 2nd ending."),
         }),
-        execute: async ({ firstEndingMeasures, secondEndingMeasures }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addVoltaBrackets(liveXml, firstEndingMeasures, secondEndingMeasures);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ firstEndingMeasures, secondEndingMeasures }: { firstEndingMeasures: number[]; secondEndingMeasures: number[] }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addVoltaBrackets(ctx.liveXml, firstEndingMeasures, secondEndingMeasures);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, firstEnding: firstEndingMeasures, secondEnding: secondEndingMeasures };
         },
       },
@@ -551,11 +429,11 @@ Rules:
             "Type of hairpin: crescendo (getting louder) or diminuendo (getting softer)."
           ),
         }),
-        execute: async ({ startMeasure, endMeasure, type }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addHairpin(liveXml, startMeasure, endMeasure, type);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ startMeasure, endMeasure, type }: { startMeasure: number; endMeasure: number; type: "crescendo" | "diminuendo" }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addHairpin(ctx.liveXml, startMeasure, endMeasure, type);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, type, section: `${startMeasure}-${endMeasure}` };
         },
       },
@@ -577,8 +455,8 @@ Rules:
             "Start the key change from this measure. Omit to change the whole score."
           ),
         }),
-        execute: async ({ key, fromMeasure }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
+        execute: async ({ key, fromMeasure }: { key: string; fromMeasure?: number }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
           const KEY_MAP: Record<string, number> = {
             "Cb major": -7, "Gb major": -6, "Db major": -5, "Ab major": -4,
             "Eb major": -3, "Bb major": -2, "F major": -1, "C major": 0,
@@ -590,9 +468,9 @@ Rules:
             "G# minor": 5,  "D# minor": 6,  "A# minor": 7,
           };
           const fifths = KEY_MAP[key];
-          const result = changeKey(liveXml, fifths, fromMeasure);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+          const result = changeKey(ctx.liveXml, fifths, fromMeasure);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, key, fromMeasure: fromMeasure ?? "all" };
         },
       },
@@ -610,12 +488,12 @@ Rules:
             "Whether to double or halve the durations."
           ),
         }),
-        execute: async ({ measureNumbers, factor }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
+        execute: async ({ measureNumbers, factor }: { measureNumbers: number[]; factor: "double" | "halve" }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
           const numericFactor = factor === "double" ? 2 : 0.5;
-          const result = scaleNoteDurations(liveXml, measureNumbers, numericFactor);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+          const result = scaleNoteDurations(ctx.liveXml, measureNumbers, numericFactor);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, factor, measures: measureNumbers };
         },
       },
@@ -632,11 +510,11 @@ Rules:
             "Type: 'text' for expression text (italic), 'rehearsal' for rehearsal marks (boxed)."
           ),
         }),
-        execute: async ({ measureNumber, text, type }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addTextAnnotation(liveXml, measureNumber, text, type);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumber, text, type }: { measureNumber: number; text: string; type: "text" | "rehearsal" }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addTextAnnotation(ctx.liveXml, measureNumber, text, type);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, text, type, measure: measureNumber };
         },
       },
@@ -671,6 +549,7 @@ Rules:
           notes: z.preprocess(
             (val) => {
               if (!Array.isArray(val)) return val;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               return val.map((note: any) => {
                 if (typeof note !== "object" || !note || typeof note.step !== "string") return note;
                 const flat = note.step.match(/^([A-G])b$/i);
@@ -711,8 +590,9 @@ Rules:
             ),
           }))).describe("Array of notes to write into the measure, in order."),
         }),
-        execute: async ({ measureNumber, partId, staff, voice, notes }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        execute: async ({ measureNumber, partId, staff, voice, notes }: { measureNumber: number; partId?: string; staff?: number; voice?: number; notes: any[] }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
           // Enforce selection: if the user has selected measures, only write to those
           const targetMeasure =
             selectedMeasures && selectedMeasures.length > 0 && !selectedMeasures.includes(measureNumber)
@@ -726,7 +606,7 @@ Rules:
           // Check whether this measure is a pickup (anacrusis) — implicit="yes"
           const isPickup = new RegExp(
             `<measure\\b[^>]*number="${targetMeasure}"[^>]*implicit="yes"`
-          ).test(liveXml);
+          ).test(ctx.liveXml);
 
           // Find effective time signature at targetMeasure (last change on or before it)
           const { timeSigBeats, timeSigBeatType } = (() => {
@@ -734,7 +614,7 @@ Rules:
             let beats = 4, beatType = 4;
             const measureRe = /<measure\b[^>]*number="(\d+)"[\s\S]*?(?=<measure\b|$)/g;
             let m: RegExpExecArray | null;
-            while ((m = measureRe.exec(liveXml)) !== null) {
+            while ((m = measureRe.exec(ctx.liveXml!)) !== null) {
               const mNum = parseInt(m[1]);
               if (mNum > targetMeasure) break;
               const timeSig = m[0].match(/<beats>(\d+)<\/beats>[\s\S]*?<beat-type>(\d+)<\/beat-type>/);
@@ -775,10 +655,10 @@ Rules:
           } // end: non-percussion duration validation
           // ────────────────────────────────────────────────────────────────
 
-          const result = setMeasureNotes(liveXml, targetMeasure, notes as NoteSpec[], partId ?? "P1", staff, voice as 1 | 2 | undefined);
+          const result = setMeasureNotes(ctx.liveXml, targetMeasure, notes as NoteSpec[], partId ?? "P1", staff, voice as 1 | 2 | undefined);
           const postProcessed = addBeams(fixChordSymbols(addAccidentals(result)));
-          liveXml = postProcessed;
-          capture.result = { musicXml: postProcessed, resultType: "modify" };
+          ctx.liveXml = postProcessed;
+          ctx.capture.result = { musicXml: postProcessed, resultType: "modify" };
           return { ok: true, measure: targetMeasure, partId: partId ?? "P1", staff: staff ?? "all", noteCount: notes.length };
         },
       },
@@ -795,11 +675,11 @@ Rules:
             "Change from this measure onward. Omit to change the whole score."
           ),
         }),
-        execute: async ({ beats, beatType, fromMeasure }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = setTimeSignature(liveXml, beats, beatType, fromMeasure ?? 1);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ beats, beatType, fromMeasure }: { beats: number; beatType: number; fromMeasure?: number }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = setTimeSignature(ctx.liveXml, beats, beatType, fromMeasure ?? 1);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, timeSignature: `${beats}/${beatType}`, fromMeasure: fromMeasure ?? "all" };
         },
       },
@@ -816,12 +696,12 @@ Rules:
             bass: z.string().optional().describe("Bass note for slash chords, e.g. 'E' for C/E."),
           })).describe("List of chord symbols to add to this measure."),
         }),
-        execute: async ({ measureNumber, partId, chords }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addChordSymbols(liveXml, measureNumber, chords as ChordSymbol[], partId ?? "P1");
+        execute: async ({ measureNumber, partId, chords }: { measureNumber: number; partId?: string; chords: ChordSymbol[] }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addChordSymbols(ctx.liveXml, measureNumber, chords as ChordSymbol[], partId ?? "P1");
           if (result.error) return { ok: false, error: result.error };
-          liveXml = result.xml;
-          capture.result = { musicXml: result.xml, resultType: "modify" };
+          ctx.liveXml = result.xml;
+          ctx.capture.result = { musicXml: result.xml, resultType: "modify" };
           return { ok: true, measure: measureNumber, chords: chords.length };
         },
       },
@@ -832,11 +712,11 @@ Rules:
           partId: z.string().describe("Part ID to rename, e.g. 'P1', 'P2'."),
           name: z.string().describe("New instrument name, e.g. 'Flute', 'Bass Guitar'."),
         }),
-        execute: async ({ partId, name }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = renamePart(liveXml, partId, name);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ partId, name }: { partId: string; name: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = renamePart(ctx.liveXml, partId, name);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, partId, name };
         },
       },
@@ -855,11 +735,11 @@ Rules:
             "Examples: Piano=1, Harpsichord=7, Guitar=25, Violin=41, Cello=43, Trumpet=57, Flute=74, Voice=53."
           ),
         }),
-        execute: async ({ partId, name, staves, midiProgram }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = changeInstrument(liveXml, partId, { name, staves, midiProgram });
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ partId, name, staves, midiProgram }: { partId: string; name: string; staves?: number; midiProgram: number }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = changeInstrument(ctx.liveXml, partId, { name, staves, midiProgram });
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, partId, name };
         },
       },
@@ -879,11 +759,11 @@ Rules:
             "For multi-staff parts (e.g. piano): 1=top staff, 2=bottom staff. Omit for single-staff instruments."
           ),
         }),
-        execute: async ({ partId, clef, staffNumber }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = changeClef(liveXml, partId, clef, staffNumber);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ partId, clef, staffNumber }: { partId: string; clef: "treble" | "bass" | "alto" | "tenor"; staffNumber?: number }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = changeClef(ctx.liveXml, partId, clef, staffNumber);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, partId, clef, staffNumber: staffNumber ?? "single" };
         },
       },
@@ -913,11 +793,11 @@ Rules:
             "Use writeNotes with drumSound on each note. voice=1 for hands, voice=2 for feet."
           ),
         }),
-        execute: async ({ name, staves, clef, midiProgram, percussion }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addPart(liveXml, { name, staves, clef, midiProgram, percussion });
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ name, staves, clef, midiProgram, percussion }: { name: string; staves?: number; clef?: "treble" | "bass" | "alto" | "tenor"; midiProgram?: number; percussion?: boolean }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addPart(ctx.liveXml, { name, staves, clef, midiProgram, percussion });
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, name };
         },
       },
@@ -927,25 +807,26 @@ Rules:
         parameters: z.object({
           partId: z.string().describe("Part ID to remove, e.g. 'P2'."),
         }),
-        execute: async ({ partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = removePart(liveXml, partId);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ partId }: { partId: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = removePart(ctx.liveXml, partId);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, partId };
         },
       },
+
       movePart: {
         description: "Move a part up or down in the score order (i.e. reorder staves). 'up' means higher on the page (lower index), 'down' means lower on the page.",
         parameters: z.object({
           partId: z.string().describe("Part ID to move, e.g. 'P2'."),
           direction: z.enum(["up", "down"]).describe("Direction to move the part."),
         }),
-        execute: async ({ partId, direction }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = movePart(liveXml, partId, direction);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ partId, direction }: { partId: string; direction: "up" | "down" }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = movePart(ctx.liveXml, partId, direction);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, partId, direction };
         },
       },
@@ -959,11 +840,11 @@ Rules:
           endMeasure: z.number().describe("Measure where the slur ends (can equal startMeasure for within-measure slur)."),
           partId: z.string().optional().describe("Part ID (default 'P1')."),
         }),
-        execute: async ({ startMeasure, endMeasure, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addSlur(liveXml, startMeasure, endMeasure, partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ startMeasure, endMeasure, partId }: { startMeasure: number; endMeasure: number; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addSlur(ctx.liveXml, startMeasure, endMeasure, partId ?? "P1");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, startMeasure, endMeasure };
         },
       },
@@ -975,11 +856,11 @@ Rules:
           endMeasure: z.number(),
           partId: z.string().optional(),
         }),
-        execute: async ({ startMeasure, endMeasure, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = removeSlurs(liveXml, startMeasure, endMeasure, partId);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ startMeasure, endMeasure, partId }: { startMeasure: number; endMeasure: number; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = removeSlurs(ctx.liveXml, startMeasure, endMeasure, partId);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, startMeasure, endMeasure };
         },
       },
@@ -992,11 +873,11 @@ Rules:
           type: z.enum(["upright", "inverted"]).optional().describe("Fermata orientation. Default: upright."),
           partId: z.string().optional(),
         }),
-        execute: async ({ measureNumber, beat, type, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addFermata(liveXml, measureNumber, beat, type ?? "upright", partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumber, beat, type, partId }: { measureNumber: number; beat?: number; type?: "upright" | "inverted"; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addFermata(ctx.liveXml, measureNumber, beat, type ?? "upright", partId ?? "P1");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, measureNumber };
         },
       },
@@ -1007,11 +888,11 @@ Rules:
           measureNumber: z.number(),
           partId: z.string().optional(),
         }),
-        execute: async ({ measureNumber, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addBreathMark(liveXml, measureNumber, partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumber, partId }: { measureNumber: number; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addBreathMark(ctx.liveXml, measureNumber, partId ?? "P1");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, measureNumber };
         },
       },
@@ -1024,11 +905,11 @@ Rules:
           lineType: z.enum(["solid", "wavy"]).optional().describe("Line style. Default: wavy."),
           partId: z.string().optional(),
         }),
-        execute: async ({ startMeasure, endMeasure, lineType, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addGlissando(liveXml, startMeasure, endMeasure, lineType ?? "wavy", partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ startMeasure, endMeasure, lineType, partId }: { startMeasure: number; endMeasure: number; lineType?: "solid" | "wavy"; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addGlissando(ctx.liveXml, startMeasure, endMeasure, lineType ?? "wavy", partId ?? "P1");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, startMeasure, endMeasure };
         },
       },
@@ -1043,11 +924,11 @@ Rules:
           ottava: z.enum(["8va", "8vb", "15ma", "15mb"]).describe("Type of octave transposition line."),
           partId: z.string().optional(),
         }),
-        execute: async ({ startMeasure, endMeasure, ottava, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addOttava(liveXml, startMeasure, endMeasure, ottava, partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ startMeasure, endMeasure, ottava, partId }: { startMeasure: number; endMeasure: number; ottava: "8va" | "8vb" | "15ma" | "15mb"; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addOttava(ctx.liveXml, startMeasure, endMeasure, ottava, partId ?? "P1");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, startMeasure, endMeasure, ottava };
         },
       },
@@ -1059,11 +940,11 @@ Rules:
           endMeasure: z.number(),
           partId: z.string().optional(),
         }),
-        execute: async ({ startMeasure, endMeasure, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addPedalMarking(liveXml, startMeasure, endMeasure, partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ startMeasure, endMeasure, partId }: { startMeasure: number; endMeasure: number; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addPedalMarking(ctx.liveXml, startMeasure, endMeasure, partId ?? "P1");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, startMeasure, endMeasure };
         },
       },
@@ -1075,11 +956,11 @@ Rules:
           direction: z.enum(["up", "down"]).optional().describe("Arpeggio roll direction. Default: up."),
           partId: z.string().optional(),
         }),
-        execute: async ({ measureNumber, direction, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addArpeggio(liveXml, measureNumber, direction ?? "up", partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumber, direction, partId }: { measureNumber: number; direction?: "up" | "down"; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addArpeggio(ctx.liveXml, measureNumber, direction ?? "up", partId ?? "P1");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, measureNumber };
         },
       },
@@ -1091,11 +972,11 @@ Rules:
           marks: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().describe("Number of tremolo beams. Default: 3."),
           partId: z.string().optional(),
         }),
-        execute: async ({ measureNumber, marks, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addTremolo(liveXml, measureNumber, (marks ?? 3) as 1 | 2 | 3, partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumber, marks, partId }: { measureNumber: number; marks?: 1 | 2 | 3; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addTremolo(ctx.liveXml, measureNumber, (marks ?? 3) as 1 | 2 | 3, partId ?? "P1");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, measureNumber, marks: marks ?? 3 };
         },
       },
@@ -1109,11 +990,11 @@ Rules:
           syllables: z.array(z.string()).describe("List of syllables, one per note. E.g. ['Twinkle', 'twin-', 'kle'] or ['A-', 'ma-', 'zing']."),
           partId: z.string().optional(),
         }),
-        execute: async ({ measureNumber, syllables, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addLyrics(liveXml, measureNumber, syllables, partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumber, syllables, partId }: { measureNumber: number; syllables: string[]; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addLyrics(ctx.liveXml, measureNumber, syllables, partId ?? "P1");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, measureNumber, syllables: syllables.length };
         },
       },
@@ -1130,11 +1011,11 @@ Rules:
           arranger: z.string().optional().describe("Arranger name."),
           copyright: z.string().optional().describe("Copyright notice."),
         }),
-        execute: async (meta) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = setScoreMetadata(liveXml, meta);
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async (meta: { title?: string; subtitle?: string; composer?: string; lyricist?: string; arranger?: string; copyright?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = setScoreMetadata(ctx.liveXml, meta);
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, ...meta };
         },
       },
@@ -1144,8 +1025,8 @@ Rules:
       addNavigationMark: {
         description:
           "Add a navigation/repeat mark to a measure:\n" +
-          "  • segno   — S𝄋 sign (jump target)\n" +
-          "  • coda    — 𝄌 coda symbol (jump target)\n" +
+          "  • segno   — S sign (jump target)\n" +
+          "  • coda    — coda symbol (jump target)\n" +
           "  • fine    — 'Fine' (end marker)\n" +
           "  • dacapo  — 'D.C. al Fine' (go back to beginning)\n" +
           "  • dalsegno — 'D.S. al Coda' (go back to segno)\n" +
@@ -1156,45 +1037,13 @@ Rules:
             .describe("Type of navigation mark to add."),
           partId: z.string().optional(),
         }),
-        execute: async ({ measureNumber, markType, partId }) => {
-          if (!liveXml) throw new Error("No score is currently loaded");
-          const result = addNavigationMark(liveXml, measureNumber, markType as NavigationMarkType, partId ?? "P1");
-          liveXml = result;
-          capture.result = { musicXml: result, resultType: "modify" };
+        execute: async ({ measureNumber, markType, partId }: { measureNumber: number; markType: string; partId?: string }) => {
+          if (!ctx.liveXml) throw new Error("No score is currently loaded");
+          const result = addNavigationMark(ctx.liveXml, measureNumber, markType as NavigationMarkType, partId ?? "P1");
+          ctx.liveXml = result;
+          ctx.capture.result = { musicXml: result, resultType: "modify" };
           return { ok: true, measureNumber, markType };
         },
       },
-    },
-  });
-
-      const r = capture.result;
-      if (r) {
-        const resultType = r.resultType === "modify" ? "modify" : `load (${r.name})`;
-        console.log(`╔══ [agent] result: ${resultType}  xml=${r.musicXml.length} chars`);
-        if (r.resultType === "modify") return { type: "modify", musicXml: r.musicXml, message: text || "Score updated." };
-        return { type: "load", musicXml: r.musicXml, name: r.name! };
-      }
-
-      if (!text.trim()) throw new Error("Empty response from model");
-
-      console.log(`╔══ [agent] result: chat — "${text.slice(0, 120)}${text.length > 120 ? "…" : ""}"`);
-      return { type: "chat", message: text };
-
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`│ [agent] ⚠ attempt ${attempt} failed: ${msg}`);
-      lastError = err;
-      // Retry on tool-name errors or tool argument validation errors (LLM can self-correct)
-      const isRetryable =
-        msg.includes("unavailable tool") ||
-        msg.includes("No such tool") ||
-        msg.includes("Invalid arguments for tool") ||
-        msg.includes("Type validation failed") ||
-        msg.includes("Invalid JSON") ||
-        msg.includes("Empty response from model");
-      if (!isRetryable) break;
-    }
-  }
-
-  throw lastError;
+  };
 }

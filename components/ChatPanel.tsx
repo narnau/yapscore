@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { capture } from "@/lib/posthog";
+import { useVoiceRecording } from "./hooks/useVoiceRecording";
+
+const MAX_SEND_RETRIES = 3;
 
 export type Message = {
   role: "user" | "system";
@@ -54,18 +57,8 @@ export default function ChatPanel({
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [recording, setRecording] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
-  const [recordingSecs, setRecordingSecs] = useState(0);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
-  const [micSupported, setMicSupported] = useState(false);
-
-  useEffect(() => {
-    setMicSupported(!!navigator.mediaDevices?.getUserMedia);
-  }, []);
+  const { recording, transcribing, recordingSecs, micSupported, toggleRecording } = useVoiceRecording(setInstruction, formRef);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -74,61 +67,6 @@ export default function ChatPanel({
   function addMessage(msg: Message) {
     onMessagesChange([...messages, msg]);
   }
-
-  const toggleRecording = useCallback(async () => {
-    // Stop recording
-    if (recording) {
-      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-      mediaRecorderRef.current?.stop();
-      return;
-    }
-
-    // Start recording
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        setRecording(false);
-        setRecordingSecs(0);
-
-        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
-        if (blob.size === 0) return;
-        capture("voice_recording_completed");
-
-        setTranscribing(true);
-        try {
-          const form = new FormData();
-          form.append("audio", blob, "recording");
-          const res = await fetch("/api/transcribe", { method: "POST", body: form });
-          const data = await res.json();
-          if (data.transcript) {
-            setInstruction(data.transcript);
-            setTimeout(() => formRef.current?.requestSubmit(), 100);
-          }
-        } catch {
-          // silently ignore transcription errors
-        } finally {
-          setTranscribing(false);
-        }
-      };
-
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      setRecordingSecs(0);
-      setRecording(true);
-      capture("voice_recording_started");
-      recordingTimerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000);
-    } catch {
-      // microphone permission denied or unavailable
-    }
-  }, [recording]);
 
   async function handleUpgrade() {
     capture("upgrade_clicked");
@@ -196,7 +134,7 @@ export default function ChatPanel({
       }
 
       let res: Response | null = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < MAX_SEND_RETRIES; attempt++) {
         if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * attempt));
         try { res = await fetch("/api/agent", { method: "POST", body: form }); break; } catch { /* retry */ }
       }

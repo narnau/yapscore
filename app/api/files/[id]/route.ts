@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFile, saveFile, deleteFile } from "@/lib/files";
-import { fixPercussionDisplayOctave } from "@/lib/musicxml";
+import { fixPercussionDisplayOctave } from "@/lib/music/musicxml";
 
 const patchSchema = z.object({
   name: z.string().max(200).optional(),

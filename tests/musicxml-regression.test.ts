@@ -23,7 +23,7 @@ import {
   insertPickupMeasure,
   setSwing,
   getSwing,
-} from "../lib/musicxml";
+} from "../lib/music/musicxml";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

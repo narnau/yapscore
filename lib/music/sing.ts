@@ -7,6 +7,13 @@
  */
 
 import type { NoteSpec } from "./musicxml";
+import {
+  SEMITONES_PER_OCTAVE,
+  A4_MIDI_NUMBER,
+  A4_FREQUENCY_HZ,
+  VOCAL_RANGE_MIN_HZ,
+  VOCAL_RANGE_MAX_HZ,
+} from "./constants";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -275,7 +282,7 @@ export async function detectPitches(
     const hz = confidence >= CREPE_CONF_THRESHOLD ? crepeActivationToHz(activation) : 0;
 
     // Filter to vocal/instrument range (roughly C2–C7)
-    const inRange = hz >= 65 && hz <= 2093;
+    const inRange = hz >= VOCAL_RANGE_MIN_HZ && hz <= VOCAL_RANGE_MAX_HZ;
     results.push({ time, hz: inRange ? hz : 0 });
 
     if (hz > 0 && inRange) {
@@ -294,12 +301,12 @@ export async function detectPitches(
 // ─── Hz to MIDI ─────────────────────────────────────────────────────────────
 
 function hzToMidi(hz: number): number {
-  return Math.round(12 * Math.log2(hz / 440) + 69);
+  return Math.round(SEMITONES_PER_OCTAVE * Math.log2(hz / A4_FREQUENCY_HZ) + A4_MIDI_NUMBER);
 }
 
 function midiToName(midi: number): string {
-  const note = NOTE_NAMES[midi % 12];
-  const octave = Math.floor(midi / 12) - 1;
+  const note = NOTE_NAMES[midi % SEMITONES_PER_OCTAVE];
+  const octave = Math.floor(midi / SEMITONES_PER_OCTAVE) - 1;
   return `${note}${octave}`;
 }
 
@@ -385,7 +392,7 @@ export function quantizePitches(
     for (const seg of segments) {
       for (const frame of pitches) {
         if (frame.time < seg.startTime || frame.time >= seg.endTime || frame.hz === 0) continue;
-        const exactMidi = 12 * Math.log2(frame.hz / 440) + 69;
+        const exactMidi = SEMITONES_PER_OCTAVE * Math.log2(frame.hz / A4_FREQUENCY_HZ) + A4_MIDI_NUMBER;
         centOffsets.push(exactMidi - Math.round(exactMidi));
       }
     }
@@ -464,7 +471,7 @@ export function playDetectedNotes(
 
   for (const note of merged) {
     if (note.midi === null) continue;
-    const freq = 440 * Math.pow(2, (note.midi - 69) / 12);
+    const freq = A4_FREQUENCY_HZ * Math.pow(2, (note.midi - A4_MIDI_NUMBER) / SEMITONES_PER_OCTAVE);
     const noteStart = startTime + note.startSlot * slotDuration;
     const noteDur = note.slots * slotDuration;
 

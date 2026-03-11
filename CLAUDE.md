@@ -51,17 +51,17 @@ components/
   ChatPanel.tsx         — Chat UI + file upload + paywall
   ScoreViewer.tsx       — Verovio rendering + measure selection
   MidiPlayer.tsx        — MIDI playback
+  score/                — Extracted sub-components (ScoreInfoBar, MobileEditSheet, NoteSymbol, ToolBtn)
+  hooks/                — Custom hooks (useKeyboardShortcuts, useVoiceRecording)
 lib/
   supabase/             — Client utilities (client, server, middleware, admin)
+  agent/                — AI agent (index.ts orchestrator, tools.ts, system-prompt.ts, types.ts)
+  music/                — MusicXML processing (musicxml.ts, accidentals.ts, beams.ts, swing-midi.ts, sing.ts, constants.ts)
   auth.ts               — getAuthUser() helper for API routes
   stripe.ts             — Stripe instance + customer helper
   files.ts              — Supabase-backed file storage (scores + history + chat)
-  agent.ts              — AI agent with tools (modify/generate)
   llm.ts                — OpenRouter API calls
   mscore.ts             — .mscz → MusicXML via webmscore
-  musicxml.ts           — MusicXML parsing/reconstruction
-  accidentals.ts        — Post-process accidentals
-  beams.ts              — Post-process beam elements
 supabase/
   migrations/           — Database migrations (auto-deployed on push to main)
 ```

@@ -1,11 +1,16 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import MidiPlayer from "./MidiPlayer";
-import { applySwingToMidi } from "@/lib/swing-midi";
-import { getSwing, setTempo, buildNoteMap, changeNotePitch, deleteNote, changeNoteDuration, duplicateMeasures, pasteMeasures, deleteMeasures } from "@/lib/musicxml";
-import type { NotePosition } from "@/lib/musicxml";
+import { applySwingToMidi } from "@/lib/music/swing-midi";
+import { getSwing, setTempo, buildNoteMap, changeNotePitch, deleteNote, changeNoteDuration, duplicateMeasures, pasteMeasures, deleteMeasures } from "@/lib/music/musicxml";
+import type { NotePosition } from "@/lib/music/musicxml";
 import { capture } from "@/lib/posthog";
+import ScoreInfoBar from "./score/ScoreInfoBar";
+import MobileEditSheet from "./score/MobileEditSheet";
+import NoteSymbol from "./score/NoteSymbol";
+import ToolBtn from "./score/ToolBtn";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
 type Props = {
   musicXml: string | null;
@@ -107,18 +112,21 @@ export default function ScoreViewer({
   }, [swingEnabled]);
 
   // Build channel → instrument map from all <midi-instrument> blocks in MusicXML
-  const channelInstruments: Record<number, string> = {};
-  if (musicXml) {
-    const blockRe = /<midi-instrument[\s\S]*?<\/midi-instrument>/g;
-    for (const block of musicXml.matchAll(blockRe)) {
-      const channel = parseInt(block[0].match(/<midi-channel>(\d+)<\/midi-channel>/)?.[1] ?? "0");
-      const program = parseInt(block[0].match(/<midi-program>(\d+)<\/midi-program>/)?.[1] ?? "1");
-      if (channel > 0 && channel !== 10) {
-        // Skip channel 10 (GM percussion) — no matching soundfont available in this player
-        channelInstruments[channel] = GM_INSTRUMENTS[program - 1] ?? "acoustic_grand_piano";
+  const channelInstruments = useMemo(() => {
+    const result: Record<number, string> = {};
+    if (musicXml) {
+      const blockRe = /<midi-instrument[\s\S]*?<\/midi-instrument>/g;
+      for (const block of musicXml.matchAll(blockRe)) {
+        const channel = parseInt(block[0].match(/<midi-channel>(\d+)<\/midi-channel>/)?.[1] ?? "0");
+        const program = parseInt(block[0].match(/<midi-program>(\d+)<\/midi-program>/)?.[1] ?? "1");
+        if (channel > 0 && channel !== 10) {
+          // Skip channel 10 (GM percussion) — no matching soundfont available in this player
+          result[channel] = GM_INSTRUMENTS[program - 1] ?? "acoustic_grand_piano";
+        }
       }
     }
-  }
+    return result;
+  }, [musicXml]);
 
   // ── render with Verovio ───────────────────────────────────────────────────
   useEffect(() => {
@@ -257,58 +265,17 @@ export default function ScoreViewer({
   }, [selectedNoteIndex]);
 
   // ── keyboard shortcuts (note + measure editing) ───────────────────────────
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      const ctrl = e.ctrlKey || e.metaKey;
-      const xml = musicXmlRef.current;
-      const onChange = onMusicXmlChangeRef.current;
-      const idx = selectedNoteIndexRef.current;
-      const measures = selectedMeasuresRef.current;
-      const copied = copiedMeasuresRef.current;
-
-      // ── Note actions ──
-      if (idx !== null && xml) {
-        const position = noteMapRef.current[idx];
-        if (position) {
-          if (!position.isRest && !position.isDrum && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-            e.preventDefault();
-            const semitones = (e.key === "ArrowUp" ? 1 : -1) * (ctrl ? 12 : 1);
-            onChange?.(changeNotePitch(xml, position, semitones),
-              ctrl ? (e.key === "ArrowUp" ? "Octave up" : "Octave down")
-                   : (e.key === "ArrowUp" ? "Move note up" : "Move note down"));
-            return;
-          }
-          if (!ctrl && (e.key === "Delete" || e.key === "Backspace")) {
-            e.preventDefault();
-            onChange?.(deleteNote(xml, position), "Delete note");
-            setSelectedNoteIndex(null);
-            return;
-          }
-          if (!ctrl && /^[1-7]$/.test(e.key)) {
-            e.preventDefault();
-            onChange?.(changeNoteDuration(xml, position, e.key as "1"|"2"|"3"|"4"|"5"|"6"|"7"), "Change duration");
-            return;
-          }
-        }
-      }
-
-      // ── Measure actions ──
-      if (ctrl && xml) {
-        if (e.key === "c" && measures.size > 0) {
-          e.preventDefault();
-          setCopiedMeasures(new Set(measures));
-        } else if (e.key === "v" && copied.size > 0 && measures.size > 0) {
-          e.preventDefault();
-          onChange?.(pasteMeasures(xml, [...copied], Math.min(...measures)), "Paste measures");
-        } else if (e.key === "d" && measures.size > 0) {
-          e.preventDefault();
-          onChange?.(duplicateMeasures(xml, [...measures].sort((a, b) => a - b)), "Duplicate measures");
-        }
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []); // stable — all mutable values accessed via refs
+  useKeyboardShortcuts(
+    musicXmlRef,
+    onMusicXmlChangeRef,
+    selectedNoteIndexRef,
+    selectedMeasuresRef,
+    copiedMeasuresRef,
+    onClearMeasureSelectionRef,
+    noteMapRef,
+    setSelectedNoteIndex,
+    setCopiedMeasures,
+  );
 
   // ── selection + playback highlight ───────────────────────────────────────
   useEffect(() => {
@@ -506,294 +473,3 @@ export default function ScoreViewer({
   );
 }
 
-// ─── Score info bar ─────────────────────────────────────────────────────────
-
-const FIFTHS_KEYS = ["Cb","Gb","Db","Ab","Eb","Bb","F","C","G","D","A","E","B","F#","C#"];
-
-function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: string; onTempoChange?: (bpm: number) => void }) {
-  const instruments = [...musicXml.matchAll(/<part-name>([^<]+)<\/part-name>/g)]
-    .map((m) => m[1].trim())
-    .filter(Boolean)
-    .join(", ");
-
-  const fifths = parseInt(musicXml.match(/<fifths>(-?\d+)<\/fifths>/)?.[1] ?? "0");
-  const key = FIFTHS_KEYS[fifths + 7] ?? "C";
-
-  const beatsStr = musicXml.match(/<beats>(\d+)<\/beats>/)?.[1] ?? "4";
-  const beatTypeStr = musicXml.match(/<beat-type>(\d+)<\/beat-type>/)?.[1] ?? "4";
-
-  const tempoMatch = musicXml.match(/<sound\b[^>]*tempo="(\d+(?:\.\d+)?)"/);
-  const tempoExplicit = tempoMatch ? Math.round(parseFloat(tempoMatch[1])) : null;
-  const tempo = tempoExplicit ?? 120;
-
-  // Count measures in first part only
-  const firstPart = musicXml.match(/<part\b[^>]*>[\s\S]*?<\/part>/);
-  const measureCount = firstPart
-    ? (firstPart[0].match(/<measure\b/g) ?? []).length
-    : 0;
-
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(tempo);
-  const committedRef = useRef(false);
-
-  function startEdit() {
-    if (!onTempoChange) return;
-    committedRef.current = false;
-    setDraft(tempo);
-    setEditing(true);
-  }
-
-  function commit(value: number) {
-    if (committedRef.current) { setEditing(false); return; }
-    const bpm = Math.round(value);
-    if (bpm >= 20 && bpm <= 300 && bpm !== tempo) {
-      committedRef.current = true;
-      onTempoChange?.(bpm);
-    }
-    setEditing(false);
-  }
-
-  // Reset editing state when musicXml changes (e.g. after a commit re-render)
-  const prevTempoRef = useRef(tempo);
-  if (prevTempoRef.current !== tempo) {
-    prevTempoRef.current = tempo;
-    setDraft(tempo);
-    if (editing) setEditing(false);
-  }
-
-  const items: Array<{ label: string; dim?: boolean; isTempoSlot?: boolean }> = [];
-  if (instruments) items.push({ label: instruments });
-  items.push({ label: key });
-  items.push({ label: `${beatsStr}/${beatTypeStr}` });
-  items.push({ label: `♩ = ${tempo}`, dim: !tempoExplicit, isTempoSlot: true });
-  items.push({ label: `${measureCount} bars` });
-
-  return (
-    <div className="flex items-center gap-3 text-[11px] text-brand-secondary">
-      {items.map((item, i) => (
-        <span key={i} className={`flex items-center gap-3${item.dim ? " opacity-40" : ""}`}>
-          {i > 0 && <span className="text-gray-300">·</span>}
-          {item.isTempoSlot && onTempoChange ? (
-            editing ? (
-              <span className="flex items-center gap-2">
-                <span className="shrink-0">♩ =</span>
-                <input
-                  type="range"
-                  min={20}
-                  max={300}
-                  step={1}
-                  value={draft}
-                  onChange={(e) => setDraft(Number(e.target.value))}
-                  onMouseUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
-                  onTouchEnd={(e) => commit(Number((e.target as HTMLInputElement).value))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") setEditing(false);
-                    if (e.key === "Enter") commit(draft);
-                  }}
-                  onBlur={() => commit(draft)}
-                  className="w-24 accent-brand-primary cursor-pointer"
-                />
-                <span className="tabular-nums text-gray-900 w-7 shrink-0">{draft}</span>
-              </span>
-            ) : (
-              <button
-                onClick={startEdit}
-                title="Click to change tempo"
-                className="hover:text-gray-900 hover:underline decoration-dotted underline-offset-2 transition cursor-pointer"
-              >
-                {item.label}
-              </button>
-            )
-          ) : (
-            item.label
-          )}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-// ─── NoteSymbol ───────────────────────────────────────────────────────────────
-
-function NoteSymbol({ dur }: { dur: 1|2|3|4|5|6|7 }) {
-  const numFlags = [4, 3, 2, 1, 0, 0, 0][dur - 1];
-  const filled = dur <= 5;
-  const hasStem = dur <= 6;
-  return (
-    <svg viewBox="0 0 9 16" width="9" height="16" style={{ display: "inline-block", verticalAlign: "middle" }}>
-      <ellipse
-        cx="3" cy="13" rx="2.8" ry="1.8"
-        fill={filled ? "currentColor" : "none"}
-        stroke={filled ? "none" : "currentColor"}
-        strokeWidth="1.1"
-        transform="rotate(-20 3 13)"
-      />
-      {hasStem && <line x1="5.5" y1="12" x2="5.5" y2="1" stroke="currentColor" strokeWidth="1" />}
-      {numFlags >= 1 && <path d="M5.5 1 C8.5 2.5 8 5 6.5 6" stroke="currentColor" strokeWidth="1" fill="none" />}
-      {numFlags >= 2 && <path d="M5.5 3.5 C8.5 5 8 7.5 6.5 8.5" stroke="currentColor" strokeWidth="1" fill="none" />}
-      {numFlags >= 3 && <path d="M5.5 6 C8.5 7.5 8 10 6.5 11" stroke="currentColor" strokeWidth="1" fill="none" />}
-      {numFlags >= 4 && <path d="M5.5 8.5 C8.5 9.5 8 11.5 6.5 12" stroke="currentColor" strokeWidth="1" fill="none" />}
-    </svg>
-  );
-}
-
-// ─── ToolBtn ──────────────────────────────────────────────────────────────────
-
-// ─── Mobile bottom sheet ──────────────────────────────────────────────────────
-
-function MobileEditSheet({
-  selectedNoteIndex, noteMapRef, selectedMeasures, copiedMeasures,
-  musicXml, onMusicXmlChange, onClearMeasureSelection,
-  setSelectedNoteIndex, setCopiedMeasures,
-}: {
-  selectedNoteIndex: number | null;
-  noteMapRef: React.RefObject<NotePosition[]>;
-  selectedMeasures: Set<number>;
-  copiedMeasures: Set<number>;
-  musicXml: string | null;
-  onMusicXmlChange?: (xml: string, label: string) => void;
-  onClearMeasureSelection?: () => void;
-  setSelectedNoteIndex: (i: number | null) => void;
-  setCopiedMeasures: (s: Set<number>) => void;
-}) {
-  const isOpen = (selectedNoteIndex !== null || selectedMeasures.size > 0) && !!onMusicXmlChange;
-  const note = selectedNoteIndex !== null ? noteMapRef.current[selectedNoteIndex] : null;
-
-  function dismiss() {
-    setSelectedNoteIndex(null);
-    onClearMeasureSelection?.();
-  }
-
-  return (
-    <div
-      className={`md:hidden fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out ${
-        isOpen ? "translate-y-0" : "translate-y-full"
-      }`}
-    >
-      <div className="bg-white rounded-t-2xl shadow-2xl border-t border-gray-200">
-        {/* Handle + dismiss */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          <div className="w-8" />
-          <div className="w-10 h-1 rounded-full bg-gray-300" />
-          <button onClick={dismiss} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Note editing */}
-        {selectedNoteIndex !== null && note && (
-          <div className="px-4 pb-8 space-y-3">
-            <p className="text-xs font-medium text-gray-400 text-center uppercase tracking-wide">
-              {note.isRest ? "Rest" : note.isDrum ? "Drum" : "Note"}
-            </p>
-
-            {/* Pitch row — pitched notes only (not rests, not drum notes) */}
-            {!note.isRest && !note.isDrum && (
-              <div className="grid grid-cols-4 gap-2">
-                {([
-                  { label: "↓ 8va", delta: -12, title: "Octave down" },
-                  { label: "↓", delta: -1, title: "Semitone down" },
-                  { label: "↑", delta: 1, title: "Semitone up" },
-                  { label: "↑ 8va", delta: 12, title: "Octave up" },
-                ] as const).map(({ label, delta, title }) => (
-                  <button
-                    key={label}
-                    onClick={() => { if (musicXml) onMusicXmlChange!(changeNotePitch(musicXml, note, delta), title); }}
-                    className="py-3 rounded-xl bg-gray-100 active:bg-gray-200 text-sm font-medium text-gray-700 transition active:scale-95"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Duration row */}
-            <div className="grid grid-cols-7 gap-1.5">
-              {([1, 2, 3, 4, 5, 6, 7] as const).map((dur) => (
-                <button
-                  key={dur}
-                  onClick={() => { if (musicXml) onMusicXmlChange!(changeNoteDuration(musicXml, note, String(dur) as "1"|"2"|"3"|"4"|"5"|"6"|"7"), "Change duration"); }}
-                  title={["64th","32nd","16th","Eighth","Quarter","Half","Whole"][dur - 1]}
-                  className="flex items-center justify-center py-3 rounded-xl bg-gray-100 active:bg-gray-200 text-gray-700 transition active:scale-95"
-                >
-                  <NoteSymbol dur={dur} />
-                </button>
-              ))}
-            </div>
-
-            {/* Delete */}
-            <button
-              onClick={() => { if (musicXml) { onMusicXmlChange!(deleteNote(musicXml, note), "Delete note"); setSelectedNoteIndex(null); } }}
-              className="w-full py-3 rounded-xl bg-red-50 active:bg-red-100 text-red-600 text-sm font-medium transition active:scale-95"
-            >
-              ✕ Delete note
-            </button>
-          </div>
-        )}
-
-        {/* Measure editing */}
-        {selectedMeasures.size > 0 && (
-          <div className="px-4 pb-8 space-y-3">
-            <p className="text-xs font-medium text-gray-400 text-center uppercase tracking-wide">
-              {selectedMeasures.size} measure{selectedMeasures.size > 1 ? "s" : ""} selected
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setCopiedMeasures(new Set(selectedMeasures))}
-                className="py-3 rounded-xl bg-gray-100 active:bg-gray-200 text-sm font-medium text-gray-700 transition active:scale-95"
-              >
-                Copy
-              </button>
-              <button
-                disabled={copiedMeasures.size === 0}
-                onClick={() => { if (musicXml && copiedMeasures.size > 0) onMusicXmlChange!(pasteMeasures(musicXml, [...copiedMeasures], Math.min(...selectedMeasures)), "Paste measures"); }}
-                className="py-3 rounded-xl bg-gray-100 active:bg-gray-200 disabled:opacity-30 text-sm font-medium text-gray-700 transition active:scale-95"
-              >
-                Paste
-              </button>
-              <button
-                onClick={() => { if (musicXml) onMusicXmlChange!(duplicateMeasures(musicXml, [...selectedMeasures].sort((a, b) => a - b)), "Duplicate measures"); }}
-                className="py-3 rounded-xl bg-gray-100 active:bg-gray-200 text-sm font-medium text-gray-700 transition active:scale-95"
-              >
-                Duplicate
-              </button>
-              <button
-                onClick={() => { if (musicXml) { onMusicXmlChange!(deleteMeasures(musicXml, [...selectedMeasures]), "Delete measures"); onClearMeasureSelection?.(); } }}
-                className="py-3 rounded-xl bg-red-50 active:bg-red-100 text-red-600 text-sm font-medium transition active:scale-95"
-              >
-                ✕ Delete
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── ToolBtn ──────────────────────────────────────────────────────────────────
-
-function ToolBtn({ onClick, title, danger, disabled, children }: {
-  onClick: () => void;
-  title?: string;
-  danger?: boolean;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      disabled={disabled}
-      className={`text-[11px] px-1.5 py-0.5 rounded transition shrink-0 ${
-        danger
-          ? "bg-red-50 hover:bg-red-100 text-red-600 disabled:opacity-30"
-          : "bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-30"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}

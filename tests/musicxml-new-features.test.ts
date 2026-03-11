@@ -30,7 +30,7 @@ import {
   addTremolo,
   addGlissando,
   addBreathMark,
-} from "../lib/musicxml";
+} from "../lib/music/musicxml";
 
 function score4() {
   let xml = createScore({ instruments: [{ name: "Piano" }], measures: 4 });

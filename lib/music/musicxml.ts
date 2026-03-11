@@ -5,6 +5,13 @@ import {
   transpose as mxlTranspose,
   removePart as mxlRemovePart,
 } from "musicxml-io";
+import {
+  SEMITONES_PER_OCTAVE,
+  DEFAULT_DIVISIONS,
+  DEFAULT_BEATS,
+  DEFAULT_BEAT_TYPE,
+  DEFAULT_TEMPO_BPM,
+} from "./constants";
 import type {
   Score, Part, Measure, MeasureEntry, NoteEntry, Pitch,
   MeasureAttributes, DirectionEntry, DirectionType,
@@ -44,25 +51,25 @@ function getDivisions(score: Score): number {
       if (m.attributes?.divisions) return m.attributes.divisions;
     }
   }
-  return 4;
+  return DEFAULT_DIVISIONS;
 }
 
 function getBeats(score: Score): number {
   for (const p of score.parts) {
     for (const m of p.measures) {
-      if (m.attributes?.time) return parseInt(m.attributes.time.beats) || 4;
+      if (m.attributes?.time) return parseInt(m.attributes.time.beats) || DEFAULT_BEATS;
     }
   }
-  return 4;
+  return DEFAULT_BEATS;
 }
 
 function getBeatType(score: Score): number {
   for (const p of score.parts) {
     for (const m of p.measures) {
-      if (m.attributes?.time) return m.attributes.time.beatType || 4;
+      if (m.attributes?.time) return m.attributes.time.beatType || DEFAULT_BEAT_TYPE;
     }
   }
-  return 4;
+  return DEFAULT_BEAT_TYPE;
 }
 
 function getFifths(score: Score): number {
@@ -922,9 +929,9 @@ export function addHairpin(
 
 
 function fifthsToSemitones(oldFifths: number, newFifths: number): number {
-  let semitones = ((newFifths - oldFifths) * 7) % 12;
-  if (semitones > 6) semitones -= 12;
-  if (semitones < -6) semitones += 12;
+  let semitones = ((newFifths - oldFifths) * 7) % SEMITONES_PER_OCTAVE;
+  if (semitones > 6) semitones -= SEMITONES_PER_OCTAVE;
+  if (semitones < -6) semitones += SEMITONES_PER_OCTAVE;
   return semitones;
 }
 
@@ -1070,8 +1077,8 @@ function transposePitch(
   let totalSemitone = baseSemitone + semitones;
   let newOctave = octave;
 
-  while (totalSemitone >= 12) { totalSemitone -= 12; newOctave++; }
-  while (totalSemitone < 0) { totalSemitone += 12; newOctave--; }
+  while (totalSemitone >= SEMITONES_PER_OCTAVE) { totalSemitone -= SEMITONES_PER_OCTAVE; newOctave++; }
+  while (totalSemitone < 0) { totalSemitone += SEMITONES_PER_OCTAVE; newOctave--; }
 
   const [newStep, newAlter] = NOTES[totalSemitone];
   return { step: newStep, alter: newAlter, octave: newOctave };
@@ -1537,8 +1544,8 @@ export function createScore(options: {
   pickupBeats?: number;
 }): string {
   const {
-    instruments, key = "C", beats = 4, beatType = 4,
-    tempo = 120, measures: measureCount = 4, pickupBeats,
+    instruments, key = "C", beats = DEFAULT_BEATS, beatType = DEFAULT_BEAT_TYPE,
+    tempo = DEFAULT_TEMPO_BPM, measures: measureCount = 4, pickupBeats,
   } = options;
 
   const fifths = KEY_ROOT_TO_FIFTHS[key] ?? 0;
