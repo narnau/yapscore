@@ -7,7 +7,7 @@ import { setLlmUserId } from "@/lib/agent/llm";
 export const maxDuration = 300;
 
 const modifySchema = z.object({
-  prompt:   z.string().min(1, "prompt is required"),
+  prompt: z.string().min(1, "prompt is required"),
   musicxml: z.string().min(1, "musicxml is required"),
   selectedMeasures: z.array(z.number()).optional(),
 });

@@ -8,16 +8,8 @@
  */
 
 import type { NoteSpec } from "./musicxml";
-import {
-  SEMITONES_PER_OCTAVE,
-  A4_MIDI_NUMBER,
-  A4_FREQUENCY_HZ,
-} from "./constants";
-import {
-  detectPitches as detectPitchesImpl,
-  hzToMidi,
-  midiToName,
-} from "./pitch-detection";
+import { SEMITONES_PER_OCTAVE, A4_MIDI_NUMBER, A4_FREQUENCY_HZ } from "./constants";
+import { detectPitches as detectPitchesImpl, hzToMidi, midiToName } from "./pitch-detection";
 
 // Re-export detectPitches so existing consumers (SingModal) keep working
 export { detectPitchesImpl as detectPitches };
@@ -42,18 +34,18 @@ export type SingResult = {
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const STEP_MAP: Record<string, { step: NoteSpec["step"]; alter: number }> = {
-  "C":  { step: "C", alter: 0 },
+  C: { step: "C", alter: 0 },
   "C#": { step: "C", alter: 1 },
-  "D":  { step: "D", alter: 0 },
+  D: { step: "D", alter: 0 },
   "D#": { step: "D", alter: 1 },
-  "E":  { step: "E", alter: 0 },
-  "F":  { step: "F", alter: 0 },
+  E: { step: "E", alter: 0 },
+  F: { step: "F", alter: 0 },
   "F#": { step: "F", alter: 1 },
-  "G":  { step: "G", alter: 0 },
+  G: { step: "G", alter: 0 },
   "G#": { step: "G", alter: 1 },
-  "A":  { step: "A", alter: 0 },
+  A: { step: "A", alter: 0 },
   "A#": { step: "A", alter: 1 },
-  "B":  { step: "B", alter: 0 },
+  B: { step: "B", alter: 0 },
 };
 
 // ─── Metronome ──────────────────────────────────────────────────────────────
@@ -111,7 +103,9 @@ export function startMetronome(
   scheduleBeat();
 
   return {
-    stop: () => { stopped = true; },
+    stop: () => {
+      stopped = true;
+    },
   };
 }
 
@@ -145,7 +139,7 @@ export async function startRecording(audioCtx: AudioContext): Promise<RecordingH
     stop: async () => {
       processor.disconnect();
       source.disconnect();
-      stream.getTracks().forEach(t => t.stop());
+      stream.getTracks().forEach((t) => t.stop());
 
       // Concatenate chunks into single AudioBuffer
       const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
@@ -176,9 +170,13 @@ function modeFilter(values: number[], halfWin: number): number[] {
     for (let j = i - halfWin; j <= i + halfWin; j++) {
       counts.set(values[j], (counts.get(values[j]) ?? 0) + 1);
     }
-    let best = values[i], bestCount = 0;
+    let best = values[i],
+      bestCount = 0;
     for (const [v, c] of counts) {
-      if (c > bestCount) { best = v; bestCount = c; }
+      if (c > bestCount) {
+        best = v;
+        bestCount = c;
+      }
     }
     out[i] = best;
   }
@@ -206,10 +204,13 @@ export function quantizePitches(
   const slotDuration = 60 / bpm / 2; // eighth note in seconds
   const totalSlots = measures * beats * 2;
 
-  if (process.env.NODE_ENV === "development") console.log(`[sing] quantizePitches (onset-based): bpm=${bpm}, beats=${beats}, measures=${measures}, totalSlots=${totalSlots}, slotDuration=${slotDuration.toFixed(3)}s`);
+  if (process.env.NODE_ENV === "development")
+    console.log(
+      `[sing] quantizePitches (onset-based): bpm=${bpm}, beats=${beats}, measures=${measures}, totalSlots=${totalSlots}, slotDuration=${slotDuration.toFixed(3)}s`,
+    );
 
   // Step 1: Convert to MIDI stream (0 = silence)
-  const midiStream = pitches.map(p => p.hz > 0 ? hzToMidi(p.hz) : 0);
+  const midiStream = pitches.map((p) => (p.hz > 0 ? hzToMidi(p.hz) : 0));
 
   // Step 2: Mode filter with ~70ms window (7 frames × 10ms)
   const smoothed = modeFilter(midiStream, 3);
@@ -218,20 +219,27 @@ export function quantizePitches(
   const segments: Segment[] = [];
   let i = 0;
   while (i < smoothed.length) {
-    if (smoothed[i] === 0) { i++; continue; }
+    if (smoothed[i] === 0) {
+      i++;
+      continue;
+    }
 
     const startIdx = i;
     const midi = smoothed[i];
     while (i < smoothed.length && smoothed[i] === midi) i++;
 
     const duration = (i - startIdx) * 0.01; // seconds
-    if (duration >= 0.08) { // ignore segments < 80ms
+    if (duration >= 0.08) {
+      // ignore segments < 80ms
       segments.push({
         startTime: pitches[startIdx].time,
         endTime: pitches[Math.min(i, pitches.length - 1)].time + 0.01,
         midi,
       });
-      if (process.env.NODE_ENV === "development") console.log(`[sing] segment: ${midiToName(midi)} t=${pitches[startIdx].time.toFixed(3)}-${(pitches[Math.min(i - 1, pitches.length - 1)].time + 0.01).toFixed(3)}s dur=${duration.toFixed(3)}s`);
+      if (process.env.NODE_ENV === "development")
+        console.log(
+          `[sing] segment: ${midiToName(midi)} t=${pitches[startIdx].time.toFixed(3)}-${(pitches[Math.min(i - 1, pitches.length - 1)].time + 0.01).toFixed(3)}s dur=${duration.toFixed(3)}s`,
+        );
     }
   }
 
@@ -249,11 +257,15 @@ export function quantizePitches(
     }
     if (centOffsets.length > 0) {
       const avgOffset = centOffsets.reduce((s, v) => s + v, 0) / centOffsets.length;
-      if (process.env.NODE_ENV === "development") console.log(`[sing] pitch correction: avgOffset=${(avgOffset * 100).toFixed(1)} cents from ${centOffsets.length} frames`);
+      if (process.env.NODE_ENV === "development")
+        console.log(
+          `[sing] pitch correction: avgOffset=${(avgOffset * 100).toFixed(1)} cents from ${centOffsets.length} frames`,
+        );
       if (Math.abs(avgOffset) > 0.3) {
         const correction = Math.round(avgOffset);
         if (correction !== 0) {
-          if (process.env.NODE_ENV === "development") console.log(`[sing] applying ${correction > 0 ? "-" : "+"}${Math.abs(correction)} semitone(s)`);
+          if (process.env.NODE_ENV === "development")
+            console.log(`[sing] applying ${correction > 0 ? "-" : "+"}${Math.abs(correction)} semitone(s)`);
           for (const seg of segments) seg.midi -= correction;
         }
       }
@@ -268,7 +280,8 @@ export function quantizePitches(
     const endSlot = Math.round(seg.endTime / slotDuration);
     const noteSlots = Math.max(1, endSlot - startSlot);
 
-    if (process.env.NODE_ENV === "development") console.log(`[sing] snap: ${midiToName(seg.midi)} → slot ${startSlot} for ${noteSlots} slot(s)`);
+    if (process.env.NODE_ENV === "development")
+      console.log(`[sing] snap: ${midiToName(seg.midi)} → slot ${startSlot} for ${noteSlots} slot(s)`);
 
     for (let s = startSlot; s < startSlot + noteSlots && s < totalSlots; s++) {
       if (s >= 0) slots[s] = seg.midi;
@@ -283,7 +296,10 @@ export function quantizePitches(
   }));
 
   if (process.env.NODE_ENV === "development") {
-    const summary = notes.filter(n => n.midi !== null).map(n => n.name).join(" ");
+    const summary = notes
+      .filter((n) => n.midi !== null)
+      .map((n) => n.name)
+      .join(" ");
     console.log(`[sing] result: ${summary || "(all rests)"}`);
   }
 
@@ -300,11 +316,7 @@ export type PlaybackHandle = {
  * Play detected notes back using simple oscillators.
  * Returns a handle to stop playback.
  */
-export function playDetectedNotes(
-  notes: DetectedNote[],
-  bpm: number,
-  onDone?: () => void,
-): PlaybackHandle {
+export function playDetectedNotes(notes: DetectedNote[], bpm: number, onDone?: () => void): PlaybackHandle {
   const audioCtx = new AudioContext();
   const slotDuration = 60 / bpm / 2; // eighth note in seconds
   let stopped = false;
@@ -345,15 +357,16 @@ export function playDetectedNotes(
   }
 
   // Schedule done callback
-  const totalDuration = notes.length > 0
-    ? (Math.max(...notes.map(n => n.slot)) + 1) * slotDuration
-    : 0;
-  const timeout = setTimeout(() => {
-    if (!stopped) {
-      audioCtx.close();
-      onDone?.();
-    }
-  }, (totalDuration + 0.1) * 1000);
+  const totalDuration = notes.length > 0 ? (Math.max(...notes.map((n) => n.slot)) + 1) * slotDuration : 0;
+  const timeout = setTimeout(
+    () => {
+      if (!stopped) {
+        audioCtx.close();
+        onDone?.();
+      }
+    },
+    (totalDuration + 0.1) * 1000,
+  );
 
   return {
     stop: () => {
@@ -394,13 +407,20 @@ function mergeConsecutive(notes: DetectedNote[]): MergedNote[] {
 function slotsToDuration(slots: number): NoteSpec["duration"] | null {
   // slots are in eighth-note units
   switch (slots) {
-    case 8: return "whole";
-    case 6: return "dotted-half";
-    case 4: return "half";
-    case 3: return "dotted-quarter";
-    case 2: return "quarter";
-    case 1: return "eighth";
-    default: return null; // can't represent directly
+    case 8:
+      return "whole";
+    case 6:
+      return "dotted-half";
+    case 4:
+      return "half";
+    case 3:
+      return "dotted-quarter";
+    case 2:
+      return "quarter";
+    case 1:
+      return "eighth";
+    default:
+      return null; // can't represent directly
   }
 }
 
@@ -408,10 +428,7 @@ function slotsToDuration(slots: number): NoteSpec["duration"] | null {
  * Convert DetectedNote[] for one measure into NoteSpec[].
  * Merges consecutive same-pitch notes into longer durations.
  */
-export function notesToNoteSpecs(
-  notes: DetectedNote[],
-  beats: number,
-): NoteSpec[] {
+export function notesToNoteSpecs(notes: DetectedNote[], beats: number): NoteSpec[] {
   const slotsPerMeasure = beats * 2;
   const specs: NoteSpec[] = [];
 
@@ -421,7 +438,7 @@ export function notesToNoteSpecs(
   for (const note of merged) {
     // Break long notes that cross measure boundaries or can't be represented
     let remaining = note.slots;
-    let currentMidi = note.midi;
+    const currentMidi = note.midi;
 
     while (remaining > 0) {
       // Find the largest representable duration that fits
@@ -430,7 +447,10 @@ export function notesToNoteSpecs(
       for (const s of trySlots) {
         if (s <= remaining) {
           const dur = slotsToDuration(s);
-          if (dur) { bestSlots = s; break; }
+          if (dur) {
+            bestSlots = s;
+            break;
+          }
         }
       }
 
@@ -474,10 +494,7 @@ export function notesToNoteSpecs(
 /**
  * Split DetectedNote[] into per-measure arrays.
  */
-export function splitByMeasure(
-  notes: DetectedNote[],
-  beats: number,
-): DetectedNote[][] {
+export function splitByMeasure(notes: DetectedNote[], beats: number): DetectedNote[][] {
   const slotsPerMeasure = beats * 2;
   const measures: DetectedNote[][] = [];
   let currentMeasure: DetectedNote[] = [];

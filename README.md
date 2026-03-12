@@ -60,15 +60,15 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 
 ### Useful Commands
 
-| Command | Description |
-|---------|-------------|
-| `bun run dev` | Dev server |
-| `bun run build` | Production build |
-| `bun run tsc --noEmit` | Type check |
-| `supabase start` | Start local Supabase |
-| `supabase stop` | Stop local Supabase |
-| `supabase db reset` | Wipe DB and re-run all migrations |
-| `supabase migration new <name>` | Create a new migration file |
+| Command                         | Description                       |
+| ------------------------------- | --------------------------------- |
+| `bun run dev`                   | Dev server                        |
+| `bun run build`                 | Production build                  |
+| `bun run tsc --noEmit`          | Type check                        |
+| `supabase start`                | Start local Supabase              |
+| `supabase stop`                 | Stop local Supabase               |
+| `supabase db reset`             | Wipe DB and re-run all migrations |
+| `supabase migration new <name>` | Create a new migration file       |
 
 ---
 
@@ -125,6 +125,7 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 4. Deploy
 
 Vercel will automatically:
+
 - Build and deploy on every push to `main`
 - Create preview deploys for every PR
 
@@ -132,10 +133,10 @@ Vercel will automatically:
 
 Go to your GitHub repo → **Settings > Secrets and variables > Actions** and add:
 
-| Secret | Where to get it |
-|--------|-----------------|
+| Secret                  | Where to get it                                                                        |
+| ----------------------- | -------------------------------------------------------------------------------------- |
 | `SUPABASE_ACCESS_TOKEN` | [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens) |
-| `SUPABASE_PROJECT_REF` | Project ref from your Supabase dashboard URL |
+| `SUPABASE_PROJECT_REF`  | Project ref from your Supabase dashboard URL                                           |
 
 ---
 
@@ -144,10 +145,12 @@ Go to your GitHub repo → **Settings > Secrets and variables > Actions** and ad
 Two GitHub Actions workflows run automatically:
 
 ### `ci.yml` — on every PR and push to `main`
+
 1. **Type check** — `tsc --noEmit`
 2. **Build** — `bun run build`
 
 ### `supabase.yml` — on push to `main` (migrations only)
+
 - Deploys new migration files to Supabase cloud via `supabase db push`
 
 ---

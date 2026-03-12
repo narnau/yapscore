@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import Logo from "@/components/shared/Logo";
 
 const NAV_LINKS = [
-  { href: "/docs",       label: "Docs" },
+  { href: "/docs", label: "Docs" },
   { href: "/developers", label: "Developers" },
 ];
 
@@ -19,7 +19,11 @@ export default function PublicNavbar({ loggedIn = false }: { loggedIn?: boolean 
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="text-xl font-bold text-gray-900 tracking-tight flex items-center">
-          <Logo size={24} className="text-brand-primary mr-1.5" />Yap<span className="text-brand-primary">Score</span><span className="ml-2 text-[10px] font-semibold tracking-wide uppercase px-1.5 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-amber-700">Beta</span>
+          <Logo size={24} className="text-brand-primary mr-1.5" />
+          Yap<span className="text-brand-primary">Score</span>
+          <span className="ml-2 text-[10px] font-semibold tracking-wide uppercase px-1.5 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-amber-700">
+            Beta
+          </span>
         </Link>
 
         {/* Desktop links */}
@@ -29,9 +33,7 @@ export default function PublicNavbar({ loggedIn = false }: { loggedIn?: boolean 
               key={href}
               href={href}
               className={`text-sm transition ${
-                pathname === href
-                  ? "text-brand-primary font-medium"
-                  : "text-gray-600 hover:text-gray-900"
+                pathname === href ? "text-brand-primary font-medium" : "text-gray-600 hover:text-gray-900"
               }`}
             >
               {label}
@@ -66,7 +68,11 @@ export default function PublicNavbar({ loggedIn = false }: { loggedIn?: boolean 
             </svg>
           ) : (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-              <path fillRule="evenodd" d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75ZM2 10a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 10Zm0 5.25a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75ZM2 10a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 10Zm0 5.25a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z"
+                clipRule="evenodd"
+              />
             </svg>
           )}
         </button>

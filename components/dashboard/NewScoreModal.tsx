@@ -3,11 +3,11 @@
 import { useState } from "react";
 
 const MELODIES = [
-  { file: "ode-to-joy.xml",        label: "Ode to Joy",               composer: "Beethoven" },
-  { file: "twinkle-twinkle.xml",   label: "Twinkle Twinkle",          composer: "Traditional" },
-  { file: "amazing-grace.xml",     label: "Amazing Grace",            composer: "Traditional" },
-  { file: "happy-birthday.xml",    label: "Happy Birthday",           composer: "Traditional" },
-  { file: "scarborough-fair.xml",  label: "Scarborough Fair",         composer: "Traditional" },
+  { file: "ode-to-joy.xml", label: "Ode to Joy", composer: "Beethoven" },
+  { file: "twinkle-twinkle.xml", label: "Twinkle Twinkle", composer: "Traditional" },
+  { file: "amazing-grace.xml", label: "Amazing Grace", composer: "Traditional" },
+  { file: "happy-birthday.xml", label: "Happy Birthday", composer: "Traditional" },
+  { file: "scarborough-fair.xml", label: "Scarborough Fair", composer: "Traditional" },
 ];
 
 const PROMPT_IDEAS = [
@@ -45,10 +45,7 @@ export default function NewScoreModal({ onPrompt, onMelody, onClose }: Props) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div
         role="dialog"
         aria-label="New score"
@@ -58,11 +55,7 @@ export default function NewScoreModal({ onPrompt, onMelody, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4">
           <p className="text-sm font-semibold text-gray-900">New score</p>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition"
-            title="Close"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition" title="Close">
             ✕
           </button>
         </div>
@@ -72,9 +65,7 @@ export default function NewScoreModal({ onPrompt, onMelody, onClose }: Props) {
           <button
             onClick={() => setTab("prompt")}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              tab === "prompt"
-                ? "bg-brand-primary text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              tab === "prompt" ? "bg-brand-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
             Write an idea
@@ -82,9 +73,7 @@ export default function NewScoreModal({ onPrompt, onMelody, onClose }: Props) {
           <button
             onClick={() => setTab("melody")}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              tab === "melody"
-                ? "bg-brand-primary text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              tab === "melody" ? "bg-brand-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
             Start with a melody
@@ -123,7 +112,9 @@ export default function NewScoreModal({ onPrompt, onMelody, onClose }: Props) {
                 ))}
               </div>
               <button
-                onClick={() => { if (prompt.trim()) onPrompt(prompt.trim()); }}
+                onClick={() => {
+                  if (prompt.trim()) onPrompt(prompt.trim());
+                }}
                 disabled={!prompt.trim()}
                 className="w-full py-2.5 rounded-xl bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-40 text-white text-sm font-medium transition"
               >
@@ -140,9 +131,7 @@ export default function NewScoreModal({ onPrompt, onMelody, onClose }: Props) {
                     disabled={!!loadingMelody}
                     className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 border border-gray-100 hover:border-gray-200 text-sm transition disabled:opacity-50 text-left"
                   >
-                    <span className="font-medium text-gray-800">
-                      {loadingMelody === m.file ? "Loading…" : m.label}
-                    </span>
+                    <span className="font-medium text-gray-800">{loadingMelody === m.file ? "Loading…" : m.label}</span>
                     <span className="text-xs text-brand-secondary">{m.composer}</span>
                   </button>
                 ))}

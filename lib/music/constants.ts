@@ -18,5 +18,5 @@ export const PERCUSSION_MIDI_CHANNEL = 10;
 export const DURATION_TOLERANCE = 0.02;
 
 // ── Vocal Range (for pitch detection) ────────────────────────────────────────
-export const VOCAL_RANGE_MIN_HZ = 65;   // ~C2
+export const VOCAL_RANGE_MIN_HZ = 65; // ~C2
 export const VOCAL_RANGE_MAX_HZ = 2093; // ~C7

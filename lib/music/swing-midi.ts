@@ -39,7 +39,7 @@ function writeVarLen(value: number): number[] {
 }
 
 function readUint32BE(data: Uint8Array, pos: number): number {
-  return (((data[pos] << 24) | (data[pos + 1] << 16) | (data[pos + 2] << 8) | data[pos + 3]) >>> 0);
+  return ((data[pos] << 24) | (data[pos + 1] << 16) | (data[pos + 2] << 8) | data[pos + 3]) >>> 0;
 }
 
 function writeUint32BE(val: number): number[] {
@@ -51,7 +51,7 @@ function writeUint32BE(val: number): number[] {
 type MidiEvent = {
   absoluteTick: number;
   order: number;
-  bytes: number[];       // raw MIDI bytes (without delta time)
+  bytes: number[]; // raw MIDI bytes (without delta time)
   isNoteOnOff: boolean;
 };
 
@@ -98,7 +98,7 @@ function parseTrack(data: Uint8Array, start: number, end: number): MidiEvent[] {
       }
 
       const type = (statusByte >> 4) & 0x0f;
-      const dataLen = (type === 0xc || type === 0xd) ? 1 : 2;
+      const dataLen = type === 0xc || type === 0xd ? 1 : 2;
       const dataBytes = Array.from(data.slice(pos, pos + dataLen));
       pos += dataLen;
       eventBytes = [statusByte, ...dataBytes];
@@ -147,16 +147,16 @@ export function applySwingToMidi(base64: string, ratio = 2 / 3): string {
     return base64;
   }
 
-  const headerLen  = readUint32BE(data, 4);
-  const ntracks    = readUint16BE(data, 10);
-  const division   = readUint16BE(data, 12);
+  const headerLen = readUint32BE(data, 4);
+  const ntracks = readUint16BE(data, 10);
+  const division = readUint16BE(data, 12);
 
   // Only handle ticks-per-beat (positive division); skip SMPTE
   if (division & 0x8000) return base64;
 
-  const halfBeat    = division / 2;                                 // ticks per straight eighth
-  const swingOffset = Math.round((ratio - 0.5) * division);        // extra ticks for off-beat
-  const tolerance   = Math.round(division * 0.15);                  // ±15% of a beat
+  const halfBeat = division / 2; // ticks per straight eighth
+  const swingOffset = Math.round((ratio - 0.5) * division); // extra ticks for off-beat
+  const tolerance = Math.round(division * 0.15); // ±15% of a beat
 
   const output: number[] = Array.from(data.slice(0, 8 + headerLen));
 
@@ -172,9 +172,9 @@ export function applySwingToMidi(base64: string, ratio = 2 / 3): string {
       continue;
     }
 
-    const trackLen   = readUint32BE(data, pos + 4);
+    const trackLen = readUint32BE(data, pos + 4);
     const trackStart = pos + 8;
-    const trackEnd   = trackStart + trackLen;
+    const trackEnd = trackStart + trackLen;
 
     const events = parseTrack(data, trackStart, trackEnd);
 
@@ -188,13 +188,11 @@ export function applySwingToMidi(base64: string, ratio = 2 / 3): string {
     }
 
     // Stable sort by absolute tick
-    events.sort((a, b) =>
-      a.absoluteTick !== b.absoluteTick ? a.absoluteTick - b.absoluteTick : a.order - b.order
-    );
+    events.sort((a, b) => (a.absoluteTick !== b.absoluteTick ? a.absoluteTick - b.absoluteTick : a.order - b.order));
 
     // End-of-Track (FF 2F 00) must always be the last event.
     // Swing can push note-off events past it, so re-pin it to the end.
-    const eotIdx = events.findIndex(ev => ev.bytes[0] === 0xff && ev.bytes[1] === 0x2f);
+    const eotIdx = events.findIndex((ev) => ev.bytes[0] === 0xff && ev.bytes[1] === 0x2f);
     if (eotIdx !== -1 && eotIdx !== events.length - 1) {
       const [eot] = events.splice(eotIdx, 1);
       eot.absoluteTick = Math.max(eot.absoluteTick, events[events.length - 1]?.absoluteTick ?? 0);

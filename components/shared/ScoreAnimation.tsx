@@ -20,46 +20,46 @@ const SCENARIOS: { prompt: string; notes: Note[] }[] = [
     prompt: "Write a gentle melody in C major",
     notes: [
       { x: 118, y: 90, ledger: true }, // C4  (below staff)
-      { x: 178, y: 80 },               // E4  (line 5)
-      { x: 238, y: 70 },               // G4  (line 4)
-      { x: 298, y: 55 },               // C5  (space 2-3)
+      { x: 178, y: 80 }, // E4  (line 5)
+      { x: 238, y: 70 }, // G4  (line 4)
+      { x: 298, y: 55 }, // C5  (space 2-3)
     ],
   },
   {
     prompt: "Make it descend — a falling phrase",
     notes: [
-      { x: 118, y: 55 },               // C5
-      { x: 178, y: 60 },               // B4  (line 3)
-      { x: 238, y: 65 },               // A4  (space 3-4)
-      { x: 298, y: 70 },               // G4  (line 4)
+      { x: 118, y: 55 }, // C5
+      { x: 178, y: 60 }, // B4  (line 3)
+      { x: 238, y: 65 }, // A4  (space 3-4)
+      { x: 298, y: 70 }, // G4  (line 4)
     ],
   },
   {
     prompt: "Write a waltz, let it breathe",
     notes: [
-      { x: 128, y: 70 },               // G4  — 3 beats, 3/4 time
-      { x: 218, y: 55 },               // C5
-      { x: 308, y: 45 },               // E5
+      { x: 128, y: 70 }, // G4  — 3 beats, 3/4 time
+      { x: 218, y: 55 }, // C5
+      { x: 308, y: 45 }, // E5
     ],
   },
 ];
 
 // ─── Timing (ms) ─────────────────────────────────────────────────────────────
-const CHAR_MS   = 42;
-const NOTE_MS   = 380;
-const PLAY_MS   = 280;  // highlight each note during "playback"
-const HOLD_MS   = 1600;
-const FADE_MS   = 500;
+const CHAR_MS = 42;
+const NOTE_MS = 380;
+const PLAY_MS = 280; // highlight each note during "playback"
+const HOLD_MS = 1600;
+const FADE_MS = 500;
 
 type Phase = "typing" | "appearing" | "playing" | "holding" | "fading";
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function ScoreAnimation() {
-  const [scene, setScene]           = useState(0);
-  const [chars, setChars]           = useState(0);
-  const [visible, setVisible]       = useState<number[]>([]);
-  const [lit, setLit]               = useState<number | null>(null); // playback highlight
-  const [phase, setPhase]           = useState<Phase>("typing");
+  const [scene, setScene] = useState(0);
+  const [chars, setChars] = useState(0);
+  const [visible, setVisible] = useState<number[]>([]);
+  const [lit, setLit] = useState<number | null>(null); // playback highlight
+  const [phase, setPhase] = useState<Phase>("typing");
   const [wrapperOpacity, setWrapperOpacity] = useState(1);
 
   const current = SCENARIOS[scene];
@@ -78,10 +78,7 @@ export default function ScoreAnimation() {
     // ── appearing ───────────────────────────────────────────────────────────
     if (phase === "appearing") {
       if (visible.length < current.notes.length) {
-        const t = setTimeout(
-          () => setVisible((v) => [...v, v.length]),
-          NOTE_MS
-        );
+        const t = setTimeout(() => setVisible((v) => [...v, v.length]), NOTE_MS);
         return () => clearTimeout(t);
       }
       const t = setTimeout(() => setPhase("playing"), 300);
@@ -146,16 +143,38 @@ export default function ScoreAnimation() {
         {/* Browser URL bar */}
         <div className="bg-gray-50 px-3 py-2.5 border-b border-gray-200 flex items-center gap-2">
           {/* Back / forward */}
-          <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg
+            className="w-4 h-4 text-gray-300 flex-shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
-          <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg
+            className="w-4 h-4 text-gray-300 flex-shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
           {/* URL pill */}
           <div className="flex-1 bg-white rounded-md border border-gray-200 px-2.5 py-1 flex items-center gap-1.5">
-            <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            <svg
+              className="w-3 h-3 text-gray-400 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+              />
             </svg>
             <span className="text-xs text-gray-400 tracking-wide">yapscore.ai/editor</span>
           </div>
@@ -163,19 +182,10 @@ export default function ScoreAnimation() {
 
         {/* Score area */}
         <div className="bg-white px-2 pt-5 pb-1">
-          <svg
-            viewBox="0 0 400 115"
-            className="w-full"
-            style={{ height: 115 }}
-            aria-hidden="true"
-          >
+          <svg viewBox="0 0 400 115" className="w-full" style={{ height: 115 }} aria-hidden="true">
             {/* Staff lines */}
             {STAFF_LINES.map((y) => (
-              <line
-                key={y}
-                x1="52" y1={y} x2="390" y2={y}
-                stroke="#E5E7EB" strokeWidth="1.5"
-              />
+              <line key={y} x1="52" y1={y} x2="390" y2={y} stroke="#E5E7EB" strokeWidth="1.5" />
             ))}
 
             {/* Bar line at start */}
@@ -183,7 +193,8 @@ export default function ScoreAnimation() {
 
             {/* Treble clef (Unicode 𝄞 in serif) */}
             <text
-              x="8" y="97"
+              x="8"
+              y="97"
               fontFamily="Georgia, 'Times New Roman', serif"
               fontSize="78"
               fill="#D1D5DB"
@@ -195,9 +206,9 @@ export default function ScoreAnimation() {
             {/* Notes */}
             {current.notes.map((note, i) => {
               const isVisible = visible.includes(i);
-              const isLit     = lit === i;
-              const stemUp    = note.y >= MIDDLE_LINE_Y;
-              const fill      = isLit ? "#F55D3E" : "#1F2937";
+              const isLit = lit === i;
+              const stemUp = note.y >= MIDDLE_LINE_Y;
+              const fill = isLit ? "#F55D3E" : "#1F2937";
 
               return (
                 <g
@@ -212,34 +223,38 @@ export default function ScoreAnimation() {
                   {/* Ledger line for notes below staff */}
                   {note.ledger && (
                     <line
-                      x1={note.x - 11} y1={note.y}
-                      x2={note.x + 11} y2={note.y}
-                      stroke={fill} strokeWidth="1.5"
+                      x1={note.x - 11}
+                      y1={note.y}
+                      x2={note.x + 11}
+                      y2={note.y}
+                      stroke={fill}
+                      strokeWidth="1.5"
                       style={{ transition: "stroke 0.2s" }}
                     />
                   )}
 
                   {/* Note head */}
-                  <ellipse
-                    cx={note.x} cy={note.y}
-                    rx="6" ry="4.5"
-                    fill={fill}
-                    style={{ transition: "fill 0.2s" }}
-                  />
+                  <ellipse cx={note.x} cy={note.y} rx="6" ry="4.5" fill={fill} style={{ transition: "fill 0.2s" }} />
 
                   {/* Stem */}
                   {stemUp ? (
                     <line
-                      x1={note.x + 5.5} y1={note.y - 3}
-                      x2={note.x + 5.5} y2={note.y - 30}
-                      stroke={fill} strokeWidth="1.5"
+                      x1={note.x + 5.5}
+                      y1={note.y - 3}
+                      x2={note.x + 5.5}
+                      y2={note.y - 30}
+                      stroke={fill}
+                      strokeWidth="1.5"
                       style={{ transition: "stroke 0.2s" }}
                     />
                   ) : (
                     <line
-                      x1={note.x - 5.5} y1={note.y + 3}
-                      x2={note.x - 5.5} y2={note.y + 30}
-                      stroke={fill} strokeWidth="1.5"
+                      x1={note.x - 5.5}
+                      y1={note.y + 3}
+                      x2={note.x - 5.5}
+                      y2={note.y + 30}
+                      stroke={fill}
+                      strokeWidth="1.5"
                       style={{ transition: "stroke 0.2s" }}
                     />
                   )}
@@ -272,8 +287,10 @@ export default function ScoreAnimation() {
             >
               <svg
                 className="w-3.5 h-3.5 text-white"
-                fill="none" viewBox="0 0 24 24"
-                stroke="currentColor" strokeWidth={2.5}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
               </svg>

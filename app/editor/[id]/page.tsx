@@ -18,7 +18,9 @@ import { capture } from "@/lib/telemetry/posthog";
 
 const DEBOUNCE_MS = 2000;
 
-function localKey(id: string) { return `file-${id}`; }
+function localKey(id: string) {
+  return `file-${id}`;
+}
 
 // ── component ─────────────────────────────────────────────────────────────────
 
@@ -55,10 +57,10 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   }, []);
 
   // Derived from history
-  const currentEntry  = hs.index >= 0 ? hs.entries[hs.index] : null;
-  const musicXml      = currentEntry?.musicXml ?? null;
-  const canUndo       = hs.index > 0;
-  const canRedo       = hs.index < hs.entries.length - 1;
+  const currentEntry = hs.index >= 0 ? hs.entries[hs.index] : null;
+  const musicXml = currentEntry?.musicXml ?? null;
+  const canUndo = hs.index > 0;
+  const canRedo = hs.index < hs.entries.length - 1;
 
   // Ref to always have latest state for the debounced save
   const savePayloadRef = useRef({ hs, messages, fileName });
@@ -80,13 +82,18 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           }
           if (name) setFileName(name);
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       if (hasCachedData) setLoaded(true);
 
       // 2. Load from DB (source of truth)
       try {
         const res = await fetch(`/api/files/${id}`);
-        if (res.status === 404) { router.replace("/editor"); return; }
+        if (res.status === 404) {
+          router.replace("/editor");
+          return;
+        }
         if (!res.ok) return;
         const { file } = await res.json();
         const history: HistoryEntry[] = file.history ?? [];
@@ -103,7 +110,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         }
 
         if (history.length === 0 && file.current_xml) {
-          const entries = [{ musicXml: file.current_xml, name: file.name, timestamp: file.updated_at, messages: [] as Message[] }];
+          const entries = [
+            { musicXml: file.current_xml, name: file.name, timestamp: file.updated_at, messages: [] as Message[] },
+          ];
           dispatch({ type: "restore", entries, index: 0 });
           setMessages([]);
         } else if (history.length === 0 && !file.current_xml) {
@@ -115,7 +124,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
               role: "system",
               text: "👋 I've set up a blank 4-measure piano score for you. Tell me what you'd like to create — a melody, a chord progression, an arrangement — or upload a .mscz file to get started!",
             };
-            const entries = [{ musicXml: defaultXml, name: null, timestamp: new Date().toISOString(), messages: [welcomeMsg] }];
+            const entries = [
+              { musicXml: defaultXml, name: null, timestamp: new Date().toISOString(), messages: [welcomeMsg] },
+            ];
             dispatch({ type: "restore", entries, index: 0 });
             setMessages([welcomeMsg]);
           }
@@ -123,20 +134,27 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           dispatch({ type: "restore", entries: history, index });
           setMessages(messagesAtIndex(history, index));
         }
-      } catch { /* ignore, use cache */ }
+      } catch {
+        /* ignore, use cache */
+      }
 
       setLoaded(true);
       capture("score_opened", { fileId: id, fileName });
     }
     let cancelled = false;
     load();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // ── fetch usage ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {});
+    fetch("/api/usage")
+      .then((r) => r.json())
+      .then(setUsage)
+      .catch(() => {});
   }, []);
 
   // ── auto-save ───────────────────────────────────────────────────────────────
@@ -150,12 +168,17 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
     // Write to localStorage immediately (messages are inside entries)
     try {
-      localStorage.setItem(localKey(id), JSON.stringify({
-        history: h.entries,
-        index: h.index,
-        fileName: name,
-      }));
-    } catch { /* quota */ }
+      localStorage.setItem(
+        localKey(id),
+        JSON.stringify({
+          history: h.entries,
+          index: h.index,
+          fileName: name,
+        }),
+      );
+    } catch {
+      /* quota */
+    }
 
     // Debounce DB write
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -179,16 +202,19 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         setSaveStatus("unsaved");
       }
     }, DEBOUNCE_MS);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hs, messages, fileName, loaded]);
 
   // ── navigation helpers (sync messages with history) ─────────────────────────
 
-  const navigateTo = useCallback((index: number) => {
-    dispatch({ type: "restore", entries: hsRef.current.entries, index });
-    setMessages(messagesAtIndex(hsRef.current.entries, index));
-    setSelectedMeasures(new Set());
-  }, [setMessages]);
+  const navigateTo = useCallback(
+    (index: number) => {
+      dispatch({ type: "restore", entries: hsRef.current.entries, index });
+      setMessages(messagesAtIndex(hsRef.current.entries, index));
+      setSelectedMeasures(new Set());
+    },
+    [setMessages],
+  );
 
   const handleUndo = useCallback(() => {
     if (hsRef.current.index <= 0) return;
@@ -257,7 +283,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       if (cached) {
         localStorage.setItem(localKey(id), JSON.stringify({ ...JSON.parse(cached), fileName: name }));
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     // Save to DB immediately — debounced effect won't fire (component is about to unmount)
     const { hs: h } = savePayloadRef.current;
     const current = h.index >= 0 ? h.entries[h.index] : null;
@@ -289,7 +317,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       const { id: newId } = await res.json();
       const url = prompt ? `/editor/${newId}?prompt=${encodeURIComponent(prompt)}` : `/editor/${newId}`;
       router.push(url);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   async function createNewFileFromMelody(xml: string, name: string) {
@@ -311,34 +341,36 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         }),
       });
       router.push(`/editor/${newId}`);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
-  const handleSwingChange = useCallback((enabled: boolean) => {
-    setSwingEnabled(enabled);
-    fetch(`/api/files/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ swing: enabled }),
-    }).catch(() => {});
-  }, [id]);
-
-  const handleScoreReady = useCallback(
-    (xml: string, label?: string) => {
-      setWaitingForInitialScore(false);
-      dispatch({
-        type: "push",
-        entry: {
-          musicXml: xml,
-          name: label ?? null,
-          timestamp: new Date().toISOString(),
-          messages: [...messagesRef.current],
-        },
-      });
-      setSelectedMeasures(new Set());
+  const handleSwingChange = useCallback(
+    (enabled: boolean) => {
+      setSwingEnabled(enabled);
+      fetch(`/api/files/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ swing: enabled }),
+      }).catch(() => {});
     },
-    []
+    [id],
   );
+
+  const handleScoreReady = useCallback((xml: string, label?: string) => {
+    setWaitingForInitialScore(false);
+    dispatch({
+      type: "push",
+      entry: {
+        musicXml: xml,
+        name: label ?? null,
+        timestamp: new Date().toISOString(),
+        messages: [...messagesRef.current],
+      },
+    });
+    setSelectedMeasures(new Set());
+  }, []);
 
   return (
     <main className="flex flex-col h-full bg-white text-gray-900">
@@ -371,9 +403,11 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
         {/* Chat — 34% on desktop, full width on mobile when chat tab active */}
-        <div className={`${
-          mobileTab === "chat" ? "flex" : "hidden"
-        } md:flex w-full md:w-[34%] md:min-w-[280px] border-r border-gray-200 flex-col`}>
+        <div
+          className={`${
+            mobileTab === "chat" ? "flex" : "hidden"
+          } md:flex w-full md:w-[34%] md:min-w-[280px] border-r border-gray-200 flex-col`}
+        >
           <ChatPanel
             currentMusicXml={musicXml}
             selectedMeasures={selectedMeasures}
@@ -382,14 +416,17 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             onClearSelection={() => setSelectedMeasures(new Set())}
             onScoreReady={handleScoreReady}
             initialPrompt={initialPrompt}
-            onUsageRefresh={() => fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {})}
+            onUsageRefresh={() =>
+              fetch("/api/usage")
+                .then((r) => r.json())
+                .then(setUsage)
+                .catch(() => {})
+            }
           />
         </div>
 
         {/* Score viewer — 66% on desktop, full width on mobile when score tab active */}
-        <div className={`${
-          mobileTab === "score" ? "flex" : "hidden"
-        } md:flex flex-1 flex-col`}>
+        <div className={`${mobileTab === "score" ? "flex" : "hidden"} md:flex flex-1 flex-col`}>
           <ScoreViewer
             musicXml={musicXml}
             scoreName={fileName}
@@ -441,8 +478,14 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       {/* New file modal */}
       {newModalOpen && (
         <NewScoreModal
-          onPrompt={(p) => { setNewModalOpen(false); createNewFile(p); }}
-          onMelody={(xml, name) => { setNewModalOpen(false); createNewFileFromMelody(xml, name); }}
+          onPrompt={(p) => {
+            setNewModalOpen(false);
+            createNewFile(p);
+          }}
+          onMelody={(xml, name) => {
+            setNewModalOpen(false);
+            createNewFileFromMelody(xml, name);
+          }}
           onClose={() => setNewModalOpen(false)}
         />
       )}
@@ -452,7 +495,14 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
 // ── Leave modal ───────────────────────────────────────────────────────────────
 
-function LeaveModal({ onDelete, onRename, onClose, title, description, deleteLabel }: {
+function LeaveModal({
+  onDelete,
+  onRename,
+  onClose,
+  title,
+  description,
+  deleteLabel,
+}: {
   onDelete: () => void;
   onRename: (name: string) => void;
   onClose: () => void;
@@ -464,17 +514,16 @@ function LeaveModal({ onDelete, onRename, onClose, title, description, deleteLab
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white border border-gray-200 rounded-xl p-6 w-80 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="bg-white border border-gray-200 rounded-xl p-6 w-80 space-y-4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <p className="text-sm font-medium text-gray-900">{title ?? "Untitled file"}</p>
             <p className="text-xs text-brand-secondary">{description ?? "Give it a name or delete it."}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition ml-4 mt-0.5"
-            title="Close"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition ml-4 mt-0.5" title="Close">
             ✕
           </button>
         </div>
@@ -498,7 +547,9 @@ function LeaveModal({ onDelete, onRename, onClose, title, description, deleteLab
             {deleteLabel ?? "Delete"}
           </button>
           <button
-            onClick={() => { if (name.trim()) onRename(name.trim()); }}
+            onClick={() => {
+              if (name.trim()) onRename(name.trim());
+            }}
             disabled={!name.trim()}
             className="flex-1 px-3 py-2 rounded-lg bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-40 text-white text-sm transition"
           >

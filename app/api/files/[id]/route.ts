@@ -5,22 +5,32 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getFile, saveFile, deleteFile } from "@/lib/editor/files";
 import { fixPercussionDisplayOctave } from "@/lib/music/musicxml";
 
-const patchSchema = z.object({
-  name: z.string().max(200).optional(),
-  current_xml: z.string().nullable().optional(),
-  history: z.array(z.object({
-    musicXml: z.string(),
-    name: z.string().nullable(),
-    timestamp: z.string(),
-    messages: z.array(z.object({ role: z.enum(["user", "system"]), text: z.string() })).optional(),
-  })).optional(),
-  messages: z.array(z.object({
-    role: z.enum(["user", "system"]),
-    text: z.string(),
-    suggestions: z.array(z.string()).optional(),
-  })).optional(),
-  swing: z.boolean().nullable().optional(),
-}).strict();
+const patchSchema = z
+  .object({
+    name: z.string().max(200).optional(),
+    current_xml: z.string().nullable().optional(),
+    history: z
+      .array(
+        z.object({
+          musicXml: z.string(),
+          name: z.string().nullable(),
+          timestamp: z.string(),
+          messages: z.array(z.object({ role: z.enum(["user", "system"]), text: z.string() })).optional(),
+        }),
+      )
+      .optional(),
+    messages: z
+      .array(
+        z.object({
+          role: z.enum(["user", "system"]),
+          text: z.string(),
+          suggestions: z.array(z.string()).optional(),
+        }),
+      )
+      .optional(),
+    swing: z.boolean().nullable().optional(),
+  })
+  .strict();
 
 type Ctx = { params: Promise<{ id: string }> };
 

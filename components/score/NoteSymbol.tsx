@@ -1,13 +1,16 @@
 import React from "react";
 
-export default function NoteSymbol({ dur }: { dur: 1|2|3|4|5|6|7 }) {
+export default function NoteSymbol({ dur }: { dur: 1 | 2 | 3 | 4 | 5 | 6 | 7 }) {
   const numFlags = [4, 3, 2, 1, 0, 0, 0][dur - 1];
   const filled = dur <= 5;
   const hasStem = dur <= 6;
   return (
     <svg viewBox="0 0 9 16" width="9" height="16" style={{ display: "inline-block", verticalAlign: "middle" }}>
       <ellipse
-        cx="3" cy="13" rx="2.8" ry="1.8"
+        cx="3"
+        cy="13"
+        rx="2.8"
+        ry="1.8"
         fill={filled ? "currentColor" : "none"}
         stroke={filled ? "none" : "currentColor"}
         strokeWidth="1.1"

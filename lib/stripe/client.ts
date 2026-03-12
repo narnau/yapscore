@@ -9,11 +9,7 @@ export async function createOrGetCustomer(userId: string, email: string): Promis
   const admin = createAdminClient();
 
   // Check if user already has a Stripe customer ID
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("stripe_customer_id")
-    .eq("id", userId)
-    .single();
+  const { data: profile } = await admin.from("profiles").select("stripe_customer_id").eq("id", userId).single();
 
   if (profile?.stripe_customer_id) {
     return profile.stripe_customer_id;
@@ -26,10 +22,7 @@ export async function createOrGetCustomer(userId: string, email: string): Promis
   });
 
   // Save to profile
-  await admin
-    .from("profiles")
-    .update({ stripe_customer_id: customer.id })
-    .eq("id", userId);
+  await admin.from("profiles").update({ stripe_customer_id: customer.id }).eq("id", userId);
 
   return customer.id;
 }

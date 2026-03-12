@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   // Extension allowlist — reject anything we don't handle
   const name = file.name.toLowerCase();
-  if (!ALLOWED_EXTENSIONS.some(ext => name.endsWith(ext))) {
+  if (!ALLOWED_EXTENSIONS.some((ext) => name.endsWith(ext))) {
     return NextResponse.json({ error: "Unsupported file type" }, { status: 415 });
   }
 
@@ -39,9 +39,7 @@ export async function POST(req: NextRequest) {
       // it's score.xml or the first .xml entry outside META-INF.
       const entry =
         zip.getEntry("score.xml") ??
-        zip.getEntries().find(
-          (e) => !e.entryName.startsWith("META-INF") && e.entryName.endsWith(".xml")
-        );
+        zip.getEntries().find((e) => !e.entryName.startsWith("META-INF") && e.entryName.endsWith(".xml"));
       if (!entry) return NextResponse.json({ error: "No XML found inside .mxl" }, { status: 400 });
       const musicXml = entry.getData().toString("utf8");
       return NextResponse.json({ musicXml });

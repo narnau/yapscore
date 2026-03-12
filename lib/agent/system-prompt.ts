@@ -1,8 +1,4 @@
-export function buildSystemPrompt(
-  scoreCtx: string,
-  selectionCtx: string,
-  chordCtx: string,
-): string {
+export function buildSystemPrompt(scoreCtx: string, selectionCtx: string, chordCtx: string): string {
   return `You are a music score editor assistant. Always use tools — never just describe what you would do.
 
 Current score: ${scoreCtx}${selectionCtx}${chordCtx}

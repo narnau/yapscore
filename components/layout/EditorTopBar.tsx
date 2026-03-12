@@ -63,31 +63,31 @@ export default function EditorTopBar({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const statusColor =
-    saveStatus === "saved"
-      ? "bg-green-400"
-      : saveStatus === "saving"
-      ? "bg-yellow-400"
-      : "bg-gray-400";
+    saveStatus === "saved" ? "bg-green-400" : saveStatus === "saving" ? "bg-yellow-400" : "bg-gray-400";
 
-  const statusLabel =
-    saveStatus === "saved"
-      ? "Saved"
-      : saveStatus === "saving"
-      ? "Saving..."
-      : "Unsaved";
+  const statusLabel = saveStatus === "saved" ? "Saved" : saveStatus === "saving" ? "Saving..." : "Unsaved";
 
   return (
     <div className="relative flex items-center px-3 py-2 border-b border-gray-200 bg-white shrink-0">
       {/* Centered logo (absolute so it doesn't affect layout) */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <Logo size={18} className="text-brand-primary mr-1" />
-        <span className="text-sm font-bold text-gray-900 tracking-tight">Yap<span className="text-brand-primary">Score</span></span><span className="ml-1.5 text-[9px] font-semibold tracking-wide uppercase px-1.5 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-amber-700">Beta</span>
+        <span className="text-sm font-bold text-gray-900 tracking-tight">
+          Yap<span className="text-brand-primary">Score</span>
+        </span>
+        <span className="ml-1.5 text-[9px] font-semibold tracking-wide uppercase px-1.5 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-amber-700">
+          Beta
+        </span>
       </div>
       {/* Left zone — Back */}
       <div className="flex items-center shrink-0">
         <button onClick={onBack} className={GHOST_BTN} title="All files">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-            <path fillRule="evenodd" d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 3.96a.75.75 0 1 1-1.04 1.08l-5.5-5.25a.75.75 0 0 1 0-1.08l5.5-5.25a.75.75 0 1 1 1.04 1.08L5.612 9.25H16.25A.75.75 0 0 1 17 10Z" clipRule="evenodd" />
+            <path
+              fillRule="evenodd"
+              d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 3.96a.75.75 0 1 1-1.04 1.08l-5.5-5.25a.75.75 0 0 1 0-1.08l5.5-5.25a.75.75 0 1 1 1.04 1.08L5.612 9.25H16.25A.75.75 0 0 1 17 10Z"
+              clipRule="evenodd"
+            />
           </svg>
         </button>
       </div>
@@ -119,9 +119,7 @@ export default function EditorTopBar({
 
         <div className="flex items-center gap-1 shrink-0" title={statusLabel}>
           <span className={`w-2 h-2 rounded-full ${statusColor}`} />
-          <span className="hidden md:inline text-xs text-brand-secondary">
-            {statusLabel}
-          </span>
+          <span className="hidden md:inline text-xs text-brand-secondary">{statusLabel}</span>
         </div>
       </div>
 
@@ -136,7 +134,11 @@ export default function EditorTopBar({
             className="p-1 rounded-md hover:bg-white text-gray-500 hover:text-gray-900 disabled:opacity-30 transition"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path fillRule="evenodd" d="M7.793 2.232a.75.75 0 0 1-.025 1.06L3.622 7.25h10.003a5.375 5.375 0 0 1 0 10.75H10.75a.75.75 0 0 1 0-1.5h2.875a3.875 3.875 0 0 0 0-7.75H3.622l4.146 3.957a.75.75 0 0 1-1.036 1.085l-5.5-5.25a.75.75 0 0 1 0-1.085l5.5-5.25a.75.75 0 0 1 1.06.025Z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M7.793 2.232a.75.75 0 0 1-.025 1.06L3.622 7.25h10.003a5.375 5.375 0 0 1 0 10.75H10.75a.75.75 0 0 1 0-1.5h2.875a3.875 3.875 0 0 0 0-7.75H3.622l4.146 3.957a.75.75 0 0 1-1.036 1.085l-5.5-5.25a.75.75 0 0 1 0-1.085l5.5-5.25a.75.75 0 0 1 1.06.025Z"
+                clipRule="evenodd"
+              />
             </svg>
           </button>
 
@@ -147,7 +149,11 @@ export default function EditorTopBar({
             className="p-1 rounded-md hover:bg-white text-gray-500 hover:text-gray-900 disabled:opacity-30 transition"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path fillRule="evenodd" d="M12.207 2.232a.75.75 0 0 1 1.06-.025l5.5 5.25a.75.75 0 0 1 0 1.085l-5.5 5.25a.75.75 0 0 1-1.036-1.085l4.146-3.957H6.375a3.875 3.875 0 0 0 0 7.75h2.875a.75.75 0 0 1 0 1.5H6.375a5.375 5.375 0 0 1 0-10.75h10.003L12.232 3.293a.75.75 0 0 1-.025-1.06Z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M12.207 2.232a.75.75 0 0 1 1.06-.025l5.5 5.25a.75.75 0 0 1 0 1.085l-5.5 5.25a.75.75 0 0 1-1.036-1.085l4.146-3.957H6.375a3.875 3.875 0 0 0 0 7.75h2.875a.75.75 0 0 1 0 1.5H6.375a5.375 5.375 0 0 1 0-10.75h10.003L12.232 3.293a.75.75 0 0 1-.025-1.06Z"
+                clipRule="evenodd"
+              />
             </svg>
           </button>
 
@@ -165,32 +171,38 @@ export default function EditorTopBar({
                 className="p-1 rounded-md hover:bg-white text-gray-500 hover:text-gray-900 transition"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5Z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5Z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </button>
               {historyOpen && (
                 <>
+                  <div className="fixed inset-0 z-10" onClick={() => setHistoryOpen(false)} />
                   <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setHistoryOpen(false)}
-                  />
-                  <div ref={historyListRef} role="listbox" className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
+                    ref={historyListRef}
+                    role="listbox"
+                    className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto"
+                  >
                     {historyEntries.map((entry, i) => (
                       <button
                         key={i}
                         role="option"
                         aria-selected={i === historyIndex}
                         {...(i === historyIndex ? { "data-active": "" } : {})}
-                        onClick={() => { onJumpTo(i); setHistoryOpen(false); }}
+                        onClick={() => {
+                          onJumpTo(i);
+                          setHistoryOpen(false);
+                        }}
                         className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition flex items-center gap-2 ${
                           i === historyIndex ? "text-brand-primary font-semibold" : "text-gray-700"
                         }`}
                       >
                         <span className="text-brand-secondary tabular-nums w-5 shrink-0">{i + 1}.</span>
                         <span className="truncate flex-1">{entry.name}</span>
-                        <span className="text-brand-secondary shrink-0 tabular-nums">
-                          {timeAgo(entry.timestamp)}
-                        </span>
+                        <span className="text-brand-secondary shrink-0 tabular-nums">{timeAgo(entry.timestamp)}</span>
                         {i === historyIndex && <span className="text-brand-primary">←</span>}
                       </button>
                     ))}
@@ -217,24 +229,20 @@ export default function EditorTopBar({
         )}
 
         {/* New file */}
-        <button
-          onClick={onNew}
-          className={GHOST_BTN}
-          title="New file"
-        >
+        <button onClick={onNew} className={GHOST_BTN} title="New file">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
             <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
           </svg>
         </button>
 
         {/* Docs */}
-        <button
-          onClick={onDocsOpen}
-          className={GHOST_BTN}
-          title="Documentation"
-        >
+        <button onClick={onDocsOpen} className={GHOST_BTN} title="Documentation">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-            <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
+            <path
+              fillRule="evenodd"
+              d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z"
+              clipRule="evenodd"
+            />
           </svg>
         </button>
       </div>

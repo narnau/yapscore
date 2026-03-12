@@ -31,8 +31,12 @@ beforeAll(() => {
 });
 
 function countOccurrences(xml: string, needle: string): number {
-  let n = 0, pos = 0;
-  while ((pos = xml.indexOf(needle, pos)) !== -1) { n++; pos++; }
+  let n = 0,
+    pos = 0;
+  while ((pos = xml.indexOf(needle, pos)) !== -1) {
+    n++;
+    pos++;
+  }
   return n;
 }
 
@@ -84,11 +88,7 @@ describe("[slow] tempo changes", () => {
 
 describe("[slow] staff-specific note clearing", () => {
   test("'delete left hand notes' only clears bass staff, not treble", async () => {
-    const result = await runAgent(
-      "Delete all the left hand notes",
-      pianoBass,
-      null
-    );
+    const result = await runAgent("Delete all the left hand notes", pianoBass, null);
     expect(result.type).toBe("modify");
     if (result.type !== "modify") return;
 
@@ -98,17 +98,12 @@ describe("[slow] staff-specific note clearing", () => {
 
     // Bass notes (G2, F2) should be gone
     // (They were below C4, so checking octave 2)
-    const g2present = result.musicXml.includes("<step>G</step>") &&
-      result.musicXml.includes("<octave>2</octave>");
+    const g2present = result.musicXml.includes("<step>G</step>") && result.musicXml.includes("<octave>2</octave>");
     expect(g2present).toBe(false);
   }, 30_000);
 
   test("'delete right hand notes' only clears treble staff, not bass", async () => {
-    const result = await runAgent(
-      "Delete all the right hand (treble clef) notes",
-      pianoBass,
-      null
-    );
+    const result = await runAgent("Delete all the right hand (treble clef) notes", pianoBass, null);
     expect(result.type).toBe("modify");
     if (result.type !== "modify") return;
 
@@ -124,7 +119,7 @@ describe("[slow] chord symbols", () => {
     const result = await runAgent(
       "Add these chord symbols: measure 1 = Cmaj7, measure 2 = Am7, measure 3 = Dm7, measure 4 = G7",
       piano4,
-      null
+      null,
     );
     expect(result.type).toBe("modify");
     if (result.type !== "modify") return;
@@ -139,7 +134,7 @@ describe("[slow] chord symbols", () => {
     const result = await runAgent(
       "Add a ii-V-I jazz chord progression repeating over 8 measures: Dm7, G7, Cmaj7, Cmaj7 (repeat twice)",
       piano4,
-      null
+      null,
     );
     expect(result.type).toBe("modify");
     if (result.type !== "modify") return;
@@ -154,18 +149,14 @@ describe("[slow] chord symbols", () => {
     const withChords = addChordSymbols(piano4, 1, [{ root: "C", kind: "maj7" }]).xml;
 
     // Ask agent to change it to Fmaj7
-    const result = await runAgent(
-      "Change the chord in measure 1 to Fmaj7",
-      withChords,
-      null
-    );
+    const result = await runAgent("Change the chord in measure 1 to Fmaj7", withChords, null);
     expect(result.type).toBe("modify");
     if (result.type !== "modify") return;
 
     // Measure 1 should have exactly 1 chord symbol
     // (rough check: count harmonies in the first measure block)
     const m1Start = result.musicXml.indexOf('<measure number="1"');
-    const m1End = result.musicXml.indexOf('</measure>', m1Start);
+    const m1End = result.musicXml.indexOf("</measure>", m1Start);
     const m1 = result.musicXml.slice(m1Start, m1End);
     expect(countOccurrences(m1, "<harmony")).toBe(1);
     expect(m1).toContain("<root-step>F</root-step>");
@@ -195,10 +186,15 @@ describe("[slow] dynamics", () => {
 describe("[slow] articulations", () => {
   test("adds staccato to all notes", async () => {
     const xml = createScore({ instruments: [{ name: "Piano" }], measures: 2 });
-    const withNotes = setMeasureNotes(xml, 1, [
-      { step: "C", octave: 4, duration: "quarter" },
-      { step: "D", octave: 4, duration: "quarter" },
-    ], "P1");
+    const withNotes = setMeasureNotes(
+      xml,
+      1,
+      [
+        { step: "C", octave: 4, duration: "quarter" },
+        { step: "D", octave: 4, duration: "quarter" },
+      ],
+      "P1",
+    );
 
     const result = await runAgent("Add staccato to all notes", withNotes, null);
     expect(result.type).toBe("modify");
@@ -213,25 +209,23 @@ describe("[slow] articulations", () => {
     });
     const withNotes = setMeasureNotes(
       setMeasureNotes(xml, 1, [{ step: "C", octave: 5, duration: "quarter" }], "P1"),
-      1, [{ step: "G", octave: 4, duration: "quarter" }], "P2"
+      1,
+      [{ step: "G", octave: 4, duration: "quarter" }],
+      "P2",
     );
 
-    const result = await runAgent(
-      "Add staccato only to the flute part",
-      withNotes,
-      null
-    );
+    const result = await runAgent("Add staccato only to the flute part", withNotes, null);
     expect(result.type).toBe("modify");
     if (result.type !== "modify") return;
 
     // Find P2 (piano) section — should NOT have staccato
     const p2Start = result.musicXml.indexOf('<part id="P2"');
-    const p2End = result.musicXml.indexOf('</part>', p2Start);
+    const p2End = result.musicXml.indexOf("</part>", p2Start);
     expect(result.musicXml.slice(p2Start, p2End)).not.toContain("<staccato/>");
 
     // P1 (flute) should have staccato
     const p1Start = result.musicXml.indexOf('<part id="P1"');
-    const p1End = result.musicXml.indexOf('</part>', p1Start);
+    const p1End = result.musicXml.indexOf("</part>", p1Start);
     expect(result.musicXml.slice(p1Start, p1End)).toContain("<staccato/>");
   }, 30_000);
 });

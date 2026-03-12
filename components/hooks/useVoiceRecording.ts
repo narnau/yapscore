@@ -36,7 +36,7 @@ export function useVoiceRecording(
       };
 
       recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
+        stream.getTracks().forEach((t) => t.stop());
         setRecording(false);
         setRecordingSecs(0);
 
@@ -66,7 +66,7 @@ export function useVoiceRecording(
       setRecordingSecs(0);
       setRecording(true);
       capture("voice_recording_started");
-      recordingTimerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000);
+      recordingTimerRef.current = setInterval(() => setRecordingSecs((s) => s + 1), 1000);
     } catch {
       // microphone permission denied or unavailable
     }

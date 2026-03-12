@@ -4,9 +4,15 @@ import { useState, useRef } from "react";
 import { capture } from "@/lib/telemetry/posthog";
 import { setTempo } from "@/lib/music/musicxml";
 
-const FIFTHS_KEYS = ["Cb","Gb","Db","Ab","Eb","Bb","F","C","G","D","A","E","B","F#","C#"];
+const FIFTHS_KEYS = ["Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F", "C", "G", "D", "A", "E", "B", "F#", "C#"];
 
-export default function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: string; onTempoChange?: (bpm: number) => void }) {
+export default function ScoreInfoBar({
+  musicXml,
+  onTempoChange,
+}: {
+  musicXml: string;
+  onTempoChange?: (bpm: number) => void;
+}) {
   const instruments = [...musicXml.matchAll(/<part-name>([^<]+)<\/part-name>/g)]
     .map((m) => m[1].trim())
     .filter(Boolean)
@@ -24,9 +30,7 @@ export default function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: st
 
   // Count measures in first part only
   const firstPart = musicXml.match(/<part\b[^>]*>[\s\S]*?<\/part>/);
-  const measureCount = firstPart
-    ? (firstPart[0].match(/<measure\b/g) ?? []).length
-    : 0;
+  const measureCount = firstPart ? (firstPart[0].match(/<measure\b/g) ?? []).length : 0;
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(tempo);
@@ -40,7 +44,10 @@ export default function ScoreInfoBar({ musicXml, onTempoChange }: { musicXml: st
   }
 
   function commit(value: number) {
-    if (committedRef.current) { setEditing(false); return; }
+    if (committedRef.current) {
+      setEditing(false);
+      return;
+    }
     const bpm = Math.round(value);
     if (bpm >= 20 && bpm <= 300 && bpm !== tempo) {
       committedRef.current = true;

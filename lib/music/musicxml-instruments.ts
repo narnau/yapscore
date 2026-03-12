@@ -15,13 +15,8 @@ import {
   instrumentStaves,
   nextMidiChannel,
 } from "./musicxml-core";
-import {
-  DEFAULT_MIDI_VOLUME,
-  PERCUSSION_MIDI_CHANNEL,
-} from "./constants";
-import type {
-  Score, Part, Measure, PartInfo, BackupEntry,
-} from "musicxml-io";
+import { DEFAULT_MIDI_VOLUME, PERCUSSION_MIDI_CHANNEL } from "./constants";
+import type { Score, Part, Measure, PartInfo, BackupEntry } from "musicxml-io";
 
 // ─── Drum catalog ────────────────────────────────────────────────────────────
 
@@ -36,17 +31,105 @@ export type DrumSound = {
 };
 
 export const DRUM_CATALOG: Record<string, DrumSound> = {
-  "bass-drum":    { instrumentName: "Bass Drum 1",    instrumentId: "X36", midiUnpitched: 36, displayStep: "C", displayOctave: 4, notehead: "normal",   defaultVoice: 2 },
-  "snare":        { instrumentName: "Acoustic Snare", instrumentId: "X38", midiUnpitched: 39, displayStep: "C", displayOctave: 5, notehead: "normal",   defaultVoice: 1 },
-  "hi-hat":       { instrumentName: "Closed Hi-Hat",  instrumentId: "X42", midiUnpitched: 43, displayStep: "G", displayOctave: 5, notehead: "x",        defaultVoice: 1 },
-  "open-hi-hat":  { instrumentName: "Open Hi-Hat",    instrumentId: "X46", midiUnpitched: 47, displayStep: "G", displayOctave: 5, notehead: "circle-x", defaultVoice: 1 },
-  "hi-hat-pedal": { instrumentName: "Pedal Hi-Hat",   instrumentId: "X44", midiUnpitched: 45, displayStep: "G", displayOctave: 3, notehead: "x",        defaultVoice: 2 },
-  "floor-tom":    { instrumentName: "Low Floor Tom",  instrumentId: "X41", midiUnpitched: 42, displayStep: "A", displayOctave: 3, notehead: "normal",   defaultVoice: 2 },
-  "low-tom":      { instrumentName: "Low-Mid Tom",    instrumentId: "X47", midiUnpitched: 48, displayStep: "F", displayOctave: 4, notehead: "normal",   defaultVoice: 1 },
-  "mid-tom":      { instrumentName: "Hi-Mid Tom",     instrumentId: "X48", midiUnpitched: 49, displayStep: "A", displayOctave: 4, notehead: "normal",   defaultVoice: 1 },
-  "high-tom":     { instrumentName: "High Tom",       instrumentId: "X50", midiUnpitched: 51, displayStep: "D", displayOctave: 5, notehead: "normal",   defaultVoice: 1 },
-  "crash":        { instrumentName: "Crash Cymbal 1", instrumentId: "X49", midiUnpitched: 50, displayStep: "A", displayOctave: 5, notehead: "x",        defaultVoice: 1 },
-  "ride":         { instrumentName: "Ride Cymbal 1",  instrumentId: "X51", midiUnpitched: 52, displayStep: "F", displayOctave: 5, notehead: "x",        defaultVoice: 1 },
+  "bass-drum": {
+    instrumentName: "Bass Drum 1",
+    instrumentId: "X36",
+    midiUnpitched: 36,
+    displayStep: "C",
+    displayOctave: 4,
+    notehead: "normal",
+    defaultVoice: 2,
+  },
+  snare: {
+    instrumentName: "Acoustic Snare",
+    instrumentId: "X38",
+    midiUnpitched: 39,
+    displayStep: "C",
+    displayOctave: 5,
+    notehead: "normal",
+    defaultVoice: 1,
+  },
+  "hi-hat": {
+    instrumentName: "Closed Hi-Hat",
+    instrumentId: "X42",
+    midiUnpitched: 43,
+    displayStep: "G",
+    displayOctave: 5,
+    notehead: "x",
+    defaultVoice: 1,
+  },
+  "open-hi-hat": {
+    instrumentName: "Open Hi-Hat",
+    instrumentId: "X46",
+    midiUnpitched: 47,
+    displayStep: "G",
+    displayOctave: 5,
+    notehead: "circle-x",
+    defaultVoice: 1,
+  },
+  "hi-hat-pedal": {
+    instrumentName: "Pedal Hi-Hat",
+    instrumentId: "X44",
+    midiUnpitched: 45,
+    displayStep: "G",
+    displayOctave: 3,
+    notehead: "x",
+    defaultVoice: 2,
+  },
+  "floor-tom": {
+    instrumentName: "Low Floor Tom",
+    instrumentId: "X41",
+    midiUnpitched: 42,
+    displayStep: "A",
+    displayOctave: 3,
+    notehead: "normal",
+    defaultVoice: 2,
+  },
+  "low-tom": {
+    instrumentName: "Low-Mid Tom",
+    instrumentId: "X47",
+    midiUnpitched: 48,
+    displayStep: "F",
+    displayOctave: 4,
+    notehead: "normal",
+    defaultVoice: 1,
+  },
+  "mid-tom": {
+    instrumentName: "Hi-Mid Tom",
+    instrumentId: "X48",
+    midiUnpitched: 49,
+    displayStep: "A",
+    displayOctave: 4,
+    notehead: "normal",
+    defaultVoice: 1,
+  },
+  "high-tom": {
+    instrumentName: "High Tom",
+    instrumentId: "X50",
+    midiUnpitched: 51,
+    displayStep: "D",
+    displayOctave: 5,
+    notehead: "normal",
+    defaultVoice: 1,
+  },
+  crash: {
+    instrumentName: "Crash Cymbal 1",
+    instrumentId: "X49",
+    midiUnpitched: 50,
+    displayStep: "A",
+    displayOctave: 5,
+    notehead: "x",
+    defaultVoice: 1,
+  },
+  ride: {
+    instrumentName: "Ride Cymbal 1",
+    instrumentId: "X51",
+    midiUnpitched: 52,
+    displayStep: "F",
+    displayOctave: 5,
+    notehead: "x",
+    defaultVoice: 1,
+  },
 };
 
 // ─── fixPercussionDisplayOctave ──────────────────────────────────────────────
@@ -54,9 +137,7 @@ export const DRUM_CATALOG: Record<string, DrumSound> = {
 export function fixPercussionDisplayOctave(musicXml: string): string {
   const score = mxlParse(musicXml);
   for (const part of score.parts) {
-    const isPerc = part.measures.some(m =>
-      m.attributes?.clef?.some(c => c.sign === "percussion")
-    );
+    const isPerc = part.measures.some((m) => m.attributes?.clef?.some((c) => c.sign === "percussion"));
     if (!isPerc) continue;
     for (const m of part.measures) {
       for (const entry of m.entries) {
@@ -88,7 +169,7 @@ export function addPart(musicXml: string, instrument: ScoreInstrument): string {
   const score = mxlParse(musicXml);
 
   // Find next part ID
-  const existingNums = score.parts.map(p => parseInt(p.id.replace("P", "")) || 0);
+  const existingNums = score.parts.map((p) => parseInt(p.id.replace("P", "")) || 0);
   const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
   const partId = `P${nextNum}`;
   const isPercussion = instrument.percussion === true;
@@ -112,7 +193,10 @@ export function addPart(musicXml: string, instrument: ScoreInstrument): string {
     id: partId,
     name: instrument.name,
     scoreInstruments: isPercussion
-      ? Object.entries(DRUM_CATALOG).map(([, drum]) => ({ id: `${partId}-${drum.instrumentId}`, name: drum.instrumentName }))
+      ? Object.entries(DRUM_CATALOG).map(([, drum]) => ({
+          id: `${partId}-${drum.instrumentId}`,
+          name: drum.instrumentName,
+        }))
       : [{ id: `${partId}-I1`, name: instrument.name }],
     midiInstruments: isPercussion
       ? Object.entries(DRUM_CATALOG).map(([, drum]) => ({
@@ -123,13 +207,15 @@ export function addPart(musicXml: string, instrument: ScoreInstrument): string {
           volume: DEFAULT_MIDI_VOLUME,
           pan: 0,
         }))
-      : [{
-          id: `${partId}-I1`,
-          channel: nextMidiChannel(score),
-          program: midiProgram,
-          volume: DEFAULT_MIDI_VOLUME,
-          pan: 0,
-        }],
+      : [
+          {
+            id: `${partId}-I1`,
+            channel: nextMidiChannel(score),
+            program: midiProgram,
+            volume: DEFAULT_MIDI_VOLUME,
+            pan: 0,
+          },
+        ],
   };
   score.partList.push(partInfo);
 
@@ -206,11 +292,7 @@ export function renamePart(musicXml: string, partId: string, name: string): stri
 
 // ─── changeInstrument ───────────────────────────────────────────────────────
 
-export function changeInstrument(
-  musicXml: string,
-  partId: string,
-  instrument: ScoreInstrument,
-): string {
+export function changeInstrument(musicXml: string, partId: string, instrument: ScoreInstrument): string {
   let xml = renamePart(musicXml, partId, instrument.name);
 
   if (instrument.midiProgram != null) {
@@ -241,7 +323,7 @@ export function changeClef(
   musicXml: string,
   partId: string,
   clef: "treble" | "bass" | "alto" | "tenor",
-  staffNumber?: number
+  staffNumber?: number,
 ): string {
   const { sign, line } = clefToSignLine(clef);
   const score = mxlParse(musicXml);
@@ -255,7 +337,7 @@ export function changeClef(
   const clefs = firstMeasure.attributes.clef;
 
   if (staffNumber != null) {
-    const target = clefs.find(c => c.staff === staffNumber);
+    const target = clefs.find((c) => c.staff === staffNumber);
     if (target) {
       target.sign = sign;
       target.line = line;
@@ -263,7 +345,7 @@ export function changeClef(
       clefs.push({ sign, line, staff: staffNumber });
     }
   } else {
-    const target = clefs.find(c => !c.staff) ?? clefs[0];
+    const target = clefs.find((c) => !c.staff) ?? clefs[0];
     if (target) {
       target.sign = sign;
       target.line = line;
@@ -279,34 +361,29 @@ export function movePart(musicXml: string, partId: string, direction: "up" | "do
   const score = mxlParse(musicXml);
 
   // Find part-list index
-  const plIdx = score.partList.findIndex(
-    (e): e is PartInfo => e.type === "score-part" && e.id === partId
-  );
+  const plIdx = score.partList.findIndex((e): e is PartInfo => e.type === "score-part" && e.id === partId);
   if (plIdx === -1) throw new Error(`Part "${partId}" not found`);
 
   // Find next/prev score-part (skip part-groups)
-  const swapPlIdx = direction === "up"
-    ? [...score.partList.slice(0, plIdx)].reverse().findIndex(e => e.type === "score-part")
-    : score.partList.slice(plIdx + 1).findIndex(e => e.type === "score-part");
+  const swapPlIdx =
+    direction === "up"
+      ? [...score.partList.slice(0, plIdx)].reverse().findIndex((e) => e.type === "score-part")
+      : score.partList.slice(plIdx + 1).findIndex((e) => e.type === "score-part");
 
-  const actualSwapPlIdx = direction === "up"
-    ? plIdx - 1 - swapPlIdx
-    : plIdx + 1 + swapPlIdx;
+  const actualSwapPlIdx = direction === "up" ? plIdx - 1 - swapPlIdx : plIdx + 1 + swapPlIdx;
 
   if (swapPlIdx === -1 || actualSwapPlIdx < 0 || actualSwapPlIdx >= score.partList.length) {
     throw new Error(`Cannot move part "${partId}" ${direction} — already at boundary`);
   }
 
   // Swap in part-list
-  [score.partList[plIdx], score.partList[actualSwapPlIdx]] =
-    [score.partList[actualSwapPlIdx], score.partList[plIdx]];
+  [score.partList[plIdx], score.partList[actualSwapPlIdx]] = [score.partList[actualSwapPlIdx], score.partList[plIdx]];
 
   // Swap in parts array
-  const pIdx = score.parts.findIndex(p => p.id === partId);
+  const pIdx = score.parts.findIndex((p) => p.id === partId);
   const pSwap = direction === "up" ? pIdx - 1 : pIdx + 1;
   if (pIdx !== -1 && pSwap >= 0 && pSwap < score.parts.length) {
-    [score.parts[pIdx], score.parts[pSwap]] =
-      [score.parts[pSwap], score.parts[pIdx]];
+    [score.parts[pIdx], score.parts[pSwap]] = [score.parts[pSwap], score.parts[pIdx]];
   }
 
   return mxlSerialize(score);

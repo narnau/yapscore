@@ -23,9 +23,7 @@ import {
   DEFAULT_MIDI_VOLUME,
   PERCUSSION_MIDI_CHANNEL,
 } from "./constants";
-import type {
-  Score, Part, Measure, PartInfo, BackupEntry, ScoreMetadata,
-} from "musicxml-io";
+import type { Score, Part, Measure, PartInfo, BackupEntry, ScoreMetadata } from "musicxml-io";
 
 // Re-export buildContext and fifthsToKey from core (they are score-related)
 export { buildContext, fifthsToKey };
@@ -50,8 +48,13 @@ export function createScore(options: {
   pickupBeats?: number;
 }): string {
   const {
-    instruments, key = "C", beats = DEFAULT_BEATS, beatType = DEFAULT_BEAT_TYPE,
-    tempo = DEFAULT_TEMPO_BPM, measures: measureCount = 4, pickupBeats,
+    instruments,
+    key = "C",
+    beats = DEFAULT_BEATS,
+    beatType = DEFAULT_BEAT_TYPE,
+    tempo = DEFAULT_TEMPO_BPM,
+    measures: measureCount = 4,
+    pickupBeats,
   } = options;
 
   const fifths = KEY_ROOT_TO_FIFTHS[key] ?? 0;
@@ -71,7 +74,7 @@ export function createScore(options: {
     const id = `P${i + 1}`;
     const isPercussion = inst.percussion === true;
     const staves = isPercussion ? 1 : (inst.staves ?? instrumentStaves(inst.name));
-    const midiChannel = isPercussion ? PERCUSSION_MIDI_CHANNEL : ((i + 1) >= 10 ? i + 2 : i + 1);
+    const midiChannel = isPercussion ? PERCUSSION_MIDI_CHANNEL : i + 1 >= 10 ? i + 2 : i + 1;
     const midiProgram = inst.midiProgram ?? 1;
 
     // Part list entry
@@ -81,7 +84,10 @@ export function createScore(options: {
       id,
       name: inst.name,
       scoreInstruments: isPercussion
-        ? Object.entries(DRUM_CATALOG).map(([, drum]) => ({ id: `${id}-${drum.instrumentId}`, name: drum.instrumentName }))
+        ? Object.entries(DRUM_CATALOG).map(([, drum]) => ({
+            id: `${id}-${drum.instrumentId}`,
+            name: drum.instrumentName,
+          }))
         : [{ id: `${id}-I1`, name: inst.name }],
       midiInstruments: isPercussion
         ? Object.entries(DRUM_CATALOG).map(([, drum]) => ({
@@ -92,13 +98,15 @@ export function createScore(options: {
             volume: DEFAULT_MIDI_VOLUME,
             pan: 0,
           }))
-        : [{
-            id: `${id}-I1`,
-            channel: midiChannel,
-            program: midiProgram,
-            volume: DEFAULT_MIDI_VOLUME,
-            pan: 0,
-          }],
+        : [
+            {
+              id: `${id}-I1`,
+              channel: midiChannel,
+              program: midiProgram,
+              volume: DEFAULT_MIDI_VOLUME,
+              pan: 0,
+            },
+          ],
     };
     score.partList.push(partInfo);
 
@@ -201,7 +209,7 @@ export function setScoreMetadata(musicXml: string, meta: ScoreMetadataInput): st
   for (const { key, type } of creatorFields) {
     if (meta[key] === undefined) continue;
     if (!score.metadata.creators) score.metadata.creators = [];
-    const idx = score.metadata.creators.findIndex(c => c.type === type);
+    const idx = score.metadata.creators.findIndex((c) => c.type === type);
     if (idx !== -1) {
       score.metadata.creators[idx].value = meta[key] as string;
     } else {

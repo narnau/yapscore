@@ -88,7 +88,7 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
     setRevoking(id);
     const res = await fetch(`/api/keys/${id}`, { method: "DELETE" });
     if (res.ok || res.status === 204) {
-      setKeys((prev) => prev.map((k) => k.id === id ? { ...k, revoked_at: new Date().toISOString() } : k));
+      setKeys((prev) => prev.map((k) => (k.id === id ? { ...k, revoked_at: new Date().toISOString() } : k)));
     }
     setRevoking(null);
   }
@@ -141,7 +141,11 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
             title="Dashboard"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-              <path fillRule="evenodd" d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 3.96a.75.75 0 1 1-1.04 1.08l-5.5-5.25a.75.75 0 0 1 0-1.08l5.5-5.25a.75.75 0 1 1 1.04 1.08L5.612 9.25H16.25A.75.75 0 0 1 17 10Z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 3.96a.75.75 0 1 1-1.04 1.08l-5.5-5.25a.75.75 0 0 1 0-1.08l5.5-5.25a.75.75 0 1 1 1.04 1.08L5.612 9.25H16.25A.75.75 0 0 1 17 10Z"
+                clipRule="evenodd"
+              />
             </svg>
           </Link>
 
@@ -176,14 +180,13 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-brand-secondary">Plan</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {usage.plan === "pro" ? "Pro" : "Free"}
-                </span>
+                <span className="text-sm font-medium text-gray-900">{usage.plan === "pro" ? "Pro" : "Free"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-brand-secondary">AI edits used</span>
                 <span className="text-sm text-gray-900">
-                  {usage.used}{usage.limit !== null ? ` / ${usage.limit}` : " (unlimited)"}
+                  {usage.used}
+                  {usage.limit !== null ? ` / ${usage.limit}` : " (unlimited)"}
                 </span>
               </div>
             </div>
@@ -197,7 +200,9 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
             <div className="px-6 py-5">
               {usage.plan === "pro" ? (
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-brand-secondary">You&apos;re on the <strong className="text-gray-900">Pro</strong> plan with unlimited AI edits.</p>
+                  <p className="text-sm text-brand-secondary">
+                    You&apos;re on the <strong className="text-gray-900">Pro</strong> plan with unlimited AI edits.
+                  </p>
                   <button
                     onClick={manageSubscription}
                     className="text-sm px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:border-gray-300 transition"
@@ -207,7 +212,10 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
                 </div>
               ) : (
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-brand-secondary">You&apos;re on the <strong className="text-gray-900">Free</strong> plan ({usage.used}/{usage.limit} edits used).</p>
+                  <p className="text-sm text-brand-secondary">
+                    You&apos;re on the <strong className="text-gray-900">Free</strong> plan ({usage.used}/{usage.limit}{" "}
+                    edits used).
+                  </p>
                   <button
                     onClick={upgradeToPro}
                     className="text-sm px-4 py-2 rounded-lg bg-brand-primary text-white font-medium hover:bg-brand-primary/90 transition"
@@ -265,7 +273,10 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
                     {creating ? "Creating..." : "Create"}
                   </button>
                   <button
-                    onClick={() => { setShowCreateForm(false); setNewKeyName(""); }}
+                    onClick={() => {
+                      setShowCreateForm(false);
+                      setNewKeyName("");
+                    }}
                     className="text-sm px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:border-gray-300 transition"
                   >
                     Cancel
@@ -285,9 +296,7 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
                   <li key={k.id} className="flex items-center justify-between px-6 py-4">
                     <div>
                       <p className="text-sm font-medium text-gray-900">{k.name}</p>
-                      <p className="text-xs text-brand-secondary mt-0.5 font-mono">
-                        {k.key_prefix}••••••••
-                      </p>
+                      <p className="text-xs text-brand-secondary mt-0.5 font-mono">{k.key_prefix}••••••••</p>
                       <p className="text-xs text-brand-secondary mt-0.5">
                         Created {formatDate(k.created_at)} · Last used {formatDate(k.last_used_at)}
                       </p>
@@ -305,12 +314,8 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
                   <li key={k.id} className="flex items-center justify-between px-6 py-4 opacity-50">
                     <div>
                       <p className="text-sm font-medium text-gray-500 line-through">{k.name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 font-mono">
-                        {k.key_prefix}••••••••
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        Revoked {formatDate(k.revoked_at)}
-                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5 font-mono">{k.key_prefix}••••••••</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Revoked {formatDate(k.revoked_at)}</p>
                     </div>
                     <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">Revoked</span>
                   </li>
@@ -347,9 +352,7 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-bold text-gray-900">Your new API key</h3>
-            <p className="text-sm text-brand-secondary mt-1">
-              Copy it now — we won&apos;t show it again.
-            </p>
+            <p className="text-sm text-brand-secondary mt-1">Copy it now — we won&apos;t show it again.</p>
 
             <div className="mt-4 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               <code className="flex-1 text-xs font-mono text-gray-800 break-all">{createdKey}</code>
@@ -381,7 +384,8 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-bold text-red-600">Delete your account?</h3>
             <p className="text-sm text-brand-secondary mt-2">
-              This action is <strong>permanent and irreversible</strong>. All your files, chat history, API keys, and subscription will be deleted.
+              This action is <strong>permanent and irreversible</strong>. All your files, chat history, API keys, and
+              subscription will be deleted.
             </p>
             <p className="text-sm text-gray-900 mt-4">
               Type <strong>delete</strong> to confirm:
@@ -403,7 +407,10 @@ export default function SettingsClient({ initialUser, initialUsage, initialKeys 
                 {deleting ? "Deleting..." : "Delete my account"}
               </button>
               <button
-                onClick={() => { setShowDeleteModal(false); setDeleteConfirm(""); }}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirm("");
+                }}
                 className="flex-1 text-sm py-2 rounded-lg border border-gray-200 text-gray-700 hover:border-gray-300 transition"
               >
                 Cancel

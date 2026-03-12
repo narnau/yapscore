@@ -24,11 +24,7 @@ export default async function SettingsPage() {
 
   // Fetch profile, usage, and API keys in parallel
   const [profileResult, keysResult] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("plan, interactions_used")
-      .eq("id", user.id)
-      .single(),
+    admin.from("profiles").select("plan, interactions_used").eq("id", user.id).single(),
     admin
       .from("api_keys")
       .select("id, name, key_prefix, created_at, last_used_at, revoked_at")
@@ -52,11 +48,5 @@ export default async function SettingsPage() {
 
   const keysData = keysResult.data ?? [];
 
-  return (
-    <SettingsClient
-      initialUser={userData}
-      initialUsage={usageData}
-      initialKeys={keysData}
-    />
-  );
+  return <SettingsClient initialUser={userData} initialUsage={usageData} initialKeys={keysData} />;
 }

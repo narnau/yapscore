@@ -10,17 +10,10 @@ export async function syncUserProfile(admin: SupabaseClient, user: User) {
     {
       id: user.id,
       email: user.email,
-      name:
-        user.user_metadata?.full_name ??
-        user.user_metadata?.name ??
-        user.email?.split("@")[0] ??
-        "",
-      avatar_url:
-        user.user_metadata?.avatar_url ??
-        user.user_metadata?.picture ??
-        null,
+      name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email?.split("@")[0] ?? "",
+      avatar_url: user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null,
     },
-    { onConflict: "id" }
+    { onConflict: "id" },
   );
 }
 

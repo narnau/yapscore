@@ -1,6 +1,12 @@
 import React from "react";
 
-export default function ToolBtn({ onClick, title, danger, disabled, children }: {
+export default function ToolBtn({
+  onClick,
+  title,
+  danger,
+  disabled,
+  children,
+}: {
   onClick: () => void;
   title?: string;
   danger?: boolean;

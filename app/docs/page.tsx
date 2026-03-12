@@ -19,7 +19,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default async function DocsPage() {
   const [supabase, currency] = await Promise.all([createClient(), detectCurrency()]);
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900">
@@ -28,35 +30,59 @@ export default async function DocsPage() {
       <div className="pt-28 pb-20 px-6">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Documentation</h1>
-          <p className="mt-3 text-lg text-brand-secondary">
-            Everything you need to know to get started with YapScore.
-          </p>
+          <p className="mt-3 text-lg text-brand-secondary">Everything you need to know to get started with YapScore.</p>
 
           <div className="mt-12 space-y-6">
             <Section title="Getting Started">
-              <p>
-                You can start in two ways:
-              </p>
+              <p>You can start in two ways:</p>
               <ul className="list-disc list-inside space-y-1.5 ml-1">
-                <li><strong>Upload a file</strong> — Drop a <code className="text-brand-primary bg-brand-primary/5 px-1.5 py-0.5 rounded">.musicxml</code> or <code className="text-brand-primary bg-brand-primary/5 px-1.5 py-0.5 rounded">.mscz</code> file into the editor</li>
-                <li><strong>Create from scratch</strong> — Ask the AI to generate a score for you (e.g., &ldquo;Write a 12-bar blues in Bb for piano&rdquo;)</li>
+                <li>
+                  <strong>Upload a file</strong> — Drop a{" "}
+                  <code className="text-brand-primary bg-brand-primary/5 px-1.5 py-0.5 rounded">.musicxml</code> or{" "}
+                  <code className="text-brand-primary bg-brand-primary/5 px-1.5 py-0.5 rounded">.mscz</code> file into
+                  the editor
+                </li>
+                <li>
+                  <strong>Create from scratch</strong> — Ask the AI to generate a score for you (e.g., &ldquo;Write a
+                  12-bar blues in Bb for piano&rdquo;)
+                </li>
               </ul>
-              <p>
-                Then simply describe your edits in plain language.
-              </p>
+              <p>Then simply describe your edits in plain language.</p>
             </Section>
 
             <Section title="Editing Scores">
               <ul className="list-disc list-inside space-y-1.5 ml-1">
                 <li>Click measures in the score to select them for targeted edits</li>
-                <li>Hold <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Shift</kbd> or <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Cmd</kbd> to select multiple measures</li>
-                <li>Type instructions like &ldquo;transpose up a major third&rdquo; or &ldquo;change the tempo&rdquo;</li>
-                <li>Use <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Ctrl+Z</kbd> / <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Ctrl+Y</kbd> to undo/redo changes</li>
+                <li>
+                  Hold{" "}
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">
+                    Shift
+                  </kbd>{" "}
+                  or{" "}
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Cmd</kbd>{" "}
+                  to select multiple measures
+                </li>
+                <li>
+                  Type instructions like &ldquo;transpose up a major third&rdquo; or &ldquo;change the tempo&rdquo;
+                </li>
+                <li>
+                  Use{" "}
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">
+                    Ctrl+Z
+                  </kbd>{" "}
+                  /{" "}
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">
+                    Ctrl+Y
+                  </kbd>{" "}
+                  to undo/redo changes
+                </li>
               </ul>
             </Section>
 
             <Section title="Direct Editing">
-              <p>Click a note or measure in the score to select it, then use the toolbar buttons or keyboard shortcuts.</p>
+              <p>
+                Click a note or measure in the score to select it, then use the toolbar buttons or keyboard shortcuts.
+              </p>
 
               <p className="font-semibold text-gray-800 mt-4">Note editing</p>
               <table className="w-full text-sm border-collapse mt-2">
@@ -65,12 +91,20 @@ export default async function DocsPage() {
                     [["↑", "↓"], "Move note up / down one semitone"],
                     [["Ctrl+↑", "Ctrl+↓"], "Move note up / down one octave"],
                     [["Delete", "Backspace"], "Replace note with a rest"],
-                    [["1", "2", "3", "4", "5", "6", "7"], "Change duration: 1=64th, 2=32nd, 3=16th, 4=eighth, 5=quarter, 6=half, 7=whole"],
+                    [
+                      ["1", "2", "3", "4", "5", "6", "7"],
+                      "Change duration: 1=64th, 2=32nd, 3=16th, 4=eighth, 5=quarter, 6=half, 7=whole",
+                    ],
                   ].map(([keys, desc], i) => (
                     <tr key={i} className="border-t border-gray-100">
                       <td className="py-1.5 pr-4 align-top whitespace-nowrap">
                         {(keys as string[]).map((k) => (
-                          <kbd key={k} className="mr-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">{k}</kbd>
+                          <kbd
+                            key={k}
+                            className="mr-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono"
+                          >
+                            {k}
+                          </kbd>
                         ))}
                       </td>
                       <td className="py-1.5 text-brand-secondary">{desc as string}</td>
@@ -90,7 +124,12 @@ export default async function DocsPage() {
                     <tr key={i} className="border-t border-gray-100">
                       <td className="py-1.5 pr-4 align-top whitespace-nowrap">
                         {(keys as string[]).map((k) => (
-                          <kbd key={k} className="mr-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">{k}</kbd>
+                          <kbd
+                            key={k}
+                            className="mr-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono"
+                          >
+                            {k}
+                          </kbd>
                         ))}
                       </td>
                       <td className="py-1.5 text-brand-secondary">{desc as string}</td>
@@ -111,7 +150,10 @@ export default async function DocsPage() {
                   "Add a crescendo from measure 4 to 8",
                   "Change the tempo to 120 bpm",
                 ].map((prompt) => (
-                  <div key={prompt} className="bg-gray-50 rounded-lg px-4 py-3 text-sm italic text-gray-700 border border-gray-100">
+                  <div
+                    key={prompt}
+                    className="bg-gray-50 rounded-lg px-4 py-3 text-sm italic text-gray-700 border border-gray-100"
+                  >
                     &ldquo;{prompt}&rdquo;
                   </div>
                 ))}
@@ -120,23 +162,30 @@ export default async function DocsPage() {
 
             <Section title="File Compatibility">
               <p>
-                YapScore uses <strong>MusicXML</strong>, the universal standard for music notation. Your scores are compatible with:
+                YapScore uses <strong>MusicXML</strong>, the universal standard for music notation. Your scores are
+                compatible with:
               </p>
               <div className="flex flex-wrap gap-2 mt-2">
                 {["MuseScore", "Finale", "Sibelius", "Dorico", "Noteflight", "Flat.io"].map((app) => (
-                  <span key={app} className="px-3 py-1 bg-gray-50 border border-gray-200 rounded-full text-sm font-medium text-gray-700">
+                  <span
+                    key={app}
+                    className="px-3 py-1 bg-gray-50 border border-gray-200 rounded-full text-sm font-medium text-gray-700"
+                  >
                     {app}
                   </span>
                 ))}
               </div>
               <p className="mt-3">
-                You can also upload <code className="text-brand-primary bg-brand-primary/5 px-1.5 py-0.5 rounded">.mscz</code> files directly — they&apos;re converted automatically.
+                You can also upload{" "}
+                <code className="text-brand-primary bg-brand-primary/5 px-1.5 py-0.5 rounded">.mscz</code> files
+                directly — they&apos;re converted automatically.
               </p>
             </Section>
 
             <Section title="Score Library">
               <p>
-                All your scores are saved to your personal library. Access them from the dashboard at any time, continue editing, or download updated versions.
+                All your scores are saved to your personal library. Access them from the dashboard at any time, continue
+                editing, or download updated versions.
               </p>
             </Section>
 
@@ -166,7 +215,9 @@ export default async function DocsPage() {
             <div className="flex items-center justify-between px-6 py-4 bg-brand-primary/5 rounded-2xl border border-brand-primary/20">
               <div>
                 <p className="text-sm font-medium text-gray-900">Building something with YapScore?</p>
-                <p className="text-xs text-brand-secondary mt-0.5">Generate and modify sheet music programmatically via REST API.</p>
+                <p className="text-xs text-brand-secondary mt-0.5">
+                  Generate and modify sheet music programmatically via REST API.
+                </p>
               </div>
               <Link
                 href="/developers"
@@ -175,7 +226,6 @@ export default async function DocsPage() {
                 API Reference →
               </Link>
             </div>
-
           </div>
         </div>
       </div>
@@ -186,8 +236,12 @@ export default async function DocsPage() {
             &copy; {new Date().getFullYear()} YapScore. All rights reserved.
           </div>
           <div className="flex items-center gap-6 text-sm text-brand-secondary">
-            <Link href="/" className="hover:text-gray-900 transition">Home</Link>
-            <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
+            <Link href="/" className="hover:text-gray-900 transition">
+              Home
+            </Link>
+            <Link href="/login" className="hover:text-gray-900 transition">
+              Sign In
+            </Link>
           </div>
         </div>
       </footer>

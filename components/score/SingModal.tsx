@@ -29,21 +29,18 @@ const PROCESSING_MESSAGES = [
   "Beethoven would be proud (maybe)...",
 ];
 
-const REFERENCE_NOTES = [
-  "C4", "D4", "E4", "F4", "G4", "A4", "B4",
-  "C5", "D5", "E5",
-];
+const REFERENCE_NOTES = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5"];
 
 const REFERENCE_CHORDS: Record<string, string[]> = {
-  "C major":  ["C4", "E4", "G4"],
-  "D minor":  ["D4", "F4", "A4"],
-  "E minor":  ["E4", "G4", "B4"],
-  "F major":  ["F4", "A4", "C5"],
-  "G major":  ["G4", "B4", "D5"],
-  "A minor":  ["A4", "C5", "E5"],
-  "C minor":  ["C4", "Eb4", "G4"],
-  "D major":  ["D4", "F#4", "A4"],
-  "A major":  ["A4", "C#5", "E5"],
+  "C major": ["C4", "E4", "G4"],
+  "D minor": ["D4", "F4", "A4"],
+  "E minor": ["E4", "G4", "B4"],
+  "F major": ["F4", "A4", "C5"],
+  "G major": ["G4", "B4", "D5"],
+  "A minor": ["A4", "C5", "E5"],
+  "C minor": ["C4", "Eb4", "G4"],
+  "D major": ["D4", "F#4", "A4"],
+  "A major": ["A4", "C#5", "E5"],
 };
 
 type RefMode = "note" | "chord";
@@ -137,7 +134,11 @@ export default function SingModal({
 
   function stopReference() {
     for (const node of refNodesRef.current) {
-      try { node.stop(); } catch { /* already stopped */ }
+      try {
+        node.stop();
+      } catch {
+        /* already stopped */
+      }
     }
     refNodesRef.current = [];
     refAudioCtxRef.current?.close();
@@ -160,9 +161,7 @@ export default function SingModal({
       const piano = await Soundfont.instrument(ctx, "acoustic_grand_piano");
       if (refAudioCtxRef.current !== ctx) return;
 
-      const notes = refMode === "chord"
-        ? REFERENCE_CHORDS[referenceChord] ?? ["C4"]
-        : [referenceNote];
+      const notes = refMode === "chord" ? (REFERENCE_CHORDS[referenceChord] ?? ["C4"]) : [referenceNote];
 
       const nodes: AudioBufferSourceNode[] = [];
       for (const n of notes) {
@@ -188,7 +187,7 @@ export default function SingModal({
     try {
       // Request mic permission early
       const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      testStream.getTracks().forEach(t => t.stop());
+      testStream.getTracks().forEach((t) => t.stop());
     } catch {
       setError("Microphone access denied. Please allow microphone access and try again.");
       return;
@@ -203,7 +202,10 @@ export default function SingModal({
 
     const countInBeats = beats;
     startMetronome(
-      audioCtx, bpm, beats, countInBeats,
+      audioCtx,
+      bpm,
+      beats,
+      countInBeats,
       (beat) => setCountdownBeat(beat),
       async () => {
         // Count-in done → start recording
@@ -218,7 +220,10 @@ export default function SingModal({
           // Start silent metronome for recording period (visual only, no audio to confuse pitch detection)
           const recordingBeats = measuresToRecord * beats;
           metronomeRef.current = startMetronome(
-            audioCtx, bpm, beats, recordingBeats,
+            audioCtx,
+            bpm,
+            beats,
+            recordingBeats,
             (beat, measure) => {
               setCurrentBeat(beat);
               setCurrentMeasure(measure);
@@ -319,13 +324,15 @@ export default function SingModal({
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [phase, detectedNotes, beats, beatType, bpm]);
 
   const handleInsert = useCallback(() => {
     let xml = musicXml;
     const measureGroups = splitByMeasure(detectedNotes, beats);
-    const partName = parts.find(p => p.id === targetPart)?.name ?? targetPart;
+    const partName = parts.find((p) => p.id === targetPart)?.name ?? targetPart;
 
     if (replaceSelected && selectedMeasures.size > 0) {
       // Replace selected measures
@@ -349,7 +356,18 @@ export default function SingModal({
       }
       onInsert(xml, `Sing: added ${measureGroups.length} measure(s) after measure ${insertAfter} in ${partName}`);
     }
-  }, [musicXml, detectedNotes, beats, replaceSelected, selectedMeasures, insertAfter, onInsert, targetPart, targetStaff, parts]);
+  }, [
+    musicXml,
+    detectedNotes,
+    beats,
+    replaceSelected,
+    selectedMeasures,
+    insertAfter,
+    onInsert,
+    targetPart,
+    targetStaff,
+    parts,
+  ]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -363,10 +381,7 @@ export default function SingModal({
             {phase === "processing" && "Processing..."}
             {phase === "review" && "Review Notes"}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-lg leading-none px-1"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none px-1">
             ×
           </button>
         </div>
@@ -376,29 +391,25 @@ export default function SingModal({
           {phase === "setup" && (
             <div className="space-y-4">
               {error && (
-                <div className="text-red-600 text-xs bg-red-50 border border-red-200 rounded px-3 py-2">
-                  {error}
-                </div>
+                <div className="text-red-600 text-xs bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
               )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-brand-secondary mb-1">
                     BPM (tempo)
-                    {bpm > 80 && (
-                      <span className="ml-2 text-amber-600 font-normal">↓ slower = better</span>
-                    )}
+                    {bpm > 80 && <span className="ml-2 text-amber-600 font-normal">↓ slower = better</span>}
                   </label>
                   <input
                     type="number"
                     min={40}
                     max={80}
                     value={bpm}
-                    onChange={e => {
+                    onChange={(e) => {
                       const v = parseInt(e.target.value);
                       setBpm(isNaN(v) ? 0 : v);
                     }}
-                    onBlur={() => setBpm(prev => Math.max(40, Math.min(80, prev || 60)))}
+                    onBlur={() => setBpm((prev) => Math.max(40, Math.min(80, prev || 60)))}
                     className="w-full px-3 py-2 rounded bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-brand-primary"
                   />
                 </div>
@@ -409,11 +420,11 @@ export default function SingModal({
                     min={1}
                     max={8}
                     value={measuresToRecord}
-                    onChange={e => {
+                    onChange={(e) => {
                       const v = parseInt(e.target.value);
                       setMeasuresToRecord(isNaN(v) ? 0 : v);
                     }}
-                    onBlur={() => setMeasuresToRecord(prev => Math.max(1, Math.min(8, prev || 2)))}
+                    onBlur={() => setMeasuresToRecord((prev) => Math.max(1, Math.min(8, prev || 2)))}
                     className="w-full px-3 py-2 rounded bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-brand-primary"
                   />
                 </div>
@@ -445,21 +456,25 @@ export default function SingModal({
                   {refMode === "note" ? (
                     <select
                       value={referenceNote}
-                      onChange={e => setReferenceNote(e.target.value)}
+                      onChange={(e) => setReferenceNote(e.target.value)}
                       className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-brand-primary"
                     >
-                      {REFERENCE_NOTES.map(n => (
-                        <option key={n} value={n}>{n}</option>
+                      {REFERENCE_NOTES.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
                       ))}
                     </select>
                   ) : (
                     <select
                       value={referenceChord}
-                      onChange={e => setReferenceChord(e.target.value)}
+                      onChange={(e) => setReferenceChord(e.target.value)}
                       className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-brand-primary"
                     >
-                      {Object.keys(REFERENCE_CHORDS).map(c => (
-                        <option key={c} value={c}>{c}</option>
+                      {Object.keys(REFERENCE_CHORDS).map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
                       ))}
                     </select>
                   )}
@@ -478,7 +493,11 @@ export default function SingModal({
               </div>
 
               <div className="text-xs text-brand-secondary bg-gray-50 rounded p-3 space-y-1">
-                <div><strong className="text-gray-700">How it works:</strong> Listen to the reference pitch, click Start, hear the count-in ({beats} clicks), then sing or hum your melody. Recording stops automatically after {measuresToRecord} measure{measuresToRecord > 1 ? "s" : ""}.</div>
+                <div>
+                  <strong className="text-gray-700">How it works:</strong> Listen to the reference pitch, click Start,
+                  hear the count-in ({beats} clicks), then sing or hum your melody. Recording stops automatically after{" "}
+                  {measuresToRecord} measure{measuresToRecord > 1 ? "s" : ""}.
+                </div>
                 <div className="text-amber-700">Tip: use a slow tempo (≤ 80 BPM) for best rhythm detection.</div>
               </div>
 
@@ -516,9 +535,7 @@ export default function SingModal({
                   <div
                     key={i}
                     className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold transition-all ${
-                      currentBeat === i + 1
-                        ? "bg-brand-primary text-white scale-110"
-                        : "bg-gray-100 text-gray-400"
+                      currentBeat === i + 1 ? "bg-brand-primary text-white scale-110" : "bg-gray-100 text-gray-400"
                     }`}
                   >
                     {i + 1}
@@ -558,22 +575,26 @@ export default function SingModal({
                 <span className="absolute text-4xl animate-bounce" style={{ left: 0, animationDelay: "0s" }}>
                   ♪
                 </span>
-                <span className="absolute text-3xl animate-bounce text-brand-primary" style={{ left: 28, top: 4, animationDelay: "0.2s" }}>
+                <span
+                  className="absolute text-3xl animate-bounce text-brand-primary"
+                  style={{ left: 28, top: 4, animationDelay: "0.2s" }}
+                >
                   ♫
                 </span>
-                <span className="absolute text-4xl animate-bounce text-purple-400" style={{ left: 52, animationDelay: "0.4s" }}>
+                <span
+                  className="absolute text-4xl animate-bounce text-purple-400"
+                  style={{ left: 52, animationDelay: "0.4s" }}
+                >
                   ♪
                 </span>
               </div>
 
               {/* Rotating message */}
-              <div className="text-sm text-gray-700 text-center transition-all">
-                {processingMsg}
-              </div>
+              <div className="text-sm text-gray-700 text-center transition-all">{processingMsg}</div>
 
               {/* Progress dots */}
               <div className="flex gap-1.5">
-                {[0, 1, 2].map(i => (
+                {[0, 1, 2].map((i) => (
                   <div
                     key={i}
                     className="w-2 h-2 rounded-full bg-brand-primary animate-pulse"
@@ -622,9 +643,13 @@ export default function SingModal({
                 }`}
               >
                 {isPlaying ? (
-                  <><span>⏹</span> Stop</>
+                  <>
+                    <span>⏹</span> Stop
+                  </>
                 ) : (
-                  <><span>▶</span> Play preview</>
+                  <>
+                    <span>▶</span> Play preview
+                  </>
                 )}
               </button>
 
@@ -637,25 +662,27 @@ export default function SingModal({
                       <span className="text-xs text-brand-secondary">Part</span>
                       <select
                         value={targetPart}
-                        onChange={e => {
+                        onChange={(e) => {
                           setTargetPart(e.target.value);
                           setTargetStaff(undefined);
                         }}
                         className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-brand-primary"
                       >
-                        {parts.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                        {parts.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
                         ))}
                       </select>
                     </div>
                   )}
 
-                  {(parts.find(p => p.id === targetPart)?.staves ?? 1) > 1 && (
+                  {(parts.find((p) => p.id === targetPart)?.staves ?? 1) > 1 && (
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-brand-secondary">Staff</span>
                       <select
                         value={targetStaff ?? ""}
-                        onChange={e => setTargetStaff(e.target.value ? parseInt(e.target.value) : undefined)}
+                        onChange={(e) => setTargetStaff(e.target.value ? parseInt(e.target.value) : undefined)}
                         className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-brand-primary"
                       >
                         <option value="">All staves</option>
@@ -671,7 +698,7 @@ export default function SingModal({
                     <input
                       type="checkbox"
                       checked={replaceSelected}
-                      onChange={e => setReplaceSelected(e.target.checked)}
+                      onChange={(e) => setReplaceSelected(e.target.checked)}
                       className="rounded bg-gray-50 border-gray-200"
                     />
                     Replace selected measures ({[...selectedMeasures].sort((a, b) => a - b).join(", ")})
@@ -683,7 +710,7 @@ export default function SingModal({
                     <span className="text-xs text-brand-secondary">Insert after measure</span>
                     <select
                       value={insertAfter}
-                      onChange={e => setInsertAfter(parseInt(e.target.value))}
+                      onChange={(e) => setInsertAfter(parseInt(e.target.value))}
                       className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-brand-primary"
                     >
                       {Array.from({ length: scoreMeasures + 1 }, (_, i) => (

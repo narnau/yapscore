@@ -21,9 +21,10 @@ const FOUR_QUARTERS = `<?xml version="1.0" encoding="UTF-8"?>
 </score-partwise>`;
 
 // Same with divisions=1 (common in some editors) — can only represent whole/half/quarter
-const SMALL_DIVISIONS = FOUR_QUARTERS
-  .replace("<divisions>16</divisions>", "<divisions>1</divisions>")
-  .replace(/<duration>16<\/duration>/g, "<duration>1</duration>");
+const SMALL_DIVISIONS = FOUR_QUARTERS.replace("<divisions>16</divisions>", "<divisions>1</divisions>").replace(
+  /<duration>16<\/duration>/g,
+  "<duration>1</duration>",
+);
 
 // Score with a chord: C+E quarter, then two more quarters
 const WITH_CHORD = `<?xml version="1.0" encoding="UTF-8"?>
@@ -189,7 +190,7 @@ describe("changeNoteDuration", () => {
         // whole: needs full measure — just check it doesn't crash
         continue;
       }
-      const result = changeNoteDuration(xml, nm[0], String(k) as "1"|"2"|"3"|"4"|"5"|"6"|"7");
+      const result = changeNoteDuration(xml, nm[0], String(k) as "1" | "2" | "3" | "4" | "5" | "6" | "7");
       expect(result).toContain(`<type>${types[k - 1]}</type>`);
     }
   });

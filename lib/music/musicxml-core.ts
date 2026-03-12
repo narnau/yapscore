@@ -1,17 +1,15 @@
-import {
-  parse as mxlParse,
-  serialize as mxlSerialize,
-  generateId,
-} from "musicxml-io";
-import {
-  DEFAULT_DIVISIONS,
-  DEFAULT_BEATS,
-  DEFAULT_BEAT_TYPE,
-  SEMITONES_PER_OCTAVE,
-} from "./constants";
+import { parse as mxlParse, serialize as mxlSerialize, generateId } from "musicxml-io";
+import { DEFAULT_DIVISIONS, DEFAULT_BEATS, DEFAULT_BEAT_TYPE, SEMITONES_PER_OCTAVE } from "./constants";
 import type {
-  Score, Part, Measure, MeasureEntry, NoteEntry, Pitch,
-  MeasureAttributes, PartInfo, ScoreMetadata,
+  Score,
+  Part,
+  Measure,
+  MeasureEntry,
+  NoteEntry,
+  Pitch,
+  MeasureAttributes,
+  PartInfo,
+  ScoreMetadata,
 } from "musicxml-io";
 
 // ─── Local type aliases ─────────────────────────────────────────────────────
@@ -19,21 +17,16 @@ import type {
 // SoundEntry is not re-exported by musicxml-io, define locally
 export type SoundEntry = Extract<MeasureEntry, { type: "sound" }>;
 export type HarmonyEntry = Extract<MeasureEntry, { type: "harmony" }>;
-export type ArticulationNotation = Extract<
-  import("musicxml-io").Notation,
-  { type: "articulation" }
->;
+export type ArticulationNotation = Extract<import("musicxml-io").Notation, { type: "articulation" }>;
 
 // ─── Score model helpers ────────────────────────────────────────────────────
 
 export function findPart(score: Score, partId: string): Part | undefined {
-  return score.parts.find(p => p.id === partId);
+  return score.parts.find((p) => p.id === partId);
 }
 
 export function findPartInfo(score: Score, partId: string): PartInfo | undefined {
-  return score.partList.find(
-    (e): e is PartInfo => e.type === "score-part" && e.id === partId
-  );
+  return score.partList.find((e): e is PartInfo => e.type === "score-part" && e.id === partId);
 }
 
 export function measureNum(m: Measure): number {
@@ -41,7 +34,7 @@ export function measureNum(m: Measure): number {
 }
 
 export function findMeasure(part: Part, num: number): Measure | undefined {
-  return part.measures.find(m => measureNum(m) === num);
+  return part.measures.find((m) => measureNum(m) === num);
 }
 
 export function getDivisions(score: Score): number {
@@ -81,7 +74,7 @@ export function getFifths(score: Score): number {
 }
 
 const SHARP_ORDER = ["F", "C", "G", "D", "A", "E", "B"];
-const FLAT_ORDER  = ["B", "E", "A", "D", "G", "C", "F"];
+const FLAT_ORDER = ["B", "E", "A", "D", "G", "C", "F"];
 
 export function stepAlteredByKey(step: string, fifths: number): boolean {
   if (fifths > 0) return SHARP_ORDER.slice(0, fifths).includes(step);
@@ -123,26 +116,48 @@ export function emptyMeasure(num: number, duration: number): Measure {
 // ─── Pitch transposition helpers ────────────────────────────────────────────
 
 const NOTES: [string, number][] = [
-  ["C", 0], ["C", 1], ["D", 0], ["D", 1], ["E", 0],
-  ["F", 0], ["F", 1], ["G", 0], ["G", 1], ["A", 0], ["A", 1], ["B", 0],
+  ["C", 0],
+  ["C", 1],
+  ["D", 0],
+  ["D", 1],
+  ["E", 0],
+  ["F", 0],
+  ["F", 1],
+  ["G", 0],
+  ["G", 1],
+  ["A", 0],
+  ["A", 1],
+  ["B", 0],
 ];
 
 const NOTE_TO_SEMITONE: Record<string, number> = {
-  C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
+  C: 0,
+  D: 2,
+  E: 4,
+  F: 5,
+  G: 7,
+  A: 9,
+  B: 11,
 };
 
 export function transposePitch(
   step: string,
   alter: number,
   octave: number,
-  semitones: number
+  semitones: number,
 ): { step: string; alter: number; octave: number } {
   const baseSemitone = (NOTE_TO_SEMITONE[step] ?? 0) + alter;
   let totalSemitone = baseSemitone + semitones;
   let newOctave = octave;
 
-  while (totalSemitone >= SEMITONES_PER_OCTAVE) { totalSemitone -= SEMITONES_PER_OCTAVE; newOctave++; }
-  while (totalSemitone < 0) { totalSemitone += SEMITONES_PER_OCTAVE; newOctave--; }
+  while (totalSemitone >= SEMITONES_PER_OCTAVE) {
+    totalSemitone -= SEMITONES_PER_OCTAVE;
+    newOctave++;
+  }
+  while (totalSemitone < 0) {
+    totalSemitone += SEMITONES_PER_OCTAVE;
+    newOctave--;
+  }
 
   const [newStep, newAlter] = NOTES[totalSemitone];
   return { step: newStep, alter: newAlter, octave: newOctave };
@@ -150,8 +165,12 @@ export function transposePitch(
 
 // ─── Math helpers ───────────────────────────────────────────────────────────
 
-export function gcd(a: number, b: number): number { return b === 0 ? a : gcd(b, a % b); }
-export function lcmInt(a: number, b: number): number { return Math.round((a / gcd(a, b)) * b); }
+export function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+export function lcmInt(a: number, b: number): number {
+  return Math.round((a / gcd(a, b)) * b);
+}
 
 // ─── extractParts / reconstructMusicXml ─────────────────────────────────────
 // These stay string-based because they manage skeleton/placeholder for LLM.
@@ -185,11 +204,7 @@ export function reconstructMusicXml(skeleton: string, modifiedParts: string): st
   // Sync <part-list>: ensure every <part id="X"> has a matching <score-part id="X">
   try {
     const score = mxlParse(result);
-    const knownIds = new Set(
-      score.partList
-        .filter((e): e is PartInfo => e.type === "score-part")
-        .map(sp => sp.id)
-    );
+    const knownIds = new Set(score.partList.filter((e): e is PartInfo => e.type === "score-part").map((sp) => sp.id));
     let changed = false;
     for (const p of score.parts) {
       if (!knownIds.has(p.id)) {
@@ -204,14 +219,16 @@ export function reconstructMusicXml(skeleton: string, modifiedParts: string): st
       }
     }
     if (changed) result = mxlSerialize(score);
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 
   return result;
 }
 
 export function extractSelectedMeasures(
   musicXml: string,
-  measureNumbers: number[]
+  measureNumbers: number[],
 ): { skeleton: string; selectedMeasures: string; context: string } {
   const { skeleton, parts, context } = extractParts(musicXml);
   const nums = new Set(measureNumbers);
@@ -252,7 +269,7 @@ export function extractSelectedMeasures(
 export function spliceMeasuresBack(
   musicXml: string,
   modifiedMeasuresXml: string,
-  sentMeasureNumbers?: number[]
+  sentMeasureNumbers?: number[],
 ): string {
   const hasPartWrappers = /<part[\s>]/.test(modifiedMeasuresXml);
   if (hasPartWrappers) {
@@ -264,7 +281,7 @@ export function spliceMeasuresBack(
 export function spliceMeasuresBackPerPart(
   musicXml: string,
   modifiedMeasuresXml: string,
-  sentMeasureNumbers?: number[]
+  sentMeasureNumbers?: number[],
 ): string {
   // Parse modified measures to extract per-part map
   let modScore: Score;
@@ -273,7 +290,7 @@ export function spliceMeasuresBackPerPart(
   } catch {
     // Might be a partial XML — wrap it
     modScore = mxlParse(
-      `<?xml version="1.0"?><score-partwise version="3.1"><part-list></part-list>${modifiedMeasuresXml}</score-partwise>`
+      `<?xml version="1.0"?><score-partwise version="3.1"><part-list></part-list>${modifiedMeasuresXml}</score-partwise>`,
     );
   }
 
@@ -305,8 +322,8 @@ export function spliceMeasuresBackPerPart(
     if (deleted.size > 0) anyDeleted = true;
 
     part.measures = part.measures
-      .filter(m => !deleted.has(measureNum(m)))
-      .map(m => {
+      .filter((m) => !deleted.has(measureNum(m)))
+      .map((m) => {
         const replacement = mm.get(measureNum(m));
         return replacement ?? m;
       });
@@ -320,13 +337,13 @@ export function spliceMeasuresBackPerPart(
 export function spliceMeasuresBackGlobal(
   musicXml: string,
   modifiedMeasuresXml: string,
-  sentMeasureNumbers?: number[]
+  sentMeasureNumbers?: number[],
 ): string {
   // Parse modified measures (wrapped in a temp structure)
   let modScore: Score;
   try {
     modScore = mxlParse(
-      `<?xml version="1.0"?><score-partwise version="3.1"><part-list><score-part id="P1"><part-name/></score-part></part-list><part id="P1">${modifiedMeasuresXml}</part></score-partwise>`
+      `<?xml version="1.0"?><score-partwise version="3.1"><part-list><score-part id="P1"><part-name/></score-part></part-list><part id="P1">${modifiedMeasuresXml}</part></score-partwise>`,
     );
   } catch {
     return musicXml; // Can't parse modified measures
@@ -347,8 +364,8 @@ export function spliceMeasuresBackGlobal(
   const score = mxlParse(musicXml);
   for (const part of score.parts) {
     part.measures = part.measures
-      .filter(m => !deletedNumbers.has(measureNum(m)))
-      .map(m => {
+      .filter((m) => !deletedNumbers.has(measureNum(m)))
+      .map((m) => {
         const replacement = modifiedMap.get(measureNum(m));
         return replacement ?? m;
       });
@@ -379,7 +396,7 @@ export function buildContext(musicXml: string): string {
   const score = mxlParse(musicXml);
   const instruments = score.partList
     .filter((e): e is PartInfo => e.type === "score-part")
-    .map(pi => pi.name?.trim())
+    .map((pi) => pi.name?.trim())
     .filter(Boolean)
     .join(", ");
 
@@ -410,7 +427,7 @@ function getTempoFromScore(score: Score): { bpm: number; beatUnit: string } | nu
         if (entry.type === "direction") {
           const dir = entry as import("musicxml-io").DirectionEntry;
           if (dir.sound?.tempo) {
-            const met = dir.directionTypes.find(dt => dt.kind === "metronome");
+            const met = dir.directionTypes.find((dt) => dt.kind === "metronome");
             return {
               bpm: dir.sound.tempo,
               beatUnit: (met && met.kind === "metronome" ? met.beatUnit : "quarter") ?? "quarter",
@@ -426,8 +443,15 @@ function getTempoFromScore(score: Score): { bpm: number; beatUnit: string } | nu
 // ─── Instrument helpers ─────────────────────────────────────────────────────
 
 export const GRAND_STAFF_INSTRUMENTS = new Set([
-  "piano", "keyboard", "organ", "harpsichord", "marimba", "vibraphone",
-  "celesta", "harp", "accordion",
+  "piano",
+  "keyboard",
+  "organ",
+  "harpsichord",
+  "marimba",
+  "vibraphone",
+  "celesta",
+  "harp",
+  "accordion",
 ]);
 
 export function instrumentStaves(name: string): number {
@@ -435,8 +459,8 @@ export function instrumentStaves(name: string): number {
 }
 
 export function clefToSignLine(clef: string): { sign: "G" | "F" | "C"; line: number } {
-  if (clef === "bass")  return { sign: "F", line: 4 };
-  if (clef === "alto")  return { sign: "C", line: 3 };
+  if (clef === "bass") return { sign: "F", line: 4 };
+  if (clef === "alto") return { sign: "C", line: 3 };
   if (clef === "tenor") return { sign: "C", line: 4 };
   return { sign: "G", line: 2 };
 }
@@ -451,8 +475,21 @@ export function isPercussionPart(score: Score, partId: string): boolean {
 // ─── Key helpers ────────────────────────────────────────────────────────────
 
 export const KEY_ROOT_TO_FIFTHS: Record<string, number> = {
-  "Cb": -7, "Gb": -6, "Db": -5, "Ab": -4, "Eb": -3, "Bb": -2, "F": -1,
-  "C": 0, "G": 1, "D": 2, "A": 3, "E": 4, "B": 5, "F#": 6, "C#": 7,
+  Cb: -7,
+  Gb: -6,
+  Db: -5,
+  Ab: -4,
+  Eb: -3,
+  Bb: -2,
+  F: -1,
+  C: 0,
+  G: 1,
+  D: 2,
+  A: 3,
+  E: 4,
+  B: 5,
+  "F#": 6,
+  "C#": 7,
 };
 
 export function fifthsToSemitones(oldFifths: number, newFifths: number): number {
@@ -464,16 +501,21 @@ export function fifthsToSemitones(oldFifths: number, newFifths: number): number 
 
 // ─── Tempo direction builder ────────────────────────────────────────────────
 
-export function buildTempoDirection(bpm: number, beatUnit: import("musicxml-io").NoteType): import("musicxml-io").DirectionEntry {
+export function buildTempoDirection(
+  bpm: number,
+  beatUnit: import("musicxml-io").NoteType,
+): import("musicxml-io").DirectionEntry {
   return {
     _id: generateId(),
     type: "direction",
     placement: "above",
-    directionTypes: [{
-      kind: "metronome",
-      beatUnit,
-      perMinute: bpm,
-    }],
+    directionTypes: [
+      {
+        kind: "metronome",
+        beatUnit,
+        perMinute: bpm,
+      },
+    ],
     sound: { tempo: bpm },
   };
 }
@@ -542,7 +584,4 @@ export function ensureMinDivisions(musicXml: string, minDiv: number): string {
 // Re-export mxlParse / mxlSerialize / generateId for use by other modules
 export { mxlParse, mxlSerialize, generateId };
 // Re-export mxlTranspose / mxlRemovePart for instruments/measures modules
-export {
-  transpose as mxlTranspose,
-  removePart as mxlRemovePart,
-} from "musicxml-io";
+export { transpose as mxlTranspose, removePart as mxlRemovePart } from "musicxml-io";

@@ -26,8 +26,21 @@ describe("historyReducer", () => {
   test("push branches from current index, trimming future entries", () => {
     // Build: 3 entries, then go back to index 1
     let state = historyReducer(initial, { type: "push", entry: makeEntry("v1", [{ role: "user", text: "a" }]) });
-    state = historyReducer(state, { type: "push", entry: makeEntry("v2", [{ role: "user", text: "a" }, { role: "user", text: "b" }]) });
-    state = historyReducer(state, { type: "push", entry: makeEntry("v3", [{ role: "user", text: "a" }, { role: "user", text: "b" }, { role: "user", text: "c" }]) });
+    state = historyReducer(state, {
+      type: "push",
+      entry: makeEntry("v2", [
+        { role: "user", text: "a" },
+        { role: "user", text: "b" },
+      ]),
+    });
+    state = historyReducer(state, {
+      type: "push",
+      entry: makeEntry("v3", [
+        { role: "user", text: "a" },
+        { role: "user", text: "b" },
+        { role: "user", text: "c" },
+      ]),
+    });
     expect(state.entries).toHaveLength(3);
     expect(state.index).toBe(2);
 
@@ -36,7 +49,10 @@ describe("historyReducer", () => {
     expect(state.index).toBe(1);
 
     // Push from index 1 — should discard v3
-    const branchEntry = makeEntry("v2-branch", [{ role: "user", text: "a" }, { role: "user", text: "branch" }]);
+    const branchEntry = makeEntry("v2-branch", [
+      { role: "user", text: "a" },
+      { role: "user", text: "branch" },
+    ]);
     state = historyReducer(state, { type: "push", entry: branchEntry });
 
     expect(state.entries).toHaveLength(3); // v1, v2, v2-branch (v3 discarded)
@@ -142,11 +158,14 @@ describe("full navigation scenario", () => {
     const llmHistory = messagesAtIndex(state.entries, state.index);
     expect(llmHistory).toEqual(msgs1);
     // Crucially: does NOT contain "change to minor" or "Changed."
-    expect(llmHistory.some(m => m.text.includes("minor"))).toBe(false);
+    expect(llmHistory.some((m) => m.text.includes("minor"))).toBe(false);
   });
 
   test("push from older version branches and trims future messages", () => {
-    const msgs1: Message[] = [{ role: "user", text: "create" }, { role: "system", text: "OK" }];
+    const msgs1: Message[] = [
+      { role: "user", text: "create" },
+      { role: "system", text: "OK" },
+    ];
     const msgs2: Message[] = [...msgs1, { role: "user", text: "add drum" }, { role: "system", text: "Added" }];
 
     let state = historyReducer(initial, { type: "push", entry: makeEntry("v1", msgs1) });
@@ -156,13 +175,17 @@ describe("full navigation scenario", () => {
     state = historyReducer(state, { type: "undo" });
 
     // Push new branch from v1
-    const branchMsgs: Message[] = [...msgs1, { role: "user", text: "add flute" }, { role: "system", text: "Added flute" }];
+    const branchMsgs: Message[] = [
+      ...msgs1,
+      { role: "user", text: "add flute" },
+      { role: "system", text: "Added flute" },
+    ];
     state = historyReducer(state, { type: "push", entry: makeEntry("v1-flute", branchMsgs) });
 
     expect(state.entries).toHaveLength(2); // v1 + v1-flute (v2 trimmed)
     expect(state.index).toBe(1);
     expect(messagesAtIndex(state.entries, state.index)).toEqual(branchMsgs);
     // The "add drum" message from v2 is gone
-    expect(state.entries.every(e => !(e.messages ?? []).some(m => m.text.includes("drum")))).toBe(true);
+    expect(state.entries.every((e) => !(e.messages ?? []).some((m) => m.text.includes("drum")))).toBe(true);
   });
 });

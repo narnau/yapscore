@@ -41,24 +41,37 @@ export default function ChatPanel({
   const [usage, setUsage] = useState<{ plan: string; used: number; limit: number | null } | null>(null);
 
   useEffect(() => {
-    fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {});
+    fetch("/api/usage")
+      .then((r) => r.json())
+      .then(setUsage)
+      .catch(() => {});
   }, []);
 
-  const isAtLimit = paywallHit || (
-    usage !== null && usage.plan === "free" && usage.limit !== null && usage.used >= usage.limit
-  );
+  const isAtLimit =
+    paywallHit || (usage !== null && usage.plan === "free" && usage.limit !== null && usage.used >= usage.limit);
 
   function refreshUsage() {
-    fetch("/api/usage").then(r => r.json()).then(u => { setUsage(u); onUsageRefresh(); }).catch(() => {});
+    fetch("/api/usage")
+      .then((r) => r.json())
+      .then((u) => {
+        setUsage(u);
+        onUsageRefresh();
+      })
+      .catch(() => {});
   }
 
   // Always-current ref so sendMessage never uses stale messages
   const messagesRef = useRef(messages);
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const { recording, transcribing, recordingSecs, micSupported, toggleRecording } = useVoiceRecording(setInstruction, formRef);
+  const { recording, transcribing, recordingSecs, micSupported, toggleRecording } = useVoiceRecording(
+    setInstruction,
+    formRef,
+  );
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -90,16 +103,13 @@ export default function ChatPanel({
     if (!initialPrompt || autoSubmittedRef.current || !currentMusicXml) return;
     autoSubmittedRef.current = true;
     sendMessage(initialPrompt, new Set());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPrompt, currentMusicXml]);
 
   async function sendMessage(text: string, selection: Set<number>) {
     if (!text.trim()) return;
 
-    const selectionNote =
-      selection.size > 0
-        ? ` [measures ${[...selection].sort((a, b) => a - b).join(", ")}]`
-        : "";
+    const selectionNote = selection.size > 0 ? ` [measures ${[...selection].sort((a, b) => a - b).join(", ")}]` : "";
 
     const next: Message[] = [...messagesRef.current, { role: "user", text: text + selectionNote }];
     onMessagesChange(next);
@@ -117,18 +127,13 @@ export default function ChatPanel({
       form.append("message", text);
       if (currentMusicXml) form.append("musicXml", currentMusicXml);
       if (selection.size > 0) {
-        form.append(
-          "selectedMeasures",
-          JSON.stringify([...selection].sort((a, b) => a - b))
-        );
+        form.append("selectedMeasures", JSON.stringify([...selection].sort((a, b) => a - b)));
       }
       // Send chat history (user messages without [measures] suffix, system→assistant)
       if (messages.length > 0) {
         const history = messages.map((m) => ({
-          role: m.role === "user" ? "user" as const : "assistant" as const,
-          content: m.role === "user"
-            ? m.text.replace(/\s*\[measures\s[\d,\s]+\]$/, "")
-            : m.text,
+          role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+          content: m.role === "user" ? m.text.replace(/\s*\[measures\s[\d,\s]+\]$/, "") : m.text,
         }));
         form.append("history", JSON.stringify(history));
       }
@@ -136,7 +141,12 @@ export default function ChatPanel({
       let res: Response | null = null;
       for (let attempt = 0; attempt < MAX_SEND_RETRIES; attempt++) {
         if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * attempt));
-        try { res = await fetch("/api/agent", { method: "POST", body: form }); break; } catch { /* retry */ }
+        try {
+          res = await fetch("/api/agent", { method: "POST", body: form });
+          break;
+        } catch {
+          /* retry */
+        }
       }
       if (!res) throw new Error("network");
       const data = await res.json();
@@ -165,7 +175,10 @@ export default function ChatPanel({
         refreshUsage();
       }
     } catch {
-      onMessagesChange([...next, { role: "system", text: "Connection error — please check your internet and try again." }]);
+      onMessagesChange([
+        ...next,
+        { role: "system", text: "Connection error — please check your internet and try again." },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -178,16 +191,19 @@ export default function ChatPanel({
 
   // Memoize suggestion filtering
   const visibleSuggestions = useMemo(() => {
-    const hasUserMsg = messages.some(m => m.role === "user");
+    const hasUserMsg = messages.some((m) => m.role === "user");
     if (hasUserMsg || loading || isAtLimit) return null;
-    const suggestions = [...messages].reverse().find(m => m.suggestions?.length)?.suggestions;
+    const suggestions = [...messages].reverse().find((m) => m.suggestions?.length)?.suggestions;
     if (!suggestions?.length) return null;
     return suggestions;
   }, [messages, loading, isAtLimit]);
 
   return (
     <div className="flex flex-col h-full bg-white">
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-hide bg-gray-50" style={{ scrollbarWidth: "none" }}>
+      <div
+        className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-hide bg-gray-50"
+        style={{ scrollbarWidth: "none" }}
+      >
         {messages.map((m, i) => (
           <div
             key={i}
@@ -203,9 +219,18 @@ export default function ChatPanel({
         {transcribing && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 self-start text-brand-secondary text-sm shadow-sm">
             <span className="flex gap-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce"
+                style={{ animationDelay: "0ms" }}
+              />
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce"
+                style={{ animationDelay: "150ms" }}
+              />
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-bounce"
+                style={{ animationDelay: "300ms" }}
+              />
             </span>
             Transcribing voice…
           </div>
@@ -213,9 +238,18 @@ export default function ChatPanel({
         {loading && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 self-start text-brand-secondary text-sm shadow-sm">
             <span className="flex gap-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-secondary animate-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-secondary animate-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-secondary animate-bounce" style={{ animationDelay: "300ms" }} />
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-brand-secondary animate-bounce"
+                style={{ animationDelay: "0ms" }}
+              />
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-brand-secondary animate-bounce"
+                style={{ animationDelay: "150ms" }}
+              />
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-brand-secondary animate-bounce"
+                style={{ animationDelay: "300ms" }}
+              />
             </span>
             Processing…
           </div>
@@ -255,7 +289,8 @@ export default function ChatPanel({
         {selectedMeasures.size > 0 && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-primary/5 border border-brand-primary/20 text-xs text-brand-primary">
             <span>
-              {selectedMeasures.size === 1 ? "Measure" : "Measures"} {[...selectedMeasures].sort((a, b) => a - b).join(", ")} selected
+              {selectedMeasures.size === 1 ? "Measure" : "Measures"}{" "}
+              {[...selectedMeasures].sort((a, b) => a - b).join(", ")} selected
             </span>
             <button
               type="button"
@@ -268,9 +303,11 @@ export default function ChatPanel({
         )}
 
         {/* Instruction input — ChatGPT-style container */}
-        <div className={`relative bg-gray-50 rounded-xl border transition ${
-          recording ? "border-red-500" : "border-gray-200 focus-within:border-brand-primary"
-        }`}>
+        <div
+          className={`relative bg-gray-50 rounded-xl border transition ${
+            recording ? "border-red-500" : "border-gray-200 focus-within:border-brand-primary"
+          }`}
+        >
           <textarea
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
@@ -284,8 +321,8 @@ export default function ChatPanel({
               recording
                 ? "Recording…"
                 : currentMusicXml
-                ? "Modify, transpose, ask anything…"
-                : "Ask me to create a score…"
+                  ? "Modify, transpose, ask anything…"
+                  : "Ask me to create a score…"
             }
             disabled={loading || isAtLimit || recording}
             rows={3}
@@ -310,7 +347,10 @@ export default function ChatPanel({
                 {onSingClick && (
                   <button
                     type="button"
-                    onClick={() => { capture("sing_opened"); onSingClick(); }}
+                    onClick={() => {
+                      capture("sing_opened");
+                      onSingClick();
+                    }}
                     disabled={loading || isAtLimit}
                     className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-700 hover:bg-gray-200"
                     title="Sing a melody"

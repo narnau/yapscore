@@ -26,10 +26,7 @@ const MAX_HISTORY = 30;
 
 const MAX_FILES_PER_PAGE = 100;
 
-export async function listFiles(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<FileEntry[]> {
+export async function listFiles(supabase: SupabaseClient, userId: string): Promise<FileEntry[]> {
   const { data, error } = await supabase
     .from("files")
     .select("id, name, created_at, updated_at")
@@ -44,23 +41,15 @@ export async function listFiles(
 export async function createFile(
   supabase: SupabaseClient,
   userId: string,
-  name: string = "Untitled"
+  name: string = "Untitled",
 ): Promise<{ id: string }> {
-  const { data, error } = await supabase
-    .from("files")
-    .insert({ user_id: userId, name })
-    .select("id")
-    .single();
+  const { data, error } = await supabase.from("files").insert({ user_id: userId, name }).select("id").single();
 
   if (error) throw new Error(error.message);
   return { id: data.id };
 }
 
-export async function getFile(
-  supabase: SupabaseClient,
-  userId: string,
-  id: string
-): Promise<FileData | null> {
+export async function getFile(supabase: SupabaseClient, userId: string, id: string): Promise<FileData | null> {
   const { data, error } = await supabase
     .from("files")
     .select("id, name, current_xml, history, messages, swing, created_at, updated_at")
@@ -82,7 +71,7 @@ export async function saveFile(
     history?: HistoryEntry[];
     messages?: Message[];
     swing?: boolean | null;
-  }
+  },
 ): Promise<void> {
   // Cap history at MAX_HISTORY
   const update: Record<string, unknown> = { ...patch };
@@ -90,25 +79,13 @@ export async function saveFile(
     update.history = patch.history.slice(-MAX_HISTORY);
   }
 
-  const { error } = await supabase
-    .from("files")
-    .update(update)
-    .eq("id", id)
-    .eq("user_id", userId);
+  const { error } = await supabase.from("files").update(update).eq("id", id).eq("user_id", userId);
 
   if (error) throw new Error(error.message);
 }
 
-export async function deleteFile(
-  supabase: SupabaseClient,
-  userId: string,
-  id: string
-): Promise<void> {
-  const { error } = await supabase
-    .from("files")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", userId);
+export async function deleteFile(supabase: SupabaseClient, userId: string, id: string): Promise<void> {
+  const { error } = await supabase.from("files").delete().eq("id", id).eq("user_id", userId);
 
   if (error) throw new Error(error.message);
 }

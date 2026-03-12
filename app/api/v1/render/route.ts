@@ -5,7 +5,7 @@ import { getVerovioToolkit } from "@/lib/music/verovio";
 
 const renderSchema = z.object({
   musicxml: z.string().min(1, "musicxml is required"),
-  page:     z.number().int().min(1).optional().default(1),
+  page: z.number().int().min(1).optional().default(1),
 });
 
 export async function POST(req: NextRequest) {
@@ -36,9 +36,9 @@ export async function POST(req: NextRequest) {
     });
 
     tk.loadData(musicxml);
-    const totalPages  = tk.getPageCount();
+    const totalPages = tk.getPageCount();
     const clampedPage = Math.max(1, Math.min(page, totalPages));
-    const svg         = tk.renderToSVG(clampedPage);
+    const svg = tk.renderToSVG(clampedPage);
 
     return new NextResponse(svg, {
       status: 200,

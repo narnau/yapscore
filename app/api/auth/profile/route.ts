@@ -8,7 +8,9 @@ export async function GET() {
     const auth = await getAuthUser();
     if (!auth.ok) return auth.response;
 
-    const { data: { user } } = await auth.supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await auth.supabase.auth.getUser();
 
     return NextResponse.json({
       email: user?.email ?? "",
@@ -24,7 +26,9 @@ export async function POST() {
     const auth = await getAuthUser();
     if (!auth.ok) return auth.response;
 
-    const { data: { user } } = await auth.supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await auth.supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const admin = createAdminClient();

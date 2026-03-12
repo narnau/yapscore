@@ -27,10 +27,10 @@ export async function POST(req: NextRequest) {
   const mime = audio.type.split(";")[0]; // strip codecs suffix
   const formatMap: Record<string, string> = {
     "audio/webm": "webm",
-    "audio/ogg":  "ogg",
-    "audio/mp4":  "mp4",
-    "audio/m4a":  "mp4",
-    "audio/wav":  "wav",
+    "audio/ogg": "ogg",
+    "audio/mp4": "mp4",
+    "audio/m4a": "mp4",
+    "audio/wav": "wav",
     "audio/flac": "flac",
     "audio/mpeg": "mp3",
   };
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
         content: [
           {
             type: "input_audio",
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
             input_audio: { data: base64, format },
           } as any,
           {

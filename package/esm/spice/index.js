@@ -1,2 +1,2 @@
-export { SPICE } from './model';
+export { SPICE } from "./model";
 //# sourceMappingURL=index.js.map

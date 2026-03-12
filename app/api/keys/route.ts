@@ -5,7 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { generateApiKey } from "@/lib/auth/api-key";
 
 const createKeySchema = z.object({
-  name: z.string().min(1, "name is required").transform(s => s.trim()),
+  name: z
+    .string()
+    .min(1, "name is required")
+    .transform((s) => s.trim()),
 });
 
 // GET /api/keys — list user's API keys

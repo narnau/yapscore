@@ -18,10 +18,15 @@ const agentSchema = z.object({
   message: z.string().min(1, "Missing message").max(2_000, "Message too long (max 2000 chars)"),
   currentMusicXml: z.string().max(500_000, "Score too large").optional().nullable(),
   selectedMeasures: z.array(z.number()).optional().nullable(),
-  history: z.array(z.object({
-    role: z.enum(["user", "assistant"]),
-    content: z.string(),
-  })).optional().nullable(),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string(),
+      }),
+    )
+    .optional()
+    .nullable(),
   scoreName: z.string().optional().nullable(),
 });
 
@@ -31,10 +36,7 @@ export async function POST(req: NextRequest) {
 
   // Burst rate limit check
   if (!rateLimiter.check(auth.userId)) {
-    return NextResponse.json(
-      { error: "Too many requests. Please wait a moment." },
-      { status: 429 }
-    );
+    return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 });
   }
 
   // Check usage limits
@@ -89,9 +91,11 @@ export async function POST(req: NextRequest) {
 
     after(() => logger.flush());
 
-    if (result.type === "chat")   return NextResponse.json({ type: "chat",   message: result.message });
-    if (result.type === "load")   return NextResponse.json({ type: "load",   musicXml: result.musicXml, name: result.name });
-    if (result.type === "modify") return NextResponse.json({ type: "modify", musicXml: result.musicXml, message: result.message });
+    if (result.type === "chat") return NextResponse.json({ type: "chat", message: result.message });
+    if (result.type === "load")
+      return NextResponse.json({ type: "load", musicXml: result.musicXml, name: result.name });
+    if (result.type === "modify")
+      return NextResponse.json({ type: "modify", musicXml: result.musicXml, message: result.message });
 
     return NextResponse.json({ error: "Unknown result type" }, { status: 500 });
   } catch (err) {

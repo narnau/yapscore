@@ -11,8 +11,16 @@ import {
   type ArticulationNotation,
 } from "./musicxml-core";
 import type {
-  Score, Measure, MeasureEntry, NoteEntry, Pitch,
-  DirectionEntry, DirectionType, NoteType, Notation, DynamicsValue,
+  Score,
+  Measure,
+  MeasureEntry,
+  NoteEntry,
+  Pitch,
+  DirectionEntry,
+  DirectionType,
+  NoteType,
+  Notation,
+  DynamicsValue,
   Lyric as MxlLyric,
 } from "musicxml-io";
 
@@ -49,7 +57,7 @@ export function setTempo(musicXml: string, bpm: number, beatUnit: string = "quar
       const m1 = part.measures[0];
       if (!m1) continue;
       const dir = buildTempoDirection(bpm, beatUnit as NoteType);
-      const firstNoteIdx = m1.entries.findIndex(e => e.type === "note");
+      const firstNoteIdx = m1.entries.findIndex((e) => e.type === "note");
       if (firstNoteIdx !== -1) {
         m1.entries.splice(firstNoteIdx, 0, dir);
       } else {
@@ -68,7 +76,7 @@ export function getTempo(musicXml: string): { bpm: number; beatUnit: string } | 
         if (entry.type === "direction") {
           const dir = entry as DirectionEntry;
           if (dir.sound?.tempo) {
-            const met = dir.directionTypes.find(dt => dt.kind === "metronome");
+            const met = dir.directionTypes.find((dt) => dt.kind === "metronome");
             return {
               bpm: dir.sound.tempo,
               beatUnit: (met && met.kind === "metronome" ? met.beatUnit : "quarter") ?? "quarter",
@@ -84,16 +92,19 @@ export function getTempo(musicXml: string): { bpm: number; beatUnit: string } | 
 // ─── addDynamics ────────────────────────────────────────────────────────────
 
 const DYNAMIC_VELOCITIES: Record<string, number> = {
-  pp: 36, p: 54, mp: 71, mf: 89, f: 106, ff: 124, fp: 96, sfz: 112,
+  pp: 36,
+  p: 54,
+  mp: 71,
+  mf: 89,
+  f: 106,
+  ff: 124,
+  fp: 96,
+  sfz: 112,
 };
 
 export type DynamicMarking = "pp" | "p" | "mp" | "mf" | "f" | "ff" | "fp" | "sfz";
 
-export function addDynamics(
-  musicXml: string,
-  measureNumbers: number[],
-  dynamic: DynamicMarking
-): string {
+export function addDynamics(musicXml: string, measureNumbers: number[], dynamic: DynamicMarking): string {
   const nums = new Set(measureNumbers);
   const velocity = DYNAMIC_VELOCITIES[dynamic] ?? 89;
   const score = mxlParse(musicXml);
@@ -103,14 +114,13 @@ export function addDynamics(
       if (!nums.has(measureNum(m))) continue;
 
       // Check for existing dynamics direction
-      const existingIdx = m.entries.findIndex(e =>
-        e.type === "direction" &&
-        (e as DirectionEntry).directionTypes.some(dt => dt.kind === "dynamics")
+      const existingIdx = m.entries.findIndex(
+        (e) => e.type === "direction" && (e as DirectionEntry).directionTypes.some((dt) => dt.kind === "dynamics"),
       );
 
       if (existingIdx !== -1) {
         const dir = m.entries[existingIdx] as DirectionEntry;
-        const dynDt = dir.directionTypes.find(dt => dt.kind === "dynamics");
+        const dynDt = dir.directionTypes.find((dt) => dt.kind === "dynamics");
         if (dynDt && dynDt.kind === "dynamics") {
           dynDt.value = dynamic as DynamicsValue;
         }
@@ -127,7 +137,7 @@ export function addDynamics(
         sound: { dynamics: velocity },
       };
 
-      const firstNoteIdx = m.entries.findIndex(e => e.type === "note");
+      const firstNoteIdx = m.entries.findIndex((e) => e.type === "note");
       if (firstNoteIdx !== -1) m.entries.splice(firstNoteIdx, 0, dir);
       else m.entries.push(dir);
     }
@@ -143,7 +153,7 @@ export function addArticulations(
   musicXml: string,
   measureNumbers: number[],
   articulation: ArticulationMarking,
-  partId?: string
+  partId?: string,
 ): string {
   const nums = new Set(measureNumbers);
   const score = mxlParse(musicXml);
@@ -170,7 +180,7 @@ export function removeArticulations(
   musicXml: string,
   measureNumbers: number[],
   articulation?: ArticulationMarking,
-  partId?: string
+  partId?: string,
 ): string {
   const nums = new Set(measureNumbers);
   const score = mxlParse(musicXml);
@@ -196,11 +206,7 @@ export function removeArticulations(
 
 // ─── addRepeatBarlines ──────────────────────────────────────────────────────
 
-export function addRepeatBarlines(
-  musicXml: string,
-  startMeasure: number,
-  endMeasure: number
-): string {
+export function addRepeatBarlines(musicXml: string, startMeasure: number, endMeasure: number): string {
   const score = mxlParse(musicXml);
 
   for (const part of score.parts) {
@@ -234,7 +240,7 @@ export function addRepeatBarlines(
 export function addVoltaBrackets(
   musicXml: string,
   firstEndingMeasures: number[],
-  secondEndingMeasures: number[]
+  secondEndingMeasures: number[],
 ): string {
   const firstStart = Math.min(...firstEndingMeasures);
   const firstEnd = Math.max(...firstEndingMeasures);
@@ -287,7 +293,7 @@ export function addHairpin(
   musicXml: string,
   startMeasure: number,
   endMeasure: number,
-  type: "crescendo" | "diminuendo"
+  type: "crescendo" | "diminuendo",
 ): string {
   const score = mxlParse(musicXml);
 
@@ -302,7 +308,7 @@ export function addHairpin(
           placement: "below",
           directionTypes: [{ kind: "wedge", type }],
         };
-        const firstNoteIdx = m.entries.findIndex(e => e.type === "note");
+        const firstNoteIdx = m.entries.findIndex((e) => e.type === "note");
         if (firstNoteIdx !== -1) m.entries.splice(firstNoteIdx, 0, dir);
         else m.entries.push(dir);
       }
@@ -313,7 +319,7 @@ export function addHairpin(
           placement: "below",
           directionTypes: [{ kind: "wedge", type: "stop" }],
         };
-        const firstNoteIdx = m.entries.findIndex(e => e.type === "note");
+        const firstNoteIdx = m.entries.findIndex((e) => e.type === "note");
         if (firstNoteIdx !== -1) m.entries.splice(firstNoteIdx, 0, dir);
         else m.entries.push(dir);
       }
@@ -328,7 +334,7 @@ export function addTextAnnotation(
   musicXml: string,
   measureNumber: number,
   text: string,
-  type: "text" | "rehearsal"
+  type: "text" | "rehearsal",
 ): string {
   const score = mxlParse(musicXml);
 
@@ -336,9 +342,10 @@ export function addTextAnnotation(
     for (const m of part.measures) {
       if (measureNum(m) !== measureNumber) continue;
 
-      const dirType: DirectionType = type === "rehearsal"
-        ? { kind: "rehearsal", text, enclosure: "square" }
-        : { kind: "words", text, fontStyle: "italic" };
+      const dirType: DirectionType =
+        type === "rehearsal"
+          ? { kind: "rehearsal", text, enclosure: "square" }
+          : { kind: "words", text, fontStyle: "italic" };
 
       const dir: DirectionEntry = {
         _id: generateId(),
@@ -347,7 +354,7 @@ export function addTextAnnotation(
         directionTypes: [dirType],
       };
 
-      const firstNoteIdx = m.entries.findIndex(e => e.type === "note");
+      const firstNoteIdx = m.entries.findIndex((e) => e.type === "note");
       if (firstNoteIdx !== -1) m.entries.splice(firstNoteIdx, 0, dir);
       else m.entries.push(dir);
     }
@@ -357,12 +364,7 @@ export function addTextAnnotation(
 
 // ─── addSlur / removeSlurs ───────────────────────────────────────────────────
 
-export function addSlur(
-  musicXml: string,
-  startMeasure: number,
-  endMeasure: number,
-  partId = "P1",
-): string {
+export function addSlur(musicXml: string, startMeasure: number, endMeasure: number, partId = "P1"): string {
   const score = mxlParse(musicXml);
   const part = findPart(score, partId);
   if (!part) return musicXml;
@@ -371,9 +373,7 @@ export function addSlur(
     const num = measureNum(m);
     if (num < startMeasure || num > endMeasure) continue;
 
-    const notes = m.entries.filter(
-      (e): e is NoteEntry => e.type === "note" && !e.rest
-    );
+    const notes = m.entries.filter((e): e is NoteEntry => e.type === "note" && !e.rest);
     if (!notes.length) continue;
 
     if (num === startMeasure) {
@@ -390,12 +390,7 @@ export function addSlur(
   return mxlSerialize(score);
 }
 
-export function removeSlurs(
-  musicXml: string,
-  startMeasure: number,
-  endMeasure: number,
-  partId?: string,
-): string {
+export function removeSlurs(musicXml: string, startMeasure: number, endMeasure: number, partId?: string): string {
   const score = mxlParse(musicXml);
   for (const part of score.parts) {
     if (partId && part.id !== partId) continue;
@@ -406,7 +401,7 @@ export function removeSlurs(
         if (e.type !== "note") continue;
         const note = e as NoteEntry;
         if (note.notations) {
-          note.notations = note.notations.filter(n => n.type !== "slur");
+          note.notations = note.notations.filter((n) => n.type !== "slur");
         }
       }
     }
@@ -416,21 +411,14 @@ export function removeSlurs(
 
 // ─── addLyrics ───────────────────────────────────────────────────────────────
 
-export function addLyrics(
-  musicXml: string,
-  measureNumber: number,
-  syllables: string[],
-  partId = "P1",
-): string {
+export function addLyrics(musicXml: string, measureNumber: number, syllables: string[], partId = "P1"): string {
   const score = mxlParse(musicXml);
   const part = findPart(score, partId);
   if (!part) return musicXml;
   const measure = findMeasure(part, measureNumber);
   if (!measure) return musicXml;
 
-  const notes = measure.entries.filter(
-    (e): e is NoteEntry => e.type === "note" && !e.rest && !e.chord
-  );
+  const notes = measure.entries.filter((e): e is NoteEntry => e.type === "note" && !e.rest && !e.chord);
 
   for (let i = 0; i < Math.min(notes.length, syllables.length); i++) {
     const raw = syllables[i];
@@ -441,9 +429,9 @@ export function addLyrics(
     const prevHadDash = i > 0 && syllables[i - 1].endsWith("-");
     let syllabic: MxlLyric["syllabic"];
     if (prevHadDash && hasDash) syllabic = "middle";
-    else if (prevHadDash)        syllabic = "end";
-    else if (hasDash)            syllabic = "begin";
-    else                         syllabic = "single";
+    else if (prevHadDash) syllabic = "end";
+    else if (hasDash) syllabic = "begin";
+    else syllabic = "single";
 
     // Replace existing lyric on this note
     notes[i].lyrics = [{ text, syllabic }];
@@ -468,9 +456,7 @@ export function addFermata(
   const measure = findMeasure(part, measureNumber);
   if (!measure) return musicXml;
 
-  const notes = measure.entries.filter(
-    (e): e is NoteEntry => e.type === "note" && !e.rest
-  );
+  const notes = measure.entries.filter((e): e is NoteEntry => e.type === "note" && !e.rest);
   if (!notes.length) return musicXml;
 
   let target: NoteEntry;
@@ -526,7 +512,7 @@ export function addOttava(
           placement: "above",
           directionTypes: [{ kind: "octave-shift", type: ottavaType as "up" | "down" | "stop", size }],
         };
-        const idx = m.entries.findIndex(e => e.type === "note");
+        const idx = m.entries.findIndex((e) => e.type === "note");
         if (idx !== -1) m.entries.splice(idx, 0, dir);
         else m.entries.push(dir);
       }
@@ -546,12 +532,7 @@ export function addOttava(
 
 // ─── addPedalMarking ─────────────────────────────────────────────────────────
 
-export function addPedalMarking(
-  musicXml: string,
-  startMeasure: number,
-  endMeasure: number,
-  partId = "P1",
-): string {
+export function addPedalMarking(musicXml: string, startMeasure: number, endMeasure: number, partId = "P1"): string {
   const score = mxlParse(musicXml);
   for (const part of score.parts) {
     if (part.id !== partId) continue;
@@ -564,7 +545,7 @@ export function addPedalMarking(
           placement: "below",
           directionTypes: [{ kind: "pedal", type: "start", line: true }],
         };
-        const idx = m.entries.findIndex(e => e.type === "note");
+        const idx = m.entries.findIndex((e) => e.type === "note");
         if (idx !== -1) m.entries.splice(idx, 0, dir);
         else m.entries.push(dir);
       }
@@ -598,7 +579,7 @@ export function addNavigationMark(
   const measure = findMeasure(part, measureNumber);
   if (!measure) return musicXml;
 
-  const idx = measure.entries.findIndex(e => e.type === "note");
+  const idx = measure.entries.findIndex((e) => e.type === "note");
   const insertAt = (entry: MeasureEntry) => {
     if (idx !== -1) measure.entries.splice(idx, 0, entry);
     else measure.entries.push(entry);
@@ -616,22 +597,42 @@ export function addNavigationMark(
       break;
     }
     case "fine": {
-      insertAt({ _id: generateId(), type: "direction", placement: "above", directionTypes: [{ kind: "words", text: "Fine", fontWeight: "bold" }] });
+      insertAt({
+        _id: generateId(),
+        type: "direction",
+        placement: "above",
+        directionTypes: [{ kind: "words", text: "Fine", fontWeight: "bold" }],
+      });
       measure.entries.push({ _id: generateId(), type: "sound", fine: true } as SoundEntry);
       break;
     }
     case "dacapo": {
-      measure.entries.push({ _id: generateId(), type: "direction", placement: "above", directionTypes: [{ kind: "words", text: "D.C. al Fine" }] } as DirectionEntry);
+      measure.entries.push({
+        _id: generateId(),
+        type: "direction",
+        placement: "above",
+        directionTypes: [{ kind: "words", text: "D.C. al Fine" }],
+      } as DirectionEntry);
       measure.entries.push({ _id: generateId(), type: "sound", dacapo: true } as SoundEntry);
       break;
     }
     case "dalsegno": {
-      measure.entries.push({ _id: generateId(), type: "direction", placement: "above", directionTypes: [{ kind: "words", text: "D.S. al Coda" }] } as DirectionEntry);
+      measure.entries.push({
+        _id: generateId(),
+        type: "direction",
+        placement: "above",
+        directionTypes: [{ kind: "words", text: "D.S. al Coda" }],
+      } as DirectionEntry);
       measure.entries.push({ _id: generateId(), type: "sound", dalsegno: "segno" } as SoundEntry);
       break;
     }
     case "toCoda": {
-      insertAt({ _id: generateId(), type: "direction", placement: "above", directionTypes: [{ kind: "words", text: "To Coda" }] });
+      insertAt({
+        _id: generateId(),
+        type: "direction",
+        placement: "above",
+        directionTypes: [{ kind: "words", text: "To Coda" }],
+      });
       insertAt({ _id: generateId(), type: "sound", tocoda: "coda" } as SoundEntry);
       break;
     }
@@ -666,12 +667,7 @@ export function addArpeggio(
 
 // ─── addTremolo ──────────────────────────────────────────────────────────────
 
-export function addTremolo(
-  musicXml: string,
-  measureNumber: number,
-  marks: 1 | 2 | 3 = 3,
-  partId = "P1",
-): string {
+export function addTremolo(musicXml: string, measureNumber: number, marks: 1 | 2 | 3 = 3, partId = "P1"): string {
   const score = mxlParse(musicXml);
   const part = findPart(score, partId);
   if (!part) return musicXml;
@@ -712,9 +708,7 @@ export function addGlissando(
     const num = measureNum(m);
     if (num < startMeasure || num > endMeasure) continue;
 
-    const notes = m.entries.filter(
-      (e): e is NoteEntry => e.type === "note" && !e.rest
-    );
+    const notes = m.entries.filter((e): e is NoteEntry => e.type === "note" && !e.rest);
     if (!notes.length) continue;
 
     if (num === startMeasure) {
@@ -739,20 +733,14 @@ export function addGlissando(
 
 // ─── addBreathMark ───────────────────────────────────────────────────────────
 
-export function addBreathMark(
-  musicXml: string,
-  measureNumber: number,
-  partId = "P1",
-): string {
+export function addBreathMark(musicXml: string, measureNumber: number, partId = "P1"): string {
   const score = mxlParse(musicXml);
   const part = findPart(score, partId);
   if (!part) return musicXml;
   const measure = findMeasure(part, measureNumber);
   if (!measure) return musicXml;
 
-  const notes = measure.entries.filter(
-    (e): e is NoteEntry => e.type === "note" && !e.rest
-  );
+  const notes = measure.entries.filter((e): e is NoteEntry => e.type === "note" && !e.rest);
   if (!notes.length) return musicXml;
 
   const last = notes[notes.length - 1];

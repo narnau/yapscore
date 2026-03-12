@@ -34,7 +34,9 @@ function SupabaseIdentify() {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         identifyUser(session.user.id, session.user.email);
       } else {

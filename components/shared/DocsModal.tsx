@@ -14,7 +14,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function DocsModal({ onClose }: { onClose: () => void }) {
   // Close on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
@@ -46,12 +48,18 @@ export default function DocsModal({ onClose }: { onClose: () => void }) {
 
         {/* Scrollable content */}
         <div className="overflow-y-auto px-6 py-5 space-y-6 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-
           <Section title="Getting Started">
             <p>You can start in two ways:</p>
             <ul className="list-disc list-inside space-y-1 ml-1">
-              <li><strong>Upload a file</strong> — Drop a <code className="text-brand-primary bg-brand-primary/5 px-1 rounded">.musicxml</code> or <code className="text-brand-primary bg-brand-primary/5 px-1 rounded">.mscz</code> file into the chat</li>
-              <li><strong>Create from scratch</strong> — Ask the AI to generate a score (e.g. "Write a 12-bar blues in Bb for piano")</li>
+              <li>
+                <strong>Upload a file</strong> — Drop a{" "}
+                <code className="text-brand-primary bg-brand-primary/5 px-1 rounded">.musicxml</code> or{" "}
+                <code className="text-brand-primary bg-brand-primary/5 px-1 rounded">.mscz</code> file into the chat
+              </li>
+              <li>
+                <strong>Create from scratch</strong> — Ask the AI to generate a score (e.g. "Write a 12-bar blues in Bb
+                for piano")
+              </li>
             </ul>
             <p>Then simply describe your edits in plain language.</p>
           </Section>
@@ -59,9 +67,20 @@ export default function DocsModal({ onClose }: { onClose: () => void }) {
           <Section title="Editing Scores">
             <ul className="list-disc list-inside space-y-1 ml-1">
               <li>Click measures in the score to select them for targeted edits</li>
-              <li>Hold <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Shift</kbd> or <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Cmd</kbd> to select multiple measures</li>
+              <li>
+                Hold{" "}
+                <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Shift</kbd>{" "}
+                or <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Cmd</kbd>{" "}
+                to select multiple measures
+              </li>
               <li>Type instructions like "transpose up a major third" or "change the tempo"</li>
-              <li>Use <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Ctrl+Z</kbd> / <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Ctrl+Y</kbd> to undo/redo</li>
+              <li>
+                Use{" "}
+                <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Ctrl+Z</kbd>{" "}
+                /{" "}
+                <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">Ctrl+Y</kbd>{" "}
+                to undo/redo
+              </li>
             </ul>
           </Section>
 
@@ -75,12 +94,20 @@ export default function DocsModal({ onClose }: { onClose: () => void }) {
                   [["↑", "↓"], "Move note up / down one semitone"],
                   [["Ctrl+↑", "Ctrl+↓"], "Move note up / down one octave"],
                   [["Delete", "Backspace"], "Replace note with a rest"],
-                  [["1","2","3","4","5","6","7"], "Duration: 1=64th 2=32nd 3=16th 4=eighth 5=quarter 6=half 7=whole"],
+                  [
+                    ["1", "2", "3", "4", "5", "6", "7"],
+                    "Duration: 1=64th 2=32nd 3=16th 4=eighth 5=quarter 6=half 7=whole",
+                  ],
                 ].map(([keys, desc], i) => (
                   <tr key={i} className="border-t border-gray-100">
                     <td className="py-1.5 pr-3 align-top whitespace-nowrap">
                       {(keys as string[]).map((k) => (
-                        <kbd key={k} className="mr-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">{k}</kbd>
+                        <kbd
+                          key={k}
+                          className="mr-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono"
+                        >
+                          {k}
+                        </kbd>
                       ))}
                     </td>
                     <td className="py-1.5 text-brand-secondary">{desc as string}</td>
@@ -100,7 +127,12 @@ export default function DocsModal({ onClose }: { onClose: () => void }) {
                   <tr key={i} className="border-t border-gray-100">
                     <td className="py-1.5 pr-3 align-top whitespace-nowrap">
                       {(keys as string[]).map((k) => (
-                        <kbd key={k} className="mr-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono">{k}</kbd>
+                        <kbd
+                          key={k}
+                          className="mr-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-mono"
+                        >
+                          {k}
+                        </kbd>
                       ))}
                     </td>
                     <td className="py-1.5 text-brand-secondary">{desc as string}</td>
@@ -121,7 +153,10 @@ export default function DocsModal({ onClose }: { onClose: () => void }) {
                 "Add a crescendo from measure 4 to 8",
                 "Change the tempo to 120 bpm",
               ].map((prompt) => (
-                <div key={prompt} className="bg-gray-50 rounded-lg px-3 py-2 text-xs italic text-gray-600 border border-gray-100">
+                <div
+                  key={prompt}
+                  className="bg-gray-50 rounded-lg px-3 py-2 text-xs italic text-gray-600 border border-gray-100"
+                >
                   &ldquo;{prompt}&rdquo;
                 </div>
               ))}
@@ -129,17 +164,24 @@ export default function DocsModal({ onClose }: { onClose: () => void }) {
           </Section>
 
           <Section title="File Compatibility">
-            <p>YapScore uses <strong>MusicXML</strong> — compatible with:</p>
+            <p>
+              YapScore uses <strong>MusicXML</strong> — compatible with:
+            </p>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {["MuseScore", "Finale", "Sibelius", "Dorico", "Noteflight", "Flat.io"].map((app) => (
-                <span key={app} className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs font-medium text-gray-700">
+                <span
+                  key={app}
+                  className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs font-medium text-gray-700"
+                >
                   {app}
                 </span>
               ))}
             </div>
-            <p className="mt-2">You can also upload <code className="text-brand-primary bg-brand-primary/5 px-1 rounded">.mscz</code> files — they&apos;re converted automatically.</p>
+            <p className="mt-2">
+              You can also upload <code className="text-brand-primary bg-brand-primary/5 px-1 rounded">.mscz</code>{" "}
+              files — they&apos;re converted automatically.
+            </p>
           </Section>
-
         </div>
       </div>
     </div>

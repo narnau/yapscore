@@ -35,19 +35,36 @@ export default function MeasureControls({
         </button>
         <button
           disabled={copiedMeasures.size === 0}
-          onClick={() => { if (copiedMeasures.size > 0) onMusicXmlChange(pasteMeasures(musicXml, [...copiedMeasures], Math.min(...selectedMeasures)), "Paste measures"); }}
+          onClick={() => {
+            if (copiedMeasures.size > 0)
+              onMusicXmlChange(
+                pasteMeasures(musicXml, [...copiedMeasures], Math.min(...selectedMeasures)),
+                "Paste measures",
+              );
+          }}
           className="py-3 rounded-xl bg-gray-100 active:bg-gray-200 disabled:opacity-30 text-sm font-medium text-gray-700 transition active:scale-95"
         >
           Paste
         </button>
         <button
-          onClick={() => onMusicXmlChange(duplicateMeasures(musicXml, [...selectedMeasures].sort((a, b) => a - b)), "Duplicate measures")}
+          onClick={() =>
+            onMusicXmlChange(
+              duplicateMeasures(
+                musicXml,
+                [...selectedMeasures].sort((a, b) => a - b),
+              ),
+              "Duplicate measures",
+            )
+          }
           className="py-3 rounded-xl bg-gray-100 active:bg-gray-200 text-sm font-medium text-gray-700 transition active:scale-95"
         >
           Duplicate
         </button>
         <button
-          onClick={() => { onMusicXmlChange(deleteMeasures(musicXml, [...selectedMeasures]), "Delete measures"); onClearMeasureSelection?.(); }}
+          onClick={() => {
+            onMusicXmlChange(deleteMeasures(musicXml, [...selectedMeasures]), "Delete measures");
+            onClearMeasureSelection?.();
+          }}
           className="py-3 rounded-xl bg-red-50 active:bg-red-100 text-red-600 text-sm font-medium transition active:scale-95"
         >
           ✕ Delete
@@ -58,11 +75,49 @@ export default function MeasureControls({
 
   return (
     <>
-      <span className="text-[10px] text-gray-400 mr-0.5 shrink-0">{selectedMeasures.size} measure{selectedMeasures.size > 1 ? "s" : ""}:</span>
-      <ToolBtn onClick={() => setCopiedMeasures(new Set(selectedMeasures))} title="Copy (Ctrl+C)">Copy</ToolBtn>
-      <ToolBtn disabled={copiedMeasures.size === 0} onClick={() => { if (copiedMeasures.size > 0) onMusicXmlChange(pasteMeasures(musicXml, [...copiedMeasures], Math.min(...selectedMeasures)), "Paste measures"); }} title="Paste (Ctrl+V)">Paste</ToolBtn>
-      <ToolBtn onClick={() => onMusicXmlChange(duplicateMeasures(musicXml, [...selectedMeasures].sort((a,b)=>a-b)), "Duplicate measures")} title="Duplicate (Ctrl+D)">Duplicate</ToolBtn>
-      <ToolBtn danger onClick={() => { onMusicXmlChange(deleteMeasures(musicXml, [...selectedMeasures]), "Delete measures"); onClearMeasureSelection?.(); }} title="Delete measures">✕ Delete</ToolBtn>
+      <span className="text-[10px] text-gray-400 mr-0.5 shrink-0">
+        {selectedMeasures.size} measure{selectedMeasures.size > 1 ? "s" : ""}:
+      </span>
+      <ToolBtn onClick={() => setCopiedMeasures(new Set(selectedMeasures))} title="Copy (Ctrl+C)">
+        Copy
+      </ToolBtn>
+      <ToolBtn
+        disabled={copiedMeasures.size === 0}
+        onClick={() => {
+          if (copiedMeasures.size > 0)
+            onMusicXmlChange(
+              pasteMeasures(musicXml, [...copiedMeasures], Math.min(...selectedMeasures)),
+              "Paste measures",
+            );
+        }}
+        title="Paste (Ctrl+V)"
+      >
+        Paste
+      </ToolBtn>
+      <ToolBtn
+        onClick={() =>
+          onMusicXmlChange(
+            duplicateMeasures(
+              musicXml,
+              [...selectedMeasures].sort((a, b) => a - b),
+            ),
+            "Duplicate measures",
+          )
+        }
+        title="Duplicate (Ctrl+D)"
+      >
+        Duplicate
+      </ToolBtn>
+      <ToolBtn
+        danger
+        onClick={() => {
+          onMusicXmlChange(deleteMeasures(musicXml, [...selectedMeasures]), "Delete measures");
+          onClearMeasureSelection?.();
+        }}
+        title="Delete measures"
+      >
+        ✕ Delete
+      </ToolBtn>
     </>
   );
 }

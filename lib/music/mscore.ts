@@ -16,10 +16,7 @@ function patchFetch() {
   _fetchPatched = true;
 
   const orig = globalThis.fetch.bind(globalThis);
-  (globalThis as Record<string, unknown>).fetch = function (
-    input: RequestInfo | URL,
-    init?: RequestInit
-  ) {
+  (globalThis as Record<string, unknown>).fetch = function (input: RequestInfo | URL, init?: RequestInit) {
     // Resolve the path string
     let filePath: string | null = null;
     if (typeof input === "string" && /^\/[^/]/.test(input)) {
@@ -46,18 +43,17 @@ function resetWebMscore() {
   // executes the module code fresh — otherwise require() returns the same
   // object with the same (potentially corrupted) WASM heap.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    delete (require as NodeJS.Require & { cache: Record<string, unknown> }).cache[
-      require.resolve("webmscore")
-    ];
-  } catch { /* ignore — path resolution may fail outside Node */ }
+    delete (require as NodeJS.Require & { cache: Record<string, unknown> }).cache[require.resolve("webmscore")];
+  } catch {
+    /* ignore — path resolution may fail outside Node */
+  }
 }
 
 async function getWebMscore(): Promise<{ load: Function; ready: Promise<void> }> {
   if (_webmscore) return _webmscore;
   patchFetch();
   // Use require() so the module loads AFTER the fetch patch is in place
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+
   let mod = require("webmscore");
   if (mod?.default) mod = mod.default;
   await (mod.ready as Promise<void>);
@@ -70,7 +66,7 @@ async function getWebMscore(): Promise<{ load: Function; ready: Promise<void> }>
  * Returns { ok: true, content } on success, { ok: false, error } on failure.
  */
 export async function toMusicXml(
-  input: Buffer | Uint8Array
+  input: Buffer | Uint8Array,
 ): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
   const data = input instanceof Buffer ? new Uint8Array(input) : input;
 

@@ -23,21 +23,21 @@ export type ChordSymbol = {
 // ─── Chord kind mapping ─────────────────────────────────────────────────────
 
 const CHORD_KIND_MAP: Record<string, { xml: string; text: string }> = {
-  "":      { xml: "major",               text: ""     },
-  "M":     { xml: "major",               text: ""     },
-  "major": { xml: "major",               text: ""     },
-  "m":     { xml: "minor",               text: "m"    },
-  "minor": { xml: "minor",               text: "m"    },
-  "7":     { xml: "dominant",            text: "7"    },
-  "maj7":  { xml: "major-seventh",       text: "maj7" },
-  "M7":    { xml: "major-seventh",       text: "maj7" },
-  "m7":    { xml: "minor-seventh",       text: "m7"   },
-  "dim":   { xml: "diminished",          text: "dim"  },
-  "dim7":  { xml: "diminished-seventh",  text: "dim7" },
-  "aug":   { xml: "augmented",           text: "aug"  },
-  "m7b5":  { xml: "half-diminished",     text: "m7b5" },
-  "sus2":  { xml: "suspended-second",    text: "sus2" },
-  "sus4":  { xml: "suspended-fourth",    text: "sus4" },
+  "": { xml: "major", text: "" },
+  M: { xml: "major", text: "" },
+  major: { xml: "major", text: "" },
+  m: { xml: "minor", text: "m" },
+  minor: { xml: "minor", text: "m" },
+  "7": { xml: "dominant", text: "7" },
+  maj7: { xml: "major-seventh", text: "maj7" },
+  M7: { xml: "major-seventh", text: "maj7" },
+  m7: { xml: "minor-seventh", text: "m7" },
+  dim: { xml: "diminished", text: "dim" },
+  dim7: { xml: "diminished-seventh", text: "dim7" },
+  aug: { xml: "augmented", text: "aug" },
+  m7b5: { xml: "half-diminished", text: "m7b5" },
+  sus2: { xml: "suspended-second", text: "sus2" },
+  sus4: { xml: "suspended-fourth", text: "sus4" },
 };
 
 // ─── addChordSymbols ────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ export function addChordSymbols(
   musicXml: string,
   measureNumber: number,
   chords: ChordSymbol[],
-  partId: string = "P1"
+  partId: string = "P1",
 ): { xml: string; error?: string } {
   const score = mxlParse(musicXml);
   const divisions = getDivisions(score);
@@ -58,12 +58,16 @@ export function addChordSymbols(
 
   const totalMeasures = part.measures.length;
   const measure = findMeasure(part, measureNumber);
-  if (!measure) return { xml: musicXml, error: `Measure ${measureNumber} does not exist (score has ${totalMeasures} measures). Call insertEmptyMeasures first to add more measures.` };
+  if (!measure)
+    return {
+      xml: musicXml,
+      error: `Measure ${measureNumber} does not exist (score has ${totalMeasures} measures). Call insertEmptyMeasures first to add more measures.`,
+    };
 
   // Remove any existing chord symbols in this measure before inserting new ones
-  measure.entries = measure.entries.filter(e => e.type !== "harmony");
+  measure.entries = measure.entries.filter((e) => e.type !== "harmony");
 
-  const firstNoteIdx = measure.entries.findIndex(e => e.type === "note");
+  const firstNoteIdx = measure.entries.findIndex((e) => e.type === "note");
 
   for (const chord of chords) {
     const rootStep = chord.root.replace(/[b#]/, "");
@@ -96,7 +100,7 @@ export function addChordSymbols(
 const XML_KIND_TO_TEXT: Record<string, string> = Object.fromEntries(
   Object.entries(CHORD_KIND_MAP)
     .filter(([k]) => !["M", "major", "minor"].includes(k)) // keep canonical keys only
-    .map(([, v]) => [v.xml, v.text])
+    .map(([, v]) => [v.xml, v.text]),
 );
 
 /**
@@ -115,9 +119,7 @@ export function extractChordMap(musicXml: string): string {
 
     for (let i = 0; i < part.measures.length; i++) {
       const measure = part.measures[i];
-      const harmonies = measure.entries.filter(
-        (e): e is HarmonyEntry => e.type === "harmony"
-      );
+      const harmonies = measure.entries.filter((e): e is HarmonyEntry => e.type === "harmony");
       if (harmonies.length === 0) continue;
 
       const chordStrs = harmonies.map((h) => {

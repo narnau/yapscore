@@ -16,7 +16,7 @@ import { stripe } from "@/lib/stripe/client";
  */
 export async function deleteUserAccount(
   userId: string,
-  stripeCustomerId?: string | null
+  stripeCustomerId?: string | null,
 ): Promise<{ ok: boolean; errors: string[] }> {
   const admin = createAdminClient();
   const errors: string[] = [];

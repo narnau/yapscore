@@ -17,9 +17,9 @@ type MidiPlayerExtended = MidiPlayer.Player & {
 type Props = {
   src: string;
   channelInstruments?: Record<number, string>; // MIDI channel → soundfont name
-  measureStartsMs: number[];                   // ms timestamp of each measure start (from Verovio timemap)
+  measureStartsMs: number[]; // ms timestamp of each measure start (from Verovio timemap)
   selectedMeasures: Set<number>;
-  playFromMeasure?: number;                    // overrides selectedMeasures start (e.g. for note selection)
+  playFromMeasure?: number; // overrides selectedMeasures start (e.g. for note selection)
   onMeasureChange: (measure: number | null) => void;
 };
 
@@ -30,27 +30,35 @@ const NOTE_RELEASE_SECONDS = 0.15;
 
 // ── WebAudioFont drum samples (FluidR3 GM, bank 128) ─────────────────────────
 // Each GM drum note has its own JS file: base64 MP3 data inside `file:'...'`.
-const DRUM_NOTES = [35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,57,59];
-const WAF_BASE   = "https://surikov.github.io/webaudiofontdata/sound";
+const DRUM_NOTES = [35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 57, 59];
+const WAF_BASE = "https://surikov.github.io/webaudiofontdata/sound";
 
 async function loadDrumSamples(ctx: AudioContext): Promise<Map<number, AudioBuffer>> {
   const map = new Map<number, AudioBuffer>();
   await Promise.all(
     DRUM_NOTES.map(async (note) => {
       try {
-        const url  = `${WAF_BASE}/128${note}_0_FluidR3_GM_sf2_file.js`;
-        const res  = await fetch(url);
-        if (!res.ok) { if (process.env.NODE_ENV === "development") console.warn(`[drums] HTTP ${res.status} for note ${note}`); return; }
+        const url = `${WAF_BASE}/128${note}_0_FluidR3_GM_sf2_file.js`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          if (process.env.NODE_ENV === "development") console.warn(`[drums] HTTP ${res.status} for note ${note}`);
+          return;
+        }
         const text = await res.text();
         const match = text.match(/file:'([^']+)'/);
-        if (!match) { if (process.env.NODE_ENV === "development") console.warn(`[drums] no file field for note ${note}`); return; }
+        if (!match) {
+          if (process.env.NODE_ENV === "development") console.warn(`[drums] no file field for note ${note}`);
+          return;
+        }
         const binary = atob(match[1]);
         const ab = new ArrayBuffer(binary.length);
         const view = new Uint8Array(ab);
         for (let i = 0; i < binary.length; i++) view[i] = binary.charCodeAt(i);
         map.set(note, await ctx.decodeAudioData(ab));
-      } catch (e) { if (process.env.NODE_ENV === "development") console.warn(`[drums] failed note ${note}:`, e); }
-    })
+      } catch (e) {
+        if (process.env.NODE_ENV === "development") console.warn(`[drums] failed note ${note}:`, e);
+      }
+    }),
   );
   if (process.env.NODE_ENV === "development") console.log(`[drums] loaded ${map.size}/${DRUM_NOTES.length} samples`);
   return map;
@@ -125,7 +133,10 @@ function playDrumSynth(ctx: AudioContext, noteNumber: number, velocity: number) 
     sub.frequency.exponentialRampToValueAtTime(30, now + 0.5);
     const dist = ctx.createWaveShaper();
     const curve = new Float32Array(256);
-    for (let i = 0; i < 256; i++) { const x = (i * 2) / 255 - 1; curve[i] = Math.tanh(2.5 * x); }
+    for (let i = 0; i < 256; i++) {
+      const x = (i * 2) / 255 - 1;
+      curve[i] = Math.tanh(2.5 * x);
+    }
     dist.curve = curve;
     sub.connect(dist);
     play(sub, dist, 1.4, 0.5);
@@ -171,7 +182,8 @@ function playDrumSynth(ctx: AudioContext, noteNumber: number, velocity: number) 
   // Frequencies derived from measured 808 ratios (inharmonic)
   const HH_FREQS = [205, 287, 365, 522, 630, 800];
 
-  if (noteNumber === 42 || noteNumber === 44) { // Closed / Pedal hi-hat
+  if (noteNumber === 42 || noteNumber === 44) {
+    // Closed / Pedal hi-hat
     const hp = ctx.createBiquadFilter();
     hp.type = "highpass";
     hp.frequency.value = 7000;
@@ -179,7 +191,8 @@ function playDrumSynth(ctx: AudioContext, noteNumber: number, velocity: number) 
     return;
   }
 
-  if (noteNumber === 46) { // Open hi-hat
+  if (noteNumber === 46) {
+    // Open hi-hat
     const hp = ctx.createBiquadFilter();
     hp.type = "highpass";
     hp.frequency.value = 6500;
@@ -225,11 +238,11 @@ function playDrumSynth(ctx: AudioContext, noteNumber: number, velocity: number) 
   // ── Toms ──────────────────────────────────────────────────────────────────
   // [fundamentalHz, decay, attackNoiseFreq]
   const TOMS: Record<number, [number, number, number]> = {
-    41: [52,  0.42, 400],  // Low Floor Tom
-    43: [62,  0.38, 480],  // High Floor Tom
-    45: [78,  0.34, 580],  // Low Tom
-    47: [98,  0.30, 720],  // Low-Mid Tom
-    48: [118, 0.27, 900],  // Hi-Mid Tom
+    41: [52, 0.42, 400], // Low Floor Tom
+    43: [62, 0.38, 480], // High Floor Tom
+    45: [78, 0.34, 580], // Low Tom
+    47: [98, 0.3, 720], // Low-Mid Tom
+    48: [118, 0.27, 900], // Hi-Mid Tom
     50: [145, 0.23, 1100], // High Tom
   };
   if (noteNumber in TOMS) {
@@ -295,24 +308,33 @@ function playDrumSynth(ctx: AudioContext, noteNumber: number, velocity: number) 
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function MidiPlayerComponent({ src, channelInstruments = {}, measureStartsMs, selectedMeasures, playFromMeasure, onMeasureChange }: Props) {
+export default function MidiPlayerComponent({
+  src,
+  channelInstruments = {},
+  measureStartsMs,
+  selectedMeasures,
+  playFromMeasure,
+  onMeasureChange,
+}: Props) {
   const [state, setState] = useState<State>("loading");
-  const playerRef        = useRef<MidiPlayerExtended | null>(null);
-  const instrumentsRef   = useRef<Map<number, SfNode & { play: (note: string, time: number, opts?: { gain?: number }) => SfNode }>>(new Map());
-  const audioCtxRef      = useRef<AudioContext | null>(null);
-  const drumBuffersRef   = useRef<Map<number, AudioBuffer>>(new Map());
-  const activeNotesRef   = useRef<Map<string, SfNode>>(new Map());
+  const playerRef = useRef<MidiPlayerExtended | null>(null);
+  const instrumentsRef = useRef<
+    Map<number, SfNode & { play: (note: string, time: number, opts?: { gain?: number }) => SfNode }>
+  >(new Map());
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const drumBuffersRef = useRef<Map<number, AudioBuffer>>(new Map());
+  const activeNotesRef = useRef<Map<string, SfNode>>(new Map());
   const onMeasureChangeRef = useRef(onMeasureChange);
   onMeasureChangeRef.current = onMeasureChange;
-  const activeRef        = useRef(false);
-  const rafRef           = useRef<number>(0);
-  const lastMeasureRef   = useRef(-1);
+  const activeRef = useRef(false);
+  const rafRef = useRef<number>(0);
+  const lastMeasureRef = useRef(-1);
 
   // For ms-based measure tracking
   const playStartAudioTimeRef = useRef(0); // audioCtx.currentTime when play() was called
-  const startOffsetMsRef      = useRef(0); // ms into the score where we started (for selected measures)
-  const measureStartsMsRef    = useRef<number[]>([]);
-  measureStartsMsRef.current  = measureStartsMs;
+  const startOffsetMsRef = useRef(0); // ms into the score where we started (for selected measures)
+  const measureStartsMsRef = useRef<number[]>([]);
+  measureStartsMsRef.current = measureStartsMs;
 
   function measureAtMs(elapsedMs: number): number {
     const starts = measureStartsMsRef.current;
@@ -349,7 +371,11 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
     const ctx = audioCtxRef.current;
     const when = ctx ? ctx.currentTime + (immediate ? 0 : NOTE_RELEASE_SECONDS) : 0;
     activeNotesRef.current.forEach((node) => {
-      try { node.stop(when); } catch { /* already stopped */ }
+      try {
+        node.stop(when);
+      } catch {
+        /* already stopped */
+      }
     });
     activeNotesRef.current.clear();
   }
@@ -366,12 +392,15 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
       audioCtxRef.current = audioCtx;
 
       // Load soundfonts + drum samples in parallel
-      const uniqueNames = [...new Set(Object.values(channelInstruments).length > 0
-        ? Object.values(channelInstruments)
-        : ["acoustic_grand_piano"]
-      )];
+      const uniqueNames = [
+        ...new Set(
+          Object.values(channelInstruments).length > 0 ? Object.values(channelInstruments) : ["acoustic_grand_piano"],
+        ),
+      ];
       const [loaded, drumMap] = await Promise.all([
-        Promise.all(uniqueNames.map((name) => Soundfont.instrument(audioCtx, name as any).then((sf) => [name, sf] as const))),
+        Promise.all(
+          uniqueNames.map((name) => Soundfont.instrument(audioCtx, name as any).then((sf) => [name, sf] as const)),
+        ),
         loadDrumSamples(audioCtx).catch(() => new Map<number, AudioBuffer>()),
       ]);
       if (cancelled) return;
@@ -400,11 +429,12 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
           // Channel 10 = GM percussion
           if (event.channel === 10) {
             const noteNum = event.noteNumber ?? 0;
-            const vel     = (event.velocity ?? 64) / 127;
-            const buf     = drumBuffersRef.current.get(noteNum);
-            if (process.env.NODE_ENV === "development") console.log(`[drums] ch10 note=${noteNum} buf=${!!buf} mapSize=${drumBuffersRef.current.size}`);
+            const vel = (event.velocity ?? 64) / 127;
+            const buf = drumBuffersRef.current.get(noteNum);
+            if (process.env.NODE_ENV === "development")
+              console.log(`[drums] ch10 note=${noteNum} buf=${!!buf} mapSize=${drumBuffersRef.current.size}`);
             if (buf) {
-              const src  = ctx.createBufferSource();
+              const src = ctx.createBufferSource();
               src.buffer = buf;
               const gain = ctx.createGain();
               gain.gain.value = vel;
@@ -417,14 +447,17 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
             return;
           }
           if (!noteName) return;
-          const sf = instrumentsRef.current.get(event.channel ?? 1)
-            ?? instrumentsRef.current.values().next().value;
+          const sf = instrumentsRef.current.get(event.channel ?? 1) ?? instrumentsRef.current.values().next().value;
           if (!sf) return;
           // Stop any still-ringing previous instance of this pitch
           const key = `${event.channel}:${noteName}`;
           const prev = activeNotesRef.current.get(key);
           if (prev) {
-            try { prev.stop(ctx.currentTime + NOTE_RELEASE_SECONDS); } catch { /* ok */ }
+            try {
+              prev.stop(ctx.currentTime + NOTE_RELEASE_SECONDS);
+            } catch {
+              /* ok */
+            }
           }
           const node: SfNode = sf.play(noteName, ctx.currentTime, { gain: event.velocity / 127 });
           activeNotesRef.current.set(key, node);
@@ -433,12 +466,17 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
         // ── note off (also handles Note on with velocity 0) ───────────────
         if (
           (event.name === "Note off" || (event.name === "Note on" && (!event.velocity || event.velocity === 0))) &&
-          noteName && ctx
+          noteName &&
+          ctx
         ) {
           const key = `${event.channel}:${noteName}`;
           const node = activeNotesRef.current.get(key);
           if (node) {
-            try { node.stop(ctx.currentTime + NOTE_RELEASE_SECONDS); } catch { /* ok */ }
+            try {
+              node.stop(ctx.currentTime + NOTE_RELEASE_SECONDS);
+            } catch {
+              /* ok */
+            }
             activeNotesRef.current.delete(key);
           }
         }
@@ -466,12 +504,12 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
       stopAllNotes(true);
       audioCtxRef.current?.close();
       onMeasureChangeRef.current(null);
-      playerRef.current      = null;
-      instrumentsRef.current  = new Map();
-      drumBuffersRef.current  = new Map();
-      audioCtxRef.current    = null;
+      playerRef.current = null;
+      instrumentsRef.current = new Map();
+      drumBuffersRef.current = new Map();
+      audioCtxRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, JSON.stringify(channelInstruments)]);
 
   // Keep latest handlers in refs so the Space listener never goes stale
@@ -490,7 +528,7 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handlePlay() {
     const player = playerRef.current;
@@ -505,9 +543,7 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
     if (startMeasure != null) {
       // ms offset: use timemap if available, otherwise fall back to tick math
       const starts = measureStartsMsRef.current;
-      const startMs = starts.length >= startMeasure
-        ? (starts[startMeasure - 1] ?? 0)
-        : 0;
+      const startMs = starts.length >= startMeasure ? (starts[startMeasure - 1] ?? 0) : 0;
       startOffsetMsRef.current = startMs;
 
       // Skip the MIDI player to the right tick
@@ -542,9 +578,21 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
 
   if (state === "loading") {
     return (
-      <button disabled className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg bg-gray-100 text-gray-400 transition shrink-0">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 animate-spin">
-          <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clipRule="evenodd" />
+      <button
+        disabled
+        className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg bg-gray-100 text-gray-400 transition shrink-0"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="w-3.5 h-3.5 animate-spin"
+        >
+          <path
+            fillRule="evenodd"
+            d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z"
+            clipRule="evenodd"
+          />
         </svg>
         Loading…
       </button>
@@ -553,7 +601,10 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
 
   return state === "playing" ? (
     <button
-      onClick={(e) => { (e.currentTarget as HTMLButtonElement).blur(); handleStop(); }}
+      onClick={(e) => {
+        (e.currentTarget as HTMLButtonElement).blur();
+        handleStop();
+      }}
       className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition shrink-0"
     >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
@@ -563,7 +614,10 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
     </button>
   ) : (
     <button
-      onClick={(e) => { (e.currentTarget as HTMLButtonElement).blur(); handlePlay(); }}
+      onClick={(e) => {
+        (e.currentTarget as HTMLButtonElement).blur();
+        handlePlay();
+      }}
       className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg bg-brand-primary hover:bg-brand-primary/90 text-white transition shrink-0"
     >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">

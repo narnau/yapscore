@@ -3,8 +3,14 @@ import { FREE_INTERACTION_LIMIT, PRO_DAILY_LIMIT } from "@/lib/constants";
 import { getProfile } from "./profile";
 
 export type UsageLimitResult =
-  | { allowed: true;  used: number; limit: number | null; plan: string }
-  | { allowed: false; used: number; limit: number;       plan: string; errorResponse: { body: Record<string, unknown>; status: number } };
+  | { allowed: true; used: number; limit: number | null; plan: string }
+  | {
+      allowed: false;
+      used: number;
+      limit: number;
+      plan: string;
+      errorResponse: { body: Record<string, unknown>; status: number };
+    };
 
 /**
  * Check whether the user is allowed to make another agent interaction.
@@ -31,7 +37,7 @@ export async function checkUsageLimit(userId: string): Promise<UsageLimitResult>
   if (plan === "pro") {
     const admin = createAdminClient();
     const { data: allowed } = await admin.rpc("check_and_increment_api_calls", {
-      p_user_id:     userId,
+      p_user_id: userId,
       p_daily_limit: PRO_DAILY_LIMIT,
     });
     if (!allowed) {

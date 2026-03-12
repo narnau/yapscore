@@ -17,10 +17,6 @@ export function getPostHogServer(): PostHog | null {
 /**
  * Server-side PostHog capture. Fire-and-forget — never blocks the request.
  */
-export function captureServer(
-  distinctId: string,
-  event: string,
-  properties?: Record<string, unknown>,
-) {
+export function captureServer(distinctId: string, event: string, properties?: Record<string, unknown>) {
   getPostHogServer()?.capture({ distinctId, event, properties });
 }

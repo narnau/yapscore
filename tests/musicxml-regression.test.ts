@@ -46,7 +46,10 @@ function flutePianoScore() {
 function countOccurrences(xml: string, needle: string): number {
   let count = 0;
   let pos = 0;
-  while ((pos = xml.indexOf(needle, pos)) !== -1) { count++; pos++; }
+  while ((pos = xml.indexOf(needle, pos)) !== -1) {
+    count++;
+    pos++;
+  }
   return count;
 }
 
@@ -74,7 +77,7 @@ describe("clearMeasures – staff-specific", () => {
     const cleared = clearMeasures(xml, [1], "P1", 1);
 
     expect(cleared).not.toContain("<step>E</step>"); // treble gone
-    expect(cleared).toContain("<step>A</step>");     // bass still there
+    expect(cleared).toContain("<step>A</step>"); // bass still there
   });
 
   test("clears all staves when no staff param (original behavior)", () => {
@@ -219,13 +222,13 @@ describe("addArticulations – partId targeting", () => {
 
     // Find P1 section — should have no articulation
     const p1Start = result.indexOf('<part id="P1"');
-    const p1End = result.indexOf('</part>', p1Start);
+    const p1End = result.indexOf("</part>", p1Start);
     const p1Section = result.slice(p1Start, p1End);
     expect(p1Section).not.toContain("<accent/>");
 
     // P2 section should have accent
     const p2Start = result.indexOf('<part id="P2"');
-    const p2End = result.indexOf('</part>', p2Start);
+    const p2End = result.indexOf("</part>", p2Start);
     const p2Section = result.slice(p2Start, p2End);
     expect(p2Section).toContain("<accent/>");
   });
@@ -247,10 +250,15 @@ describe("removeArticulations", () => {
 
   test("removes only the specified articulation type when given", () => {
     let xml = createScore({ instruments: [{ name: "Piano" }], measures: 4 });
-    xml = setMeasureNotes(xml, 1, [
-      { step: "C", octave: 4, duration: "quarter" },
-      { step: "E", octave: 4, duration: "quarter" },
-    ], "P1");
+    xml = setMeasureNotes(
+      xml,
+      1,
+      [
+        { step: "C", octave: 4, duration: "quarter" },
+        { step: "E", octave: 4, duration: "quarter" },
+      ],
+      "P1",
+    );
     xml = addArticulations(xml, [1], "staccato");
     xml = addArticulations(xml, [1], "accent");
 
@@ -284,11 +292,11 @@ describe("removeArticulations", () => {
 
     // P2 still has staccato, P1 doesn't
     const p1Start = result.indexOf('<part id="P1"');
-    const p1End = result.indexOf('</part>', p1Start);
+    const p1End = result.indexOf("</part>", p1Start);
     expect(result.slice(p1Start, p1End)).not.toContain("<staccato/>");
 
     const p2Start = result.indexOf('<part id="P2"');
-    const p2End = result.indexOf('</part>', p2Start);
+    const p2End = result.indexOf("</part>", p2Start);
     expect(result.slice(p2Start, p2End)).toContain("<staccato/>");
   });
 });

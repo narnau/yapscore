@@ -22,9 +22,7 @@ const CREPE_CONF_THRESHOLD = 0.5;
 const CREPE_MODEL_URL = "/models/crepe/model.json";
 
 // 360 bins mapping: cents from ~32.7Hz to ~1975Hz
-const CREPE_CENT_MAPPING = Float32Array.from({ length: 360 }, (_, i) =>
-  1997.3794084376191 + i * (7180 / 359)
-);
+const CREPE_CENT_MAPPING = Float32Array.from({ length: 360 }, (_, i) => 1997.3794084376191 + i * (7180 / 359));
 
 // ─── Hz / MIDI conversion ───────────────────────────────────────────────────
 
@@ -100,9 +98,7 @@ async function resampleTo16k(buffer: AudioBuffer): Promise<Float32Array> {
  * Analyze an AudioBuffer using CREPE for pitch detection.
  * Returns array of { time, hz } frames (10ms hop).
  */
-export async function detectPitches(
-  buffer: AudioBuffer,
-): Promise<Array<{ time: number; hz: number }>> {
+export async function detectPitches(buffer: AudioBuffer): Promise<Array<{ time: number; hz: number }>> {
   const samples = buffer.getChannelData(0);
   const sampleRate = buffer.sampleRate;
   const duration = samples.length / sampleRate;
@@ -110,7 +106,9 @@ export async function detectPitches(
   const rms = Math.sqrt(samples.reduce((s, v) => s + v * v, 0) / samples.length);
   const peak = samples.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
   if (process.env.NODE_ENV === "development") {
-    console.log(`[sing] detectPitches (CREPE): ${samples.length} samples, sampleRate=${sampleRate}, duration=${duration.toFixed(2)}s, RMS=${rms.toFixed(4)}, peak=${peak.toFixed(4)}`);
+    console.log(
+      `[sing] detectPitches (CREPE): ${samples.length} samples, sampleRate=${sampleRate}, duration=${duration.toFixed(2)}s, RMS=${rms.toFixed(4)}, peak=${peak.toFixed(4)}`,
+    );
   }
 
   // Resample to 16kHz
@@ -168,13 +166,17 @@ export async function detectPitches(
     if (process.env.NODE_ENV === "development" && hz > 0 && inRange) {
       const midi = hzToMidi(hz);
       const name = midiToName(midi);
-      console.log(`[sing]   t=${time.toFixed(3)}s  hz=${hz.toFixed(1)}  midi=${midi} (${name})  conf=${confidence.toFixed(3)}`);
+      console.log(
+        `[sing]   t=${time.toFixed(3)}s  hz=${hz.toFixed(1)}  midi=${midi} (${name})  conf=${confidence.toFixed(3)}`,
+      );
     }
   }
 
-  const pitchedCount = results.filter(r => r.hz > 0).length;
+  const pitchedCount = results.filter((r) => r.hz > 0).length;
   if (process.env.NODE_ENV === "development") {
-    console.log(`[sing] detectPitches result: ${results.length} frames, ${pitchedCount} pitched (${((pitchedCount / results.length) * 100).toFixed(1)}%)`);
+    console.log(
+      `[sing] detectPitches result: ${results.length} frames, ${pitchedCount} pitched (${((pitchedCount / results.length) * 100).toFixed(1)}%)`,
+    );
   }
 
   return results;

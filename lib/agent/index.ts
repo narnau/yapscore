@@ -16,7 +16,7 @@ export async function runAgent(
   currentMusicXml: string | null,
   selectedMeasures: number[] | null,
   history: { role: "user" | "assistant"; content: string }[] = [],
-  userId?: string
+  userId?: string,
 ): Promise<import("./types").AgentResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
@@ -35,15 +35,15 @@ export async function runAgent(
       try {
         const { selectedMeasures: xml } = extractSelectedMeasures(currentMusicXml, selectedMeasures);
         return xml;
-      } catch { return currentMusicXml; }
+      } catch {
+        return currentMusicXml;
+      }
     }
     return currentMusicXml;
   })();
 
   const selectionCtx =
-    selectedMeasures && selectedMeasures.length > 0
-      ? `\nSelected measures: ${selectedMeasures.join(", ")}`
-      : "";
+    selectedMeasures && selectedMeasures.length > 0 ? `\nSelected measures: ${selectedMeasures.join(", ")}` : "";
 
   // Extract chord symbols already in the score and present them as a clean
   // table so the LLM doesn't have to parse them out of raw MusicXML.
@@ -56,7 +56,13 @@ export async function runAgent(
   console.log(`║ [agent] model   : ${modelName}`);
   console.log(`║ [agent] message : ${msgPreview}`);
   const logCtx = currentMusicXml
-    ? (() => { try { return extractParts(currentMusicXml).context; } catch { return "loaded"; } })()
+    ? (() => {
+        try {
+          return extractParts(currentMusicXml).context;
+        } catch {
+          return "loaded";
+        }
+      })()
     : "none";
   console.log(`║ [agent] score   : ${logCtx}`);
   if (selectionCtx) console.log(`║ [agent]${selectionCtx}`);
@@ -72,57 +78,61 @@ export async function runAgent(
     const ctx: AgentContext = { liveXml: currentMusicXml, capture };
     const attemptModelName = attempt === 1 ? modelName : fallbackModelName;
     const model = openrouter(attemptModelName);
-    if (attempt > 1) console.log(`│ [agent] retrying (attempt ${attempt}/${MAX_AGENT_ATTEMPTS}) with ${attemptModelName}…`);
+    if (attempt > 1)
+      console.log(`│ [agent] retrying (attempt ${attempt}/${MAX_AGENT_ATTEMPTS}) with ${attemptModelName}…`);
 
     try {
-  const { text } = await generateText({
-    model,
-    maxSteps: MAX_TOOL_STEPS,
-    experimental_telemetry: {
-      isEnabled: true,
-      metadata: { posthogDistinctId: userId ?? "anonymous" },
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onStepFinish({ stepType, toolCalls, toolResults, finishReason, usage, text: stepText }: any) {
-      console.log("┌──────────────────────────────────────────────────────────────");
-      console.log(`│ [agent] step        : ${stepType}  finish: ${finishReason}`);
-      if (usage) {
-        console.log(`│ [agent] tokens      : in=${usage.promptTokens}  out=${usage.completionTokens}  total=${usage.totalTokens}`);
-      }
-      for (const tc of toolCalls ?? []) {
-        console.log(`│ [agent] tool call   : ${tc.toolName}`);
-        console.log(`│          args       : ${JSON.stringify(tc.args)}`);
-      }
-      for (const tr of toolResults ?? []) {
-        console.log(`│ [agent] tool result : ${tr.toolName} → ${JSON.stringify(tr.result)}`);
-      }
-      if (stepText) {
-        console.log(`│ [agent] text        : ${stepText.slice(0, 200)}${stepText.length > 200 ? "…" : ""}`);
-      }
-      console.log("└──────────────────────────────────────────────────────────────");
+      const { text } = await generateText({
+        model,
+        maxSteps: MAX_TOOL_STEPS,
+        experimental_telemetry: {
+          isEnabled: true,
+          metadata: { posthogDistinctId: userId ?? "anonymous" },
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onStepFinish({ stepType, toolCalls, toolResults, finishReason, usage, text: stepText }: any) {
+          console.log("┌──────────────────────────────────────────────────────────────");
+          console.log(`│ [agent] step        : ${stepType}  finish: ${finishReason}`);
+          if (usage) {
+            console.log(
+              `│ [agent] tokens      : in=${usage.promptTokens}  out=${usage.completionTokens}  total=${usage.totalTokens}`,
+            );
+          }
+          for (const tc of toolCalls ?? []) {
+            console.log(`│ [agent] tool call   : ${tc.toolName}`);
+            console.log(`│          args       : ${JSON.stringify(tc.args)}`);
+          }
+          for (const tr of toolResults ?? []) {
+            console.log(`│ [agent] tool result : ${tr.toolName} → ${JSON.stringify(tr.result)}`);
+          }
+          if (stepText) {
+            console.log(`│ [agent] text        : ${stepText.slice(0, 200)}${stepText.length > 200 ? "…" : ""}`);
+          }
+          console.log("└──────────────────────────────────────────────────────────────");
 
-      logger.info("agent.step", {
-        userId,
-        model: modelName,
-        stepType,
-        finishReason,
-        inputTokens:  usage?.promptTokens,
-        outputTokens: usage?.completionTokens,
-        totalTokens:  usage?.totalTokens,
-        tools: (toolCalls ?? []).map((tc: any) => tc.toolName).join(",") || undefined,
-        text: stepText ? stepText.slice(0, 200) : undefined,
+          logger.info("agent.step", {
+            userId,
+            model: modelName,
+            stepType,
+            finishReason,
+            inputTokens: usage?.promptTokens,
+            outputTokens: usage?.completionTokens,
+            totalTokens: usage?.totalTokens,
+            tools: (toolCalls ?? []).map((tc: any) => tc.toolName).join(",") || undefined,
+            text: stepText ? stepText.slice(0, 200) : undefined,
+          });
+        },
+        system: buildSystemPrompt(currentScoreCtx, selectionCtx, chordCtx),
+        messages: [...history, { role: "user" as const, content: message }],
+        tools: createTools(ctx, selectedMeasures),
       });
-    },
-    system: buildSystemPrompt(currentScoreCtx, selectionCtx, chordCtx),
-    messages: [...history, { role: "user" as const, content: message }],
-    tools: createTools(ctx, selectedMeasures),
-  });
 
       const r = capture.result;
       if (r) {
         const resultType = r.resultType === "modify" ? "modify" : `load (${r.name})`;
         console.log(`╔══ [agent] result: ${resultType}  xml=${r.musicXml.length} chars`);
-        if (r.resultType === "modify") return { type: "modify", musicXml: r.musicXml, message: text || "Score updated." };
+        if (r.resultType === "modify")
+          return { type: "modify", musicXml: r.musicXml, message: text || "Score updated." };
         return { type: "load", musicXml: r.musicXml, name: r.name! };
       }
 
@@ -130,7 +140,6 @@ export async function runAgent(
 
       console.log(`╔══ [agent] result: chat — "${text.slice(0, 120)}${text.length > 120 ? "…" : ""}"`);
       return { type: "chat", message: text };
-
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.log(`│ [agent] ⚠ attempt ${attempt} failed: ${msg}`);

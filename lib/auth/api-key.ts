@@ -9,7 +9,7 @@ type AuthSuccess = { ok: true; userId: string };
 type AuthFailure = { ok: false; response: NextResponse };
 export type ApiKeyAuthResult = AuthSuccess | AuthFailure;
 
-type AccessOk  = { ok: true };
+type AccessOk = { ok: true };
 type AccessFail = { ok: false; response: NextResponse };
 export type ApiAccessResult = AccessOk | AccessFail;
 
@@ -60,10 +60,7 @@ export async function getApiKeyUser(req: NextRequest): Promise<ApiKeyAuthResult>
   }
 
   // Fire-and-forget last_used_at update — don't block the request
-  void admin
-    .from("api_keys")
-    .update({ last_used_at: new Date().toISOString() })
-    .eq("id", apiKey.id);
+  void admin.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", apiKey.id);
 
   return { ok: true, userId: apiKey.user_id };
 }
@@ -74,25 +71,21 @@ export async function checkApiAccess(userId: string): Promise<ApiAccessResult> {
   const admin = createAdminClient();
 
   // Pro-only — free users cannot use the API
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("plan")
-    .eq("id", userId)
-    .single();
+  const { data: profile } = await admin.from("profiles").select("plan").eq("id", userId).single();
 
   if (profile?.plan !== "pro") {
     return {
       ok: false,
       response: NextResponse.json(
         { error: "API access requires a Pro subscription", upgrade_url: "https://yapscore.ai/settings" },
-        { status: 403 }
+        { status: 403 },
       ),
     };
   }
 
   // Atomic daily rate limit check + increment (resets at midnight UTC)
   const { data: allowed } = await admin.rpc("check_and_increment_api_calls", {
-    p_user_id:     userId,
+    p_user_id: userId,
     p_daily_limit: API_DAILY_LIMIT,
   });
 
@@ -101,7 +94,7 @@ export async function checkApiAccess(userId: string): Promise<ApiAccessResult> {
       ok: false,
       response: NextResponse.json(
         { error: "Daily API limit reached", limit: API_DAILY_LIMIT, resets: "midnight UTC" },
-        { status: 429 }
+        { status: 429 },
       ),
     };
   }

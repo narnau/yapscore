@@ -7,7 +7,9 @@ export async function POST(req: NextRequest) {
   const auth = await getAuthUser();
   if (!auth.ok) return auth.response;
 
-  const { data: { user } } = await auth.supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await auth.supabase.auth.getUser();
   if (!user?.email) {
     return NextResponse.json({ error: "No email found" }, { status: 400 });
   }

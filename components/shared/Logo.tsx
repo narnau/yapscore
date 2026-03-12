@@ -24,18 +24,28 @@ export default function Logo({ size = 24, animated = false, className }: Props) 
       {/* Left prong */}
       <path d="M20 10 L20 30 Q20 38 24 40" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none">
         {animated && (
-          <animateTransform attributeName="transform" type="translate"
-            values="0,0;-0.5,0;0,0;0.3,0;0,0" dur="0.4s"
-            begin="0s" repeatCount="4" />
+          <animateTransform
+            attributeName="transform"
+            type="translate"
+            values="0,0;-0.5,0;0,0;0.3,0;0,0"
+            dur="0.4s"
+            begin="0s"
+            repeatCount="4"
+          />
         )}
       </path>
 
       {/* Right prong */}
       <path d="M32 10 L32 30 Q32 38 28 40" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none">
         {animated && (
-          <animateTransform attributeName="transform" type="translate"
-            values="0,0;0.5,0;0,0;-0.3,0;0,0" dur="0.4s"
-            begin="0s" repeatCount="4" />
+          <animateTransform
+            attributeName="transform"
+            type="translate"
+            values="0,0;0.5,0;0,0;-0.3,0;0,0"
+            dur="0.4s"
+            begin="0s"
+            repeatCount="4"
+          />
         )}
       </path>
 

@@ -12,6 +12,6 @@ export const PRO_DAILY_LIMIT = 200;
 
 /** In-process burst rate-limit presets. */
 export const RATE_LIMITS = {
-  AGENT:      { windowMs: 10_000, max: 5 },
+  AGENT: { windowMs: 10_000, max: 5 },
   TRANSCRIBE: { windowMs: 60_000, max: 10 },
 } as const;

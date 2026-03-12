@@ -10,8 +10,8 @@
  */
 
 // Circle-of-fifths order for sharps and flats
-const SHARP_STEPS = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
-const FLAT_STEPS  = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
+const SHARP_STEPS = ["F", "C", "G", "D", "A", "E", "B"];
+const FLAT_STEPS = ["B", "E", "A", "D", "G", "C", "F"];
 
 /** Returns a map of step → alter value implied by the key signature. */
 function keyAccidentals(fifths: number): Map<string, number> {
@@ -25,31 +25,27 @@ function keyAccidentals(fifths: number): Map<string, number> {
 }
 
 function alterToAccidentalType(alter: number): string | null {
-  if (alter ===  1)  return 'sharp';
-  if (alter === -1)  return 'flat';
-  if (alter ===  0)  return 'natural';
-  if (alter ===  2)  return 'double-sharp';
-  if (alter === -2)  return 'flat-flat';
+  if (alter === 1) return "sharp";
+  if (alter === -1) return "flat";
+  if (alter === 0) return "natural";
+  if (alter === 2) return "double-sharp";
+  if (alter === -2) return "flat-flat";
   return null;
 }
 
-function processNote(
-  noteXml: string,
-  measureState: Map<string, number>,
-  keyAcc: Map<string, number>
-): string {
+function processNote(noteXml: string, measureState: Map<string, number>, keyAcc: Map<string, number>): string {
   // Skip rests and notes that already have an explicit <accidental>
-  if (noteXml.includes('<rest') || noteXml.includes('<accidental>')) return noteXml;
+  if (noteXml.includes("<rest") || noteXml.includes("<accidental>")) return noteXml;
 
-  const step   = noteXml.match(/<step>([A-G])<\/step>/)?.[1];
+  const step = noteXml.match(/<step>([A-G])<\/step>/)?.[1];
   if (!step) return noteXml;
 
-  const alter  = parseFloat(noteXml.match(/<alter>(-?\d+(?:\.\d+)?)<\/alter>/)?.[1] ?? '0');
-  const octave = noteXml.match(/<octave>(\d+)<\/octave>/)?.[1] ?? '4';
+  const alter = parseFloat(noteXml.match(/<alter>(-?\d+(?:\.\d+)?)<\/alter>/)?.[1] ?? "0");
+  const octave = noteXml.match(/<octave>(\d+)<\/octave>/)?.[1] ?? "4";
   const stateKey = `${step}${octave}`;
 
   // What was the effective alter before this note?
-  const keyAlter  = keyAcc.get(step) ?? 0;
+  const keyAlter = keyAcc.get(step) ?? 0;
   const prevAlter = measureState.has(stateKey) ? measureState.get(stateKey)! : keyAlter;
 
   // Update measure state regardless of whether we add an accidental
@@ -62,15 +58,13 @@ function processNote(
   if (!type) return noteXml;
 
   // Insert <accidental> immediately after </pitch>
-  return noteXml.replace('</pitch>', `</pitch>\n        <accidental>${type}</accidental>`);
+  return noteXml.replace("</pitch>", `</pitch>\n        <accidental>${type}</accidental>`);
 }
 
 function processMeasure(measureXml: string, keyAcc: Map<string, number>): string {
   // Fresh accidental state at every barline
   const measureState = new Map<string, number>();
-  return measureXml.replace(/<note\b[^>]*>[\s\S]*?<\/note>/g, (note) =>
-    processNote(note, measureState, keyAcc)
-  );
+  return measureXml.replace(/<note\b[^>]*>[\s\S]*?<\/note>/g, (note) => processNote(note, measureState, keyAcc));
 }
 
 /**
@@ -85,15 +79,12 @@ export function fixChordSymbols(musicXml: string): string {
     if (!rootStep) return block;
 
     // Strip leading root letter (and optional flat/sharp) from kind text attribute
-    return block.replace(
-      /(<kind\b[^>]*\btext=")([A-G][b#♭♯]?)/,
-      (_m, prefix, kindPrefix) => {
-        if (kindPrefix[0] !== rootStep) return _m;
-        // Strip the root letter and any immediately following accidental sign
-        const remainder = kindPrefix.slice(1).replace(/^[b#♭♯]/, '');
-        return prefix + remainder;
-      }
-    );
+    return block.replace(/(<kind\b[^>]*\btext=")([A-G][b#♭♯]?)/, (_m, prefix, kindPrefix) => {
+      if (kindPrefix[0] !== rootStep) return _m;
+      // Strip the root letter and any immediately following accidental sign
+      const remainder = kindPrefix.slice(1).replace(/^[b#♭♯]/, "");
+      return prefix + remainder;
+    });
   });
 }
 
@@ -103,10 +94,8 @@ export function fixChordSymbols(musicXml: string): string {
  */
 export function addAccidentals(musicXml: string): string {
   // Use the first <fifths> found (handles most single-key scores)
-  const fifths = parseInt(musicXml.match(/<fifths>(-?\d+)<\/fifths>/)?.[1] ?? '0');
+  const fifths = parseInt(musicXml.match(/<fifths>(-?\d+)<\/fifths>/)?.[1] ?? "0");
   const keyAcc = keyAccidentals(fifths);
 
-  return musicXml.replace(/<measure\b[^>]*>[\s\S]*?<\/measure>/g, (measure) =>
-    processMeasure(measure, keyAcc)
-  );
+  return musicXml.replace(/<measure\b[^>]*>[\s\S]*?<\/measure>/g, (measure) => processMeasure(measure, keyAcc));
 }

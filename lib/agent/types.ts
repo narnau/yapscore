@@ -1,7 +1,7 @@
 export type AgentResult =
-  | { type: "load";   musicXml: string; name: string }
+  | { type: "load"; musicXml: string; name: string }
   | { type: "modify"; musicXml: string; message: string }
-  | { type: "chat";   message: string };
+  | { type: "chat"; message: string };
 
 export type ScoreCapture = {
   musicXml: string;
