@@ -1,11 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import fs from "fs";
 import path from "path";
-import {
-  changeNoteDuration,
-  buildNoteMap,
-  createScore,
-} from "../lib/music/musicxml";
+import { changeNoteDuration, buildNoteMap, buildNoteMapById, createScore } from "../lib/music/musicxml";
 
 const SIMPLE = fs.readFileSync(path.join(__dirname, "fixtures/simple-score.xml"), "utf-8");
 
@@ -14,7 +10,7 @@ function getMeasureDurations(xml: string, measureNum: number): number[] {
   const re = new RegExp(`<measure[^>]*number="${measureNum}"[^>]*>([\\s\\S]*?)<\\/measure>`);
   const m = xml.match(re);
   if (!m) return [];
-  return [...m[1].matchAll(/<duration>(\d+)<\/duration>/g)].map(m => Number(m[1]));
+  return [...m[1].matchAll(/<duration>(\d+)<\/duration>/g)].map((m) => Number(m[1]));
 }
 
 /** Extract all <type> values from measure N */
@@ -22,7 +18,7 @@ function getMeasureNoteTypes(xml: string, measureNum: number): string[] {
   const re = new RegExp(`<measure[^>]*number="${measureNum}"[^>]*>([\\s\\S]*?)<\\/measure>`);
   const m = xml.match(re);
   if (!m) return [];
-  return [...m[1].matchAll(/<type>([^<]+)<\/type>/g)].map(m => m[1]);
+  return [...m[1].matchAll(/<type>([^<]+)<\/type>/g)].map((m) => m[1]);
 }
 
 /** Total duration ticks in a measure */
@@ -94,7 +90,7 @@ describe("changeNoteDuration", () => {
 
     const types = getMeasureNoteTypes(result, 1);
     expect(types[0]).toBe("quarter"); // C4 unchanged
-    expect(types[1]).toBe("eighth");  // D4 → eighth
+    expect(types[1]).toBe("eighth"); // D4 → eighth
     expect(measureTotalDuration(result, 1)).toBe(measureTotalDuration(SIMPLE, 1));
   });
 
@@ -151,12 +147,12 @@ describe("changeNoteDuration", () => {
 
   test("buildNoteMap count increases when rest is added", () => {
     const noteMap = buildNoteMap(SIMPLE);
-    const m1Count = noteMap.filter(n => n.measureNumber === 1).length;
+    const m1Count = noteMap.filter((n) => n.measureNumber === 1).length;
     expect(m1Count).toBe(4);
 
     const result = changeNoteDuration(SIMPLE, noteMap[0], "4");
     const noteMap2 = buildNoteMap(result);
-    const m1Count2 = noteMap2.filter(n => n.measureNumber === 1).length;
+    const m1Count2 = noteMap2.filter((n) => n.measureNumber === 1).length;
     expect(m1Count2).toBe(5); // eighth + rest + 3 quarters
   });
 
@@ -177,10 +173,10 @@ describe("changeNoteDuration", () => {
   test("removes measure='yes' attribute when resizing a measure rest", () => {
     // createScore produces whole rests with measure="yes" attribute
     const xml = createScore({
-      title: "Test",
-      instruments: [{ name: "Piano", midiProgram: 0, clef: "G" }],
+      instruments: [{ name: "Piano", midiProgram: 0, clef: "treble" }],
       measures: 2,
-      timeSignature: { beats: 4, beatType: 4 },
+      beats: 4,
+      beatType: 4,
       tempo: 120,
     });
 
@@ -203,10 +199,10 @@ describe("changeNoteDuration", () => {
 
   test("multi-staff piano: duration change preserves both staves", () => {
     const xml = createScore({
-      title: "Test",
-      instruments: [{ name: "Piano", midiProgram: 0, clef: "G" }],
+      instruments: [{ name: "Piano", midiProgram: 0, clef: "treble" }],
       measures: 2,
-      timeSignature: { beats: 4, beatType: 4 },
+      beats: 4,
+      beatType: 4,
       tempo: 120,
     });
 
@@ -228,5 +224,85 @@ describe("changeNoteDuration", () => {
     // Measure 2 should be untouched
     expect(measureTotalDuration(result, 2)).toBe(measureTotalDuration(SIMPLE, 2));
     expect(getMeasureNoteTypes(result, 2)).toEqual(getMeasureNoteTypes(SIMPLE, 2));
+  });
+});
+
+describe("buildNoteMap xmlId", () => {
+  // Use createScore output which has id attributes (unlike hand-written fixtures)
+  const SCORE_WITH_IDS = createScore({
+    instruments: [{ name: "Piano", midiProgram: 0, clef: "treble" }],
+    measures: 2,
+    beats: 4,
+    beatType: 4,
+    tempo: 120,
+  });
+
+  test("every note/rest has an xmlId when XML has id attributes", () => {
+    const noteMap = buildNoteMap(SCORE_WITH_IDS);
+    for (const pos of noteMap) {
+      expect(pos.xmlId).toBeTruthy();
+      expect(typeof pos.xmlId).toBe("string");
+    }
+  });
+
+  test("xmlIds are unique", () => {
+    const noteMap = buildNoteMap(SCORE_WITH_IDS);
+    const ids = noteMap.map((p) => p.xmlId).filter(Boolean);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test("xmlId is undefined when XML has no id attributes", () => {
+    const noteMap = buildNoteMap(SIMPLE);
+    for (const pos of noteMap) {
+      expect(pos.xmlId).toBeUndefined();
+    }
+  });
+
+  test("xmlIds are stable across calls with same XML", () => {
+    const map1 = buildNoteMap(SCORE_WITH_IDS);
+    const map2 = buildNoteMap(SCORE_WITH_IDS);
+    expect(map1.map((p) => p.xmlId)).toEqual(map2.map((p) => p.xmlId));
+  });
+});
+
+describe("buildNoteMapById", () => {
+  const SCORE_WITH_IDS = createScore({
+    instruments: [{ name: "Piano", midiProgram: 0, clef: "treble" }],
+    measures: 2,
+    beats: 4,
+    beatType: 4,
+    tempo: 120,
+  });
+
+  test("returns a Map keyed by xmlId", () => {
+    const map = buildNoteMapById(SCORE_WITH_IDS);
+    expect(map.size).toBeGreaterThan(0);
+    for (const [key, pos] of map) {
+      expect(key).toBe(pos.xmlId!);
+    }
+  });
+
+  test("has same count as buildNoteMap", () => {
+    const arr = buildNoteMap(SCORE_WITH_IDS);
+    const map = buildNoteMapById(SCORE_WITH_IDS);
+    expect(map.size).toBe(arr.length);
+    for (const [id, pos] of map) {
+      expect(pos.xmlId).toBe(id);
+      expect(pos.partId).toBeTruthy();
+      expect(pos.measureNumber).toBeGreaterThan(0);
+      expect(pos.entryIndex).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  test("multi-staff piano: all IDs unique across staves", () => {
+    const map = buildNoteMapById(SCORE_WITH_IDS);
+    const ids = [...map.keys()];
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test("empty Map when XML has no id attributes", () => {
+    const map = buildNoteMapById(SIMPLE);
+    expect(map.size).toBe(0);
   });
 });

@@ -31,7 +31,17 @@ export default function DurationControls({
         {([1, 2, 3, 4, 5, 6, 7] as const).map((dur) => (
           <button
             key={dur}
-            onClick={() => onMusicXmlChange(changeNoteDuration(musicXml, note, String(dur) as "1"|"2"|"3"|"4"|"5"|"6"|"7"), "Change duration")}
+            onClick={() => {
+              console.log("[score] Duration change", {
+                noteIndex: selectedNoteIndex,
+                position: note,
+                targetDuration: dur,
+              });
+              onMusicXmlChange(
+                changeNoteDuration(musicXml, note, String(dur) as "1" | "2" | "3" | "4" | "5" | "6" | "7"),
+                "Change duration",
+              );
+            }}
             title={DURATION_LABELS[dur - 1]}
             className="flex items-center justify-center py-3 rounded-xl bg-gray-100 active:bg-gray-200 text-gray-700 transition active:scale-95"
           >
@@ -49,7 +59,17 @@ export default function DurationControls({
           key={dur}
           onClick={() => {
             const p = noteMapRef.current[selectedNoteIndex];
-            if (p && musicXml) onMusicXmlChange(changeNoteDuration(musicXml, p, String(dur) as "1"|"2"|"3"|"4"|"5"|"6"|"7"), "Change duration");
+            if (p && musicXml) {
+              console.log("[score] Duration change", {
+                noteIndex: selectedNoteIndex,
+                position: p,
+                targetDuration: dur,
+              });
+              onMusicXmlChange(
+                changeNoteDuration(musicXml, p, String(dur) as "1" | "2" | "3" | "4" | "5" | "6" | "7"),
+                "Change duration",
+              );
+            }
           }}
           title={DURATION_LABELS[dur - 1]}
         >

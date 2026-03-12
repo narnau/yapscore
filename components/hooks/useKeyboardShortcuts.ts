@@ -1,6 +1,13 @@
 import { useEffect } from "react";
 import type { NotePosition } from "@/lib/music/musicxml";
-import { changeNotePitch, deleteNote, changeNoteDuration, duplicateMeasures, pasteMeasures, deleteMeasures } from "@/lib/music/musicxml";
+import {
+  changeNotePitch,
+  deleteNote,
+  changeNoteDuration,
+  duplicateMeasures,
+  pasteMeasures,
+  deleteMeasures,
+} from "@/lib/music/musicxml";
 
 type StateRef = {
   musicXml: string | null;
@@ -20,7 +27,12 @@ export function useKeyboardShortcuts(
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const ctrl = e.ctrlKey || e.metaKey;
-      const { musicXml: xml, onMusicXmlChange: onChange, selectedMeasures: measures, copiedMeasures: copied } = stateRef.current;
+      const {
+        musicXml: xml,
+        onMusicXmlChange: onChange,
+        selectedMeasures: measures,
+        copiedMeasures: copied,
+      } = stateRef.current;
       const idx = selectedNoteIndexRef.current;
 
       // ── Note actions ──
@@ -30,9 +42,16 @@ export function useKeyboardShortcuts(
           if (!position.isRest && !position.isDrum && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
             e.preventDefault();
             const semitones = (e.key === "ArrowUp" ? 1 : -1) * (ctrl ? 12 : 1);
-            onChange?.(changeNotePitch(xml, position, semitones),
-              ctrl ? (e.key === "ArrowUp" ? "Octave up" : "Octave down")
-                   : (e.key === "ArrowUp" ? "Move note up" : "Move note down"));
+            onChange?.(
+              changeNotePitch(xml, position, semitones),
+              ctrl
+                ? e.key === "ArrowUp"
+                  ? "Octave up"
+                  : "Octave down"
+                : e.key === "ArrowUp"
+                  ? "Move note up"
+                  : "Move note down",
+            );
             return;
           }
           if (!ctrl && (e.key === "Delete" || e.key === "Backspace")) {
@@ -43,7 +62,11 @@ export function useKeyboardShortcuts(
           }
           if (!ctrl && /^[1-7]$/.test(e.key)) {
             e.preventDefault();
-            onChange?.(changeNoteDuration(xml, position, e.key as "1"|"2"|"3"|"4"|"5"|"6"|"7"), "Change duration");
+            console.log("[score] Duration change (keyboard)", { key: e.key, position });
+            onChange?.(
+              changeNoteDuration(xml, position, e.key as "1" | "2" | "3" | "4" | "5" | "6" | "7"),
+              "Change duration",
+            );
             return;
           }
         }
@@ -59,7 +82,13 @@ export function useKeyboardShortcuts(
           onChange?.(pasteMeasures(xml, [...copied], Math.min(...measures)), "Paste measures");
         } else if (e.key === "d" && measures.size > 0) {
           e.preventDefault();
-          onChange?.(duplicateMeasures(xml, [...measures].sort((a, b) => a - b)), "Duplicate measures");
+          onChange?.(
+            duplicateMeasures(
+              xml,
+              [...measures].sort((a, b) => a - b),
+            ),
+            "Duplicate measures",
+          );
         }
       }
     }

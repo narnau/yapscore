@@ -24,8 +24,17 @@ import {
 import { DRUM_CATALOG } from "./musicxml-instruments";
 import { SEMITONES_PER_OCTAVE } from "./constants";
 import type {
-  Score, Part, Measure, MeasureEntry, NoteEntry, Pitch,
-  MeasureAttributes, DirectionEntry, BackupEntry, NoteType, Notation,
+  Score,
+  Part,
+  Measure,
+  MeasureEntry,
+  NoteEntry,
+  Pitch,
+  MeasureAttributes,
+  DirectionEntry,
+  BackupEntry,
+  NoteType,
+  Notation,
   Lyric as MxlLyric,
 } from "musicxml-io";
 
@@ -44,7 +53,7 @@ export function deleteMeasures(musicXml: string, measureNumbers: number[]): stri
       }
     }
 
-    part.measures = part.measures.filter(m => !toDelete.has(measureNum(m)));
+    part.measures = part.measures.filter((m) => !toDelete.has(measureNum(m)));
 
     // If the new first measure has no attributes, give it the ones we captured.
     if (orphanedAttributes && part.measures.length > 0 && !part.measures[0].attributes) {
@@ -69,7 +78,7 @@ export function clearMeasures(musicXml: string, measureNumbers: number[], partId
       if (staff != null) {
         // Staff-specific clear: remove only notes belonging to this staff,
         // keep all other entries (notes on other staves, attributes, directions)
-        m.entries = m.entries.filter(e => {
+        m.entries = m.entries.filter((e) => {
           if (e.type !== "note") return true;
           const noteStaff = (e as NoteEntry).staff ?? 1;
           return noteStaff !== staff;
@@ -78,9 +87,7 @@ export function clearMeasures(musicXml: string, measureNumbers: number[], partId
         m.entries.push(wholeRest(dur, staff, staff === 2 ? 5 : 1));
       } else {
         // Preserve attributes, direction, barline entries
-        const preserved = m.entries.filter(e =>
-          e.type === "direction" || e.type === "attributes"
-        );
+        const preserved = m.entries.filter((e) => e.type === "direction" || e.type === "attributes");
         const preservedBarlines = m.barlines;
 
         m.entries = [...preserved, wholeRest(dur)];
@@ -93,11 +100,7 @@ export function clearMeasures(musicXml: string, measureNumbers: number[], partId
 
 // ─── insertEmptyMeasures ────────────────────────────────────────────────────
 
-export function insertEmptyMeasures(
-  musicXml: string,
-  afterMeasure: number,
-  count: number
-): string {
+export function insertEmptyMeasures(musicXml: string, afterMeasure: number, count: number): string {
   const score = mxlParse(musicXml);
   const dur = measureDuration(score);
 
@@ -110,13 +113,9 @@ export function insertEmptyMeasures(
     if (afterMeasure === 0) {
       part.measures = [...newMeasures, ...part.measures];
     } else {
-      const idx = part.measures.findIndex(m => measureNum(m) === afterMeasure);
+      const idx = part.measures.findIndex((m) => measureNum(m) === afterMeasure);
       if (idx !== -1) {
-        part.measures = [
-          ...part.measures.slice(0, idx + 1),
-          ...newMeasures,
-          ...part.measures.slice(idx + 1),
-        ];
+        part.measures = [...part.measures.slice(0, idx + 1), ...newMeasures, ...part.measures.slice(idx + 1)];
       }
     }
   }
@@ -178,11 +177,7 @@ export function duplicateMeasures(musicXml: string, measureNumbers: number[]): s
     }
 
     if (lastIdx !== -1 && toDuplicate.length > 0) {
-      part.measures = [
-        ...part.measures.slice(0, lastIdx + 1),
-        ...toDuplicate,
-        ...part.measures.slice(lastIdx + 1),
-      ];
+      part.measures = [...part.measures.slice(0, lastIdx + 1), ...toDuplicate, ...part.measures.slice(lastIdx + 1)];
     }
   }
   return renumberMeasures(mxlSerialize(score));
@@ -190,12 +185,7 @@ export function duplicateMeasures(musicXml: string, measureNumbers: number[]): s
 
 // ─── repeatSection ──────────────────────────────────────────────────────────
 
-export function repeatSection(
-  musicXml: string,
-  startMeasure: number,
-  endMeasure: number,
-  times: number
-): string {
+export function repeatSection(musicXml: string, startMeasure: number, endMeasure: number, times: number): string {
   const score = mxlParse(musicXml);
 
   for (const part of score.parts) {
@@ -222,11 +212,7 @@ export function repeatSection(
           copies.push({ ...structuredClone(s), _id: generateId() });
         }
       }
-      part.measures = [
-        ...part.measures.slice(0, endIdx + 1),
-        ...copies,
-        ...part.measures.slice(endIdx + 1),
-      ];
+      part.measures = [...part.measures.slice(0, endIdx + 1), ...copies, ...part.measures.slice(endIdx + 1)];
     }
   }
   return renumberMeasures(mxlSerialize(score));
@@ -234,11 +220,7 @@ export function repeatSection(
 
 // ─── transposeMeasures ──────────────────────────────────────────────────────
 
-export function transposeMeasures(
-  musicXml: string,
-  measureNumbers: number[] | null,
-  semitones: number
-): string {
+export function transposeMeasures(musicXml: string, measureNumbers: number[] | null, semitones: number): string {
   const score = mxlParse(musicXml);
 
   if (!measureNumbers) {
@@ -255,9 +237,7 @@ export function transposeMeasures(
       if (!nums.has(measureNum(m))) continue;
       for (const entry of m.entries) {
         if (entry.type === "note" && entry.pitch) {
-          const result = transposePitch(
-            entry.pitch.step, entry.pitch.alter ?? 0, entry.pitch.octave, semitones
-          );
+          const result = transposePitch(entry.pitch.step, entry.pitch.alter ?? 0, entry.pitch.octave, semitones);
           entry.pitch.step = result.step as Pitch["step"];
           entry.pitch.alter = result.alter || undefined;
           entry.pitch.octave = result.octave;
@@ -331,11 +311,7 @@ export function changeKey(musicXml: string, newFifths: number, fromMeasure?: num
 
 const DURATION_TYPES: NoteType[] = ["whole", "half", "quarter", "eighth", "16th", "32nd", "64th"];
 
-export function scaleNoteDurations(
-  musicXml: string,
-  measureNumbers: number[],
-  factor: number
-): string {
+export function scaleNoteDurations(musicXml: string, measureNumbers: number[], factor: number): string {
   const nums = new Set(measureNumbers);
   const score = mxlParse(musicXml);
 
@@ -362,12 +338,7 @@ export function scaleNoteDurations(
 
 // ─── setTimeSignature ───────────────────────────────────────────────────────
 
-export function setTimeSignature(
-  musicXml: string,
-  beats: number,
-  beatType: number,
-  fromMeasure: number = 1
-): string {
+export function setTimeSignature(musicXml: string, beats: number, beatType: number, fromMeasure: number = 1): string {
   const score = mxlParse(musicXml);
 
   if (fromMeasure <= 1) {
@@ -407,9 +378,20 @@ export type NoteSpec = {
   step?: "C" | "D" | "E" | "F" | "G" | "A" | "B";
   octave?: number;
   alter?: number;
-  duration: "whole" | "half" | "quarter" | "eighth" | "16th" |
-            "dotted-whole" | "dotted-half" | "dotted-quarter" | "dotted-eighth" |
-            "half-triplet" | "quarter-triplet" | "eighth-triplet" | "16th-triplet";
+  duration:
+    | "whole"
+    | "half"
+    | "quarter"
+    | "eighth"
+    | "16th"
+    | "dotted-whole"
+    | "dotted-half"
+    | "dotted-quarter"
+    | "dotted-eighth"
+    | "half-triplet"
+    | "quarter-triplet"
+    | "eighth-triplet"
+    | "16th-triplet";
   chord?: boolean;
   rest?: boolean;
   tie?: "start" | "stop" | "both";
@@ -418,30 +400,29 @@ export type NoteSpec = {
   ornament?: "trill" | "mordent" | "inverted-mordent" | "turn";
   articulation?: "staccato" | "accent" | "tenuto" | "marcato" | "staccatissimo";
   lyric?: { text: string; syllabic?: "single" | "begin" | "middle" | "end"; verse?: number };
-  drumSound?: string;    // e.g. "snare", "hi-hat", "bass-drum"
-  voice?: 1 | 2;         // percussion: 1=hands (stems up), 2=feet (stems down)
+  drumSound?: string; // e.g. "snare", "hi-hat", "bass-drum"
+  voice?: 1 | 2; // percussion: 1=hands (stems up), 2=feet (stems down)
 };
 
-const BASE_TYPE_MAP: Record<string, { type: NoteType; quarterMultiplier: number; dotted: boolean; triplet?: boolean }> = {
-  "whole":           { type: "whole",   quarterMultiplier: 4,    dotted: false },
-  "half":            { type: "half",    quarterMultiplier: 2,    dotted: false },
-  "quarter":         { type: "quarter", quarterMultiplier: 1,    dotted: false },
-  "eighth":          { type: "eighth",  quarterMultiplier: 0.5,  dotted: false },
-  "16th":            { type: "16th",    quarterMultiplier: 0.25, dotted: false },
-  "dotted-whole":    { type: "whole",   quarterMultiplier: 6,    dotted: true  },
-  "dotted-half":     { type: "half",    quarterMultiplier: 3,    dotted: true  },
-  "dotted-quarter":  { type: "quarter", quarterMultiplier: 1.5,  dotted: true  },
-  "dotted-eighth":   { type: "eighth",  quarterMultiplier: 0.75, dotted: true  },
-  "half-triplet":    { type: "half",    quarterMultiplier: 4/3,  dotted: false, triplet: true },
-  "quarter-triplet": { type: "quarter", quarterMultiplier: 2/3,  dotted: false, triplet: true },
-  "eighth-triplet":  { type: "eighth",  quarterMultiplier: 1/3,  dotted: false, triplet: true },
-  "16th-triplet":    { type: "16th",    quarterMultiplier: 1/6,  dotted: false, triplet: true },
-};
+const BASE_TYPE_MAP: Record<string, { type: NoteType; quarterMultiplier: number; dotted: boolean; triplet?: boolean }> =
+  {
+    whole: { type: "whole", quarterMultiplier: 4, dotted: false },
+    half: { type: "half", quarterMultiplier: 2, dotted: false },
+    quarter: { type: "quarter", quarterMultiplier: 1, dotted: false },
+    eighth: { type: "eighth", quarterMultiplier: 0.5, dotted: false },
+    "16th": { type: "16th", quarterMultiplier: 0.25, dotted: false },
+    "dotted-whole": { type: "whole", quarterMultiplier: 6, dotted: true },
+    "dotted-half": { type: "half", quarterMultiplier: 3, dotted: true },
+    "dotted-quarter": { type: "quarter", quarterMultiplier: 1.5, dotted: true },
+    "dotted-eighth": { type: "eighth", quarterMultiplier: 0.75, dotted: true },
+    "half-triplet": { type: "half", quarterMultiplier: 4 / 3, dotted: false, triplet: true },
+    "quarter-triplet": { type: "quarter", quarterMultiplier: 2 / 3, dotted: false, triplet: true },
+    "eighth-triplet": { type: "eighth", quarterMultiplier: 1 / 3, dotted: false, triplet: true },
+    "16th-triplet": { type: "16th", quarterMultiplier: 1 / 6, dotted: false, triplet: true },
+  };
 
 export function notesTotalBeats(notes: NoteSpec[]): number {
-  return notes
-    .filter((n) => !n.chord)
-    .reduce((sum, n) => sum + (BASE_TYPE_MAP[n.duration]?.quarterMultiplier ?? 0), 0);
+  return notes.filter((n) => !n.chord).reduce((sum, n) => sum + (BASE_TYPE_MAP[n.duration]?.quarterMultiplier ?? 0), 0);
 }
 
 function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number, partId?: string): NoteEntry {
@@ -461,7 +442,8 @@ function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number, part
   if (note.drumSound && !note.rest) {
     // Percussion unpitched note
     const drum = DRUM_CATALOG[note.drumSound];
-    if (!drum) throw new Error(`Unknown drum sound: "${note.drumSound}". Valid: ${Object.keys(DRUM_CATALOG).join(", ")}`);
+    if (!drum)
+      throw new Error(`Unknown drum sound: "${note.drumSound}". Valid: ${Object.keys(DRUM_CATALOG).join(", ")}`);
     entry.unpitched = { displayStep: drum.displayStep, displayOctave: drum.displayOctave };
     if (partId) entry.instrument = `${partId}-${drum.instrumentId}`;
     if (drum.notehead !== "normal") {
@@ -506,11 +488,13 @@ function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number, part
 
   // Lyric
   if (note.lyric) {
-    entry.lyrics = [{
-      number: note.lyric.verse ?? 1,
-      syllabic: note.lyric.syllabic ?? "single",
-      text: note.lyric.text,
-    }];
+    entry.lyrics = [
+      {
+        number: note.lyric.verse ?? 1,
+        syllabic: note.lyric.syllabic ?? "single",
+        text: note.lyric.text,
+      },
+    ];
   }
 
   // Notations
@@ -521,8 +505,10 @@ function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number, part
   if (note.slur === "stop") notations.push({ type: "slur", slurType: "stop", number: 1 });
   if (note.ornament) {
     const ornMap: Record<string, string> = {
-      "trill": "trill-mark", "mordent": "mordent",
-      "inverted-mordent": "inverted-mordent", "turn": "turn",
+      trill: "trill-mark",
+      mordent: "mordent",
+      "inverted-mordent": "inverted-mordent",
+      turn: "turn",
     };
     notations.push({
       type: "ornament",
@@ -534,7 +520,10 @@ function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number, part
   }
   if (note.tuplet === "start") {
     notations.push({
-      type: "tuplet", tupletType: "start", number: 1, bracket: true,
+      type: "tuplet",
+      tupletType: "start",
+      number: 1,
+      bracket: true,
       showNumber: "actual",
       tupletActual: { tupletNumber: 3, tupletType: info.type },
       tupletNormal: { tupletNumber: 2, tupletType: info.type },
@@ -558,7 +547,7 @@ function noteSpecToEntry(note: NoteSpec, divisions: number, staff?: number, part
  */
 function autoTupletNotations(entries: NoteEntry[]): NoteEntry[] {
   // Only consider non-chord notes for grouping (chords share a beat with their root)
-  const nonChord = entries.filter(e => !e.chord);
+  const nonChord = entries.filter((e) => !e.chord);
   let i = 0;
   while (i < nonChord.length) {
     const e = nonChord[i];
@@ -569,17 +558,24 @@ function autoTupletNotations(entries: NoteEntry[]): NoteEntry[] {
       if (
         j1?.timeModification?.actualNotes === 3 &&
         j2?.timeModification?.actualNotes === 3 &&
-        e.noteType === j1.noteType && e.noteType === j2.noteType
+        e.noteType === j1.noteType &&
+        e.noteType === j2.noteType
       ) {
         // Only add if not already set
-        const hasTuplet = (n: NoteEntry) => n.notations?.some(x => x.type === "tuplet");
+        const hasTuplet = (n: NoteEntry) => n.notations?.some((x) => x.type === "tuplet");
         if (!hasTuplet(e)) {
-          e.notations = [{
-            type: "tuplet", tupletType: "start", number: 1, bracket: true,
-            showNumber: "actual",
-            tupletActual: { tupletNumber: 3, tupletType: e.noteType },
-            tupletNormal: { tupletNumber: 2, tupletType: e.noteType },
-          }, ...(e.notations ?? [])];
+          e.notations = [
+            {
+              type: "tuplet",
+              tupletType: "start",
+              number: 1,
+              bracket: true,
+              showNumber: "actual",
+              tupletActual: { tupletNumber: 3, tupletType: e.noteType },
+              tupletNormal: { tupletNumber: 2, tupletType: e.noteType },
+            },
+            ...(e.notations ?? []),
+          ];
         }
         if (!hasTuplet(j2)) {
           j2.notations = [{ type: "tuplet", tupletType: "stop", number: 1 }, ...(j2.notations ?? [])];
@@ -599,7 +595,7 @@ export function setMeasureNotes(
   notes: NoteSpec[],
   partId: string = "P1",
   staff?: number,
-  voice?: 1 | 2
+  voice?: 1 | 2,
 ): string {
   // Auto-insert missing measures
   const score0 = mxlParse(musicXml);
@@ -610,7 +606,7 @@ export function setMeasureNotes(
   }
 
   // Upgrade divisions if triplets needed
-  const hasTriplets = notes.some(n => BASE_TYPE_MAP[n.duration]?.triplet);
+  const hasTriplets = notes.some((n) => BASE_TYPE_MAP[n.duration]?.triplet);
   if (hasTriplets) musicXml = ensureTripletDivisions(musicXml);
 
   const score = mxlParse(musicXml);
@@ -628,19 +624,17 @@ export function setMeasureNotes(
   const effectiveStaff = partStaves > 1 ? staff : undefined;
 
   // Preserve non-note entries
-  const preserved = measure.entries.filter(e =>
-    e.type === "direction" || e.type === "attributes" || e.type === "harmony"
+  const preserved = measure.entries.filter(
+    (e) => e.type === "direction" || e.type === "attributes" || e.type === "harmony",
   );
   const preservedBarlines = measure.barlines;
 
-  const noteEntries = autoTupletNotations(notes.map(n => noteSpecToEntry(n, divisions, effectiveStaff, partId)));
+  const noteEntries = autoTupletNotations(notes.map((n) => noteSpecToEntry(n, divisions, effectiveStaff, partId)));
 
   if (voice != null) {
     // Percussion voice-aware merge: keep the other voice's notes, discard measure rests
-    const otherVoiceNotes = measure.entries.filter(e =>
-      e.type === "note" &&
-      (e as NoteEntry).voice !== String(voice) &&
-      !((e as NoteEntry).rest?.measure)
+    const otherVoiceNotes = measure.entries.filter(
+      (e) => e.type === "note" && (e as NoteEntry).voice !== String(voice) && !(e as NoteEntry).rest?.measure,
     );
 
     const beats = getBeats(score);
@@ -661,9 +655,7 @@ export function setMeasureNotes(
   } else {
     // Staff-aware: keep other staff's notes
     const otherStaff = staff === 1 ? 2 : 1;
-    const otherNotes = measure.entries.filter(e =>
-      e.type === "note" && (e as NoteEntry).staff === otherStaff
-    );
+    const otherNotes = measure.entries.filter((e) => e.type === "note" && (e as NoteEntry).staff === otherStaff);
 
     const beats = getBeats(score);
     const beatType = getBeatType(score);
@@ -699,11 +691,7 @@ export const writeNotes = setMeasureNotes;
 
 // ─── pasteMeasures ──────────────────────────────────────────────────────────
 
-export function pasteMeasures(
-  musicXml: string,
-  sourceMeasureNumbers: number[],
-  targetStartMeasure: number,
-): string {
+export function pasteMeasures(musicXml: string, sourceMeasureNumbers: number[], targetStartMeasure: number): string {
   const score = mxlParse(musicXml);
   const sorted = [...sourceMeasureNumbers].sort((a, b) => a - b);
   for (const part of score.parts) {
@@ -711,8 +699,10 @@ export function pasteMeasures(
       const src = findMeasure(part, sorted[i]);
       const tgt = findMeasure(part, targetStartMeasure + i);
       if (!src || !tgt) continue;
-      tgt.entries = (JSON.parse(JSON.stringify(src.entries)) as MeasureEntry[])
-        .map((e) => ({ ...e, _id: generateId() }));
+      tgt.entries = (JSON.parse(JSON.stringify(src.entries)) as MeasureEntry[]).map((e) => ({
+        ...e,
+        _id: generateId(),
+      }));
     }
   }
   return mxlSerialize(score);
@@ -720,19 +710,53 @@ export function pasteMeasures(
 
 // ─── NotePosition + buildNoteMap + changeNotePitch + deleteNote + changeNoteDuration ──
 
-export type NotePosition = { partId: string; measureNumber: number; entryIndex: number; isRest?: boolean; isDrum?: boolean };
+export type NotePosition = {
+  partId: string;
+  measureNumber: number;
+  entryIndex: number;
+  isRest?: boolean;
+  isDrum?: boolean;
+  xmlId?: string;
+};
+
+/** Extract note id attributes from raw MusicXML in document order. */
+function extractNoteXmlIds(musicXml: string): string[] {
+  const ids: string[] = [];
+  // Match <note ... id="xxx" ...> tags — id may appear anywhere in attributes
+  const noteTagRe = /<note\b([^>]*)>/g;
+  let match;
+  while ((match = noteTagRe.exec(musicXml)) !== null) {
+    const attrs = match[1];
+    const idMatch = attrs.match(/\bid="([^"]+)"/);
+    ids.push(idMatch ? idMatch[1] : "");
+  }
+  return ids;
+}
 
 /** Returns an ordered array matching DOM g.note / g.rest element order in Verovio SVG output. */
 export function buildNoteMap(musicXml: string): NotePosition[] {
   const score = mxlParse(musicXml);
+  const xmlIds = extractNoteXmlIds(musicXml);
   const result: NotePosition[] = [];
+  let noteIdx = 0;
   for (const part of score.parts) {
     for (const m of part.measures) {
       const mNum = measureNum(m);
       m.entries.forEach((entry, idx) => {
         const ne = entry as NoteEntry;
-        if (entry.type === "note" && (ne.pitch || ne.rest || ne.unpitched)) {
-          result.push({ partId: part.id, measureNumber: mNum, entryIndex: idx, isRest: !!ne.rest, isDrum: !!ne.unpitched });
+        if (entry.type === "note") {
+          const xmlId = xmlIds[noteIdx] || undefined;
+          noteIdx++;
+          if (ne.pitch || ne.rest || ne.unpitched) {
+            result.push({
+              partId: part.id,
+              measureNumber: mNum,
+              entryIndex: idx,
+              isRest: !!ne.rest,
+              isDrum: !!ne.unpitched,
+              xmlId,
+            });
+          }
         }
       });
     }
@@ -740,12 +764,18 @@ export function buildNoteMap(musicXml: string): NotePosition[] {
   return result;
 }
 
+/** Returns a Map from xml:id → NotePosition for ID-based SVG↔NoteMap matching. */
+export function buildNoteMapById(musicXml: string): Map<string, NotePosition> {
+  const arr = buildNoteMap(musicXml);
+  const map = new Map<string, NotePosition>();
+  for (const pos of arr) {
+    if (pos.xmlId) map.set(pos.xmlId, pos);
+  }
+  return map;
+}
+
 /** Move a single note pitch by `semitones` chromatic steps. */
-export function changeNotePitch(
-  musicXml: string,
-  position: NotePosition,
-  semitones: number,
-): string {
+export function changeNotePitch(musicXml: string, position: NotePosition, semitones: number): string {
   const score = mxlParse(musicXml);
   const part = findPart(score, position.partId);
   if (!part) return musicXml;
@@ -755,9 +785,7 @@ export function changeNotePitch(
   if (!entry || entry.type !== "note") return musicXml;
   const noteEntry = entry as NoteEntry;
   if (!noteEntry.pitch) return musicXml;
-  const result = transposePitch(
-    noteEntry.pitch.step, noteEntry.pitch.alter ?? 0, noteEntry.pitch.octave, semitones
-  );
+  const result = transposePitch(noteEntry.pitch.step, noteEntry.pitch.alter ?? 0, noteEntry.pitch.octave, semitones);
   noteEntry.pitch.step = result.step as Pitch["step"];
   noteEntry.pitch.alter = result.alter || undefined;
   noteEntry.pitch.octave = result.octave;
@@ -801,34 +829,47 @@ export function deleteNote(musicXml: string, position: NotePosition): string {
 // ─── changeNoteDuration ─────────────────────────────────────────────────────
 
 const DURATION_KEYS: Record<string, { noteType: NoteType; quarterMultiplier: number }> = {
-  "1": { noteType: "64th",    quarterMultiplier: 1 / 16 },
-  "2": { noteType: "32nd",    quarterMultiplier: 1 / 8  },
-  "3": { noteType: "16th",    quarterMultiplier: 1 / 4  },
-  "4": { noteType: "eighth",  quarterMultiplier: 1 / 2  },
-  "5": { noteType: "quarter", quarterMultiplier: 1      },
-  "6": { noteType: "half",    quarterMultiplier: 2      },
-  "7": { noteType: "whole",   quarterMultiplier: 4      },
+  "1": { noteType: "64th", quarterMultiplier: 1 / 16 },
+  "2": { noteType: "32nd", quarterMultiplier: 1 / 8 },
+  "3": { noteType: "16th", quarterMultiplier: 1 / 4 },
+  "4": { noteType: "eighth", quarterMultiplier: 1 / 2 },
+  "5": { noteType: "quarter", quarterMultiplier: 1 },
+  "6": { noteType: "half", quarterMultiplier: 2 },
+  "7": { noteType: "whole", quarterMultiplier: 4 },
 };
 
 // Minimum divisions value needed to represent each key as an integer tick count
 const KEY_MIN_DIVISIONS: Record<string, number> = {
-  "1": 16, "2": 8, "3": 4, "4": 2, "5": 1, "6": 1, "7": 1,
+  "1": 16,
+  "2": 8,
+  "3": 4,
+  "4": 2,
+  "5": 1,
+  "6": 1,
+  "7": 1,
 };
 
 /**
  * Fill `ticks` with one or more properly-typed rests (greedy, largest first).
  * Avoids inserting a single rest with an invalid/mismatched noteType.
  */
-function makeFillRests(ticks: number, divisions: number, voice?: number | string, staff?: number | string): NoteEntry[] {
-  const types: Array<[number, NoteType]> = ([
-    [divisions * 4,           "whole"],
-    [divisions * 2,           "half"],
-    [divisions,               "quarter"],
-    [Math.round(divisions / 2),  "eighth"],
-    [Math.round(divisions / 4),  "16th"],
-    [Math.round(divisions / 8),  "32nd"],
-    [Math.round(divisions / 16), "64th"],
-  ] as Array<[number, NoteType]>).filter(([d]) => d >= 1);
+function makeFillRests(
+  ticks: number,
+  divisions: number,
+  voice?: number | string,
+  staff?: number | string,
+): NoteEntry[] {
+  const types: Array<[number, NoteType]> = (
+    [
+      [divisions * 4, "whole"],
+      [divisions * 2, "half"],
+      [divisions, "quarter"],
+      [Math.round(divisions / 2), "eighth"],
+      [Math.round(divisions / 4), "16th"],
+      [Math.round(divisions / 8), "32nd"],
+      [Math.round(divisions / 16), "64th"],
+    ] as Array<[number, NoteType]>
+  ).filter(([d]) => d >= 1);
 
   const rests: NoteEntry[] = [];
   let remaining = ticks;
@@ -852,8 +893,12 @@ function makeFillRests(ticks: number, divisions: number, voice?: number | string
 function ticksToNoteType(ticks: number, divisions: number): NoteType | undefined {
   const q = divisions;
   const map: Array<[number, NoteType]> = [
-    [q * 4,  "whole"],   [q * 2,  "half"],   [q,      "quarter"],
-    [q / 2,  "eighth"],  [q / 4,  "16th"],   [q / 8,  "32nd"],
+    [q * 4, "whole"],
+    [q * 2, "half"],
+    [q, "quarter"],
+    [q / 2, "eighth"],
+    [q / 4, "16th"],
+    [q / 8, "32nd"],
     [q / 16, "64th"],
   ];
   for (const [dur, type] of map) if (Math.abs(ticks - dur) < 0.5) return type;
@@ -891,10 +936,8 @@ export function changeNoteDuration(
 
   // Find the last chord note in this chord group
   let lastChordIdx = mainIdx;
-  while (
-    lastChordIdx + 1 < measure.entries.length &&
-    (measure.entries[lastChordIdx + 1] as NoteEntry).chord
-  ) lastChordIdx++;
+  while (lastChordIdx + 1 < measure.entries.length && (measure.entries[lastChordIdx + 1] as NoteEntry).chord)
+    lastChordIdx++;
 
   // Update main note and all chord notes together
   noteEntry.noteType = noteType;
@@ -923,8 +966,14 @@ export function changeNoteDuration(
     while (remaining > 0 && i < measure.entries.length) {
       const next = measure.entries[i] as NoteEntry;
       if (next.type !== "note") break;
-      if (next.chord) { i++; continue; } // chord notes take no independent time
-      if (voice != null && next.voice != null && next.voice !== voice) { i++; continue; }
+      if (next.chord) {
+        i++;
+        continue;
+      } // chord notes take no independent time
+      if (voice != null && next.voice != null && next.voice !== voice) {
+        i++;
+        continue;
+      }
       if (next.duration <= remaining) {
         // Fully consume: remove this entry plus any of its chord notes
         remaining -= next.duration;
@@ -983,15 +1032,15 @@ export function percentToSwingRatio(percent: number): { first: number; second: n
 
 /** Convert first:second back to percentage (e.g. 2:1 → 67). */
 export function swingRatioToPercent(first: number, second: number): number {
-  return Math.round(first / (first + second) * 100);
+  return Math.round((first / (first + second)) * 100);
 }
 
 /** Remove any existing swing direction, then optionally insert a new one. */
 export function setSwing(musicXml: string, swing: SwingInfo | null): string {
   // Strip any existing swing direction block we previously inserted
-  let xml = musicXml.replace(
+  const xml = musicXml.replace(
     /<direction[^>]*>\s*<direction-type>\s*<words[^>]*>Swing<\/words>\s*<\/direction-type>[\s\S]*?<\/direction>\n?/g,
-    ""
+    "",
   );
   if (!swing) return xml;
 
@@ -1010,7 +1059,7 @@ export function setSwing(musicXml: string, swing: SwingInfo | null): string {
 /** Detect swing info stored in the MusicXML (returns null if straight). */
 export function getSwing(musicXml: string): SwingInfo | null {
   const m = musicXml.match(
-    /<swing>\s*<first>(\d+)<\/first>\s*<second>(\d+)<\/second>\s*<swing-type>(eighth|16th)<\/swing-type>\s*<\/swing>/
+    /<swing>\s*<first>(\d+)<\/first>\s*<second>(\d+)<\/second>\s*<swing-type>(eighth|16th)<\/swing-type>\s*<\/swing>/,
   );
   if (!m) return null;
   return { first: parseInt(m[1]), second: parseInt(m[2]), swingType: m[3] as "eighth" | "16th" };

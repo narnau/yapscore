@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import MidiPlayer from "./MidiPlayer";
 import { applySwingToMidi } from "@/lib/music/swing-midi";
-import { getSwing, setTempo, buildNoteMap, deleteNote } from "@/lib/music/musicxml";
+import { getSwing, setTempo, buildNoteMapById, deleteNote } from "@/lib/music/musicxml";
 import type { NotePosition } from "@/lib/music/musicxml";
 import { capture } from "@/lib/telemetry/posthog";
 import ScoreInfoBar from "./ScoreInfoBar";
@@ -29,35 +29,147 @@ type Props = {
 
 // General MIDI program → soundfont-player instrument name (programs 1–128)
 const GM_INSTRUMENTS: string[] = [
-  "acoustic_grand_piano","bright_acoustic_piano","electric_grand_piano","honkytonk_piano",
-  "electric_piano_1","electric_piano_2","harpsichord","clavinet",
-  "celesta","glockenspiel","music_box","vibraphone","marimba","xylophone","tubular_bells","dulcimer",
-  "drawbar_organ","percussive_organ","rock_organ","church_organ","reed_organ","accordion","harmonica","tango_accordion",
-  "acoustic_guitar_nylon","acoustic_guitar_steel","electric_guitar_jazz","electric_guitar_clean",
-  "electric_guitar_muted","overdriven_guitar","distortion_guitar","guitar_harmonics",
-  "acoustic_bass","electric_bass_finger","electric_bass_pick","fretless_bass",
-  "slap_bass_1","slap_bass_2","synth_bass_1","synth_bass_2",
-  "violin","viola","cello","contrabass","tremolo_strings","pizzicato_strings","orchestral_harp","timpani",
-  "string_ensemble_1","string_ensemble_2","synth_strings_1","synth_strings_2",
-  "choir_aahs","voice_oohs","synth_voice","orchestra_hit",
-  "trumpet","trombone","tuba","muted_trumpet","french_horn","brass_section","synth_brass_1","synth_brass_2",
-  "soprano_sax","alto_sax","tenor_sax","baritone_sax","oboe","english_horn","bassoon","clarinet",
-  "piccolo","flute","recorder","pan_flute","blown_bottle","shakuhachi","whistle","ocarina",
-  "lead_1_square","lead_2_sawtooth","lead_3_calliope","lead_4_chiff","lead_5_charang",
-  "lead_6_voice","lead_7_fifths","lead_8_bass_lead",
-  "pad_1_new_age","pad_2_warm","pad_3_polysynth","pad_4_choir","pad_5_bowed",
-  "pad_6_metallic","pad_7_halo","pad_8_sweep",
-  "fx_1_rain","fx_2_soundtrack","fx_3_crystal","fx_4_atmosphere","fx_5_brightness",
-  "fx_6_goblins","fx_7_echoes","fx_8_scifi",
-  "sitar","banjo","shamisen","koto","kalimba","bag_pipe","fiddle","shanai",
-  "tinkle_bell","agogo","steel_drums","woodblock","taiko_drum","melodic_tom","synth_drum","reverse_cymbal",
-  "guitar_fret_noise","breath_noise","seashore","bird_tweet","telephone_ring","helicopter","applause","gunshot",
+  "acoustic_grand_piano",
+  "bright_acoustic_piano",
+  "electric_grand_piano",
+  "honkytonk_piano",
+  "electric_piano_1",
+  "electric_piano_2",
+  "harpsichord",
+  "clavinet",
+  "celesta",
+  "glockenspiel",
+  "music_box",
+  "vibraphone",
+  "marimba",
+  "xylophone",
+  "tubular_bells",
+  "dulcimer",
+  "drawbar_organ",
+  "percussive_organ",
+  "rock_organ",
+  "church_organ",
+  "reed_organ",
+  "accordion",
+  "harmonica",
+  "tango_accordion",
+  "acoustic_guitar_nylon",
+  "acoustic_guitar_steel",
+  "electric_guitar_jazz",
+  "electric_guitar_clean",
+  "electric_guitar_muted",
+  "overdriven_guitar",
+  "distortion_guitar",
+  "guitar_harmonics",
+  "acoustic_bass",
+  "electric_bass_finger",
+  "electric_bass_pick",
+  "fretless_bass",
+  "slap_bass_1",
+  "slap_bass_2",
+  "synth_bass_1",
+  "synth_bass_2",
+  "violin",
+  "viola",
+  "cello",
+  "contrabass",
+  "tremolo_strings",
+  "pizzicato_strings",
+  "orchestral_harp",
+  "timpani",
+  "string_ensemble_1",
+  "string_ensemble_2",
+  "synth_strings_1",
+  "synth_strings_2",
+  "choir_aahs",
+  "voice_oohs",
+  "synth_voice",
+  "orchestra_hit",
+  "trumpet",
+  "trombone",
+  "tuba",
+  "muted_trumpet",
+  "french_horn",
+  "brass_section",
+  "synth_brass_1",
+  "synth_brass_2",
+  "soprano_sax",
+  "alto_sax",
+  "tenor_sax",
+  "baritone_sax",
+  "oboe",
+  "english_horn",
+  "bassoon",
+  "clarinet",
+  "piccolo",
+  "flute",
+  "recorder",
+  "pan_flute",
+  "blown_bottle",
+  "shakuhachi",
+  "whistle",
+  "ocarina",
+  "lead_1_square",
+  "lead_2_sawtooth",
+  "lead_3_calliope",
+  "lead_4_chiff",
+  "lead_5_charang",
+  "lead_6_voice",
+  "lead_7_fifths",
+  "lead_8_bass_lead",
+  "pad_1_new_age",
+  "pad_2_warm",
+  "pad_3_polysynth",
+  "pad_4_choir",
+  "pad_5_bowed",
+  "pad_6_metallic",
+  "pad_7_halo",
+  "pad_8_sweep",
+  "fx_1_rain",
+  "fx_2_soundtrack",
+  "fx_3_crystal",
+  "fx_4_atmosphere",
+  "fx_5_brightness",
+  "fx_6_goblins",
+  "fx_7_echoes",
+  "fx_8_scifi",
+  "sitar",
+  "banjo",
+  "shamisen",
+  "koto",
+  "kalimba",
+  "bag_pipe",
+  "fiddle",
+  "shanai",
+  "tinkle_bell",
+  "agogo",
+  "steel_drums",
+  "woodblock",
+  "taiko_drum",
+  "melodic_tom",
+  "synth_drum",
+  "reverse_cymbal",
+  "guitar_fret_noise",
+  "breath_noise",
+  "seashore",
+  "bird_tweet",
+  "telephone_ring",
+  "helicopter",
+  "applause",
+  "gunshot",
 ];
 
 export default function ScoreViewer({
-  musicXml, scoreName, selectedMeasures, onMeasureClick, onClearMeasureSelection,
-  onPlaybackStop, onMusicXmlChange, loading,
-  swingEnabled: swingProp, onSwingChange,
+  musicXml,
+  scoreName,
+  selectedMeasures,
+  onMeasureClick,
+  onClearMeasureSelection,
+  onPlaybackStop,
+  onMusicXmlChange,
+  loading,
+  swingEnabled: swingProp,
+  onSwingChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -131,7 +243,7 @@ export default function ScoreViewer({
     setMeasureStartsMs([]);
     async function render() {
       // Yield to the browser so React can paint the spinner before heavy work
-      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       if (cancelled) return;
 
       const [{ default: createVerovioModule }, { VerovioToolkit }] = await Promise.all([
@@ -142,8 +254,14 @@ export default function ScoreViewer({
       const tk = new VerovioToolkit(VerovioModule);
       if (cancelled || !containerRef.current) return;
 
-      tk.setOptions({ pageWidth: 2100, adjustPageHeight: 1, scale: 40,
-                      breaks: "auto", footer: "none", header: "none" });
+      tk.setOptions({
+        pageWidth: 2100,
+        adjustPageHeight: 1,
+        scale: 40,
+        breaks: "auto",
+        footer: "none",
+        header: "none",
+      });
       tk.loadData(musicXml!);
 
       const container = containerRef.current;
@@ -172,11 +290,11 @@ export default function ScoreViewer({
         const timemapRaw = (tk as any).renderToTimemap({ includeMeasures: true });
         const timemap: Array<{ tstamp: number; measureOn?: string }> =
           typeof timemapRaw === "string" ? JSON.parse(timemapRaw) : timemapRaw;
-        const starts = timemap
-          .filter((e) => e.measureOn !== undefined)
-          .map((e) => e.tstamp);
+        const starts = timemap.filter((e) => e.measureOn !== undefined).map((e) => e.tstamp);
         if (!cancelled && starts.length > 0) setMeasureStartsMs(starts);
-      } catch { /* ignore timemap errors, fall back to tick math */ }
+      } catch {
+        /* ignore timemap errors, fall back to tick math */
+      }
 
       // Wait one frame so the browser lays out the SVGs before getBBox()
       requestAnimationFrame(() => {
@@ -195,11 +313,11 @@ export default function ScoreViewer({
 
           const bbox = measureEl.getBBox();
           const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-          rect.setAttribute("x",      String(bbox.x));
-          rect.setAttribute("y",      String(bbox.y));
-          rect.setAttribute("width",  String(bbox.width));
+          rect.setAttribute("x", String(bbox.x));
+          rect.setAttribute("y", String(bbox.y));
+          rect.setAttribute("width", String(bbox.width));
           rect.setAttribute("height", String(bbox.height));
-          rect.setAttribute("fill",   "rgba(0,0,0,0)");
+          rect.setAttribute("fill", "rgba(0,0,0,0)");
           rect.setAttribute("pointer-events", "none");
           rect.setAttribute("data-hl", String(measureNum));
           measureEl.insertBefore(rect, measureEl.firstChild);
@@ -211,9 +329,19 @@ export default function ScoreViewer({
           });
         });
 
-        // Build note/rest map and set up click handlers
-        noteMapRef.current = buildNoteMap(musicXml!);
+        // Build note/rest map by ID and set up click handlers
+        const noteMapById = buildNoteMapById(musicXml!);
+        const noteMapArray: NotePosition[] = [];
+        let matchedCount = 0;
         containerRef.current.querySelectorAll<SVGGElement>("g.note, g.rest").forEach((el, i) => {
+          const svgId = el.id;
+          const position = svgId ? noteMapById.get(svgId) : undefined;
+          if (position) {
+            noteMapArray.push(position);
+            matchedCount++;
+          } else {
+            noteMapArray.push({ partId: "", measureNumber: 0, entryIndex: -1, isRest: true });
+          }
           el.dataset.ysIndex = String(i);
           el.style.cursor = "pointer";
           el.setAttribute("role", "button");
@@ -221,8 +349,15 @@ export default function ScoreViewer({
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             onClearMeasureSelection?.();
+            console.log("[score] Note selected", { svgIndex: i, svgId: el.id, position: position ?? null });
             setSelectedNoteIndex(i);
           });
+        });
+        noteMapRef.current = noteMapArray;
+        console.log("[score] NoteMap built", {
+          total: noteMapArray.length,
+          matched: matchedCount,
+          unmatched: noteMapArray.length - matchedCount,
         });
 
         // Re-apply highlight if a note/rest was already selected (after re-render)
@@ -234,19 +369,25 @@ export default function ScoreViewer({
       });
     }
 
-    render().catch((err) => { console.error(err); setRendering(false); });
-    return () => { cancelled = true; setRendering(false); };
+    render().catch((err) => {
+      console.error(err);
+      setRendering(false);
+    });
+    return () => {
+      cancelled = true;
+      setRendering(false);
+    };
   }, [musicXml]);
 
   // ── note highlight helper ─────────────────────────────────────────────────
   function applyNoteHighlight(noteEl: SVGGElement) {
     const bbox = noteEl.getBBox();
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    rect.setAttribute("x",      String(bbox.x));
-    rect.setAttribute("y",      String(bbox.y));
-    rect.setAttribute("width",  String(bbox.width));
+    rect.setAttribute("x", String(bbox.x));
+    rect.setAttribute("y", String(bbox.y));
+    rect.setAttribute("width", String(bbox.width));
     rect.setAttribute("height", String(bbox.height));
-    rect.setAttribute("fill",   "rgba(99,102,241,0.35)");
+    rect.setAttribute("fill", "rgba(99,102,241,0.35)");
     rect.setAttribute("pointer-events", "none");
     rect.setAttribute("data-ys-note-hl", "1");
     noteEl.insertBefore(rect, noteEl.firstChild);
@@ -256,7 +397,7 @@ export default function ScoreViewer({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    container.querySelectorAll("[data-ys-note-hl]").forEach(el => el.remove());
+    container.querySelectorAll("[data-ys-note-hl]").forEach((el) => el.remove());
     if (selectedNoteIndex === null) return;
     const noteEl = container.querySelector<SVGGElement>(`[data-ys-index="${selectedNoteIndex}"]`);
     if (!noteEl) return;
@@ -264,13 +405,7 @@ export default function ScoreViewer({
   }, [selectedNoteIndex]);
 
   // ── keyboard shortcuts (note + measure editing) ───────────────────────────
-  useKeyboardShortcuts(
-    stateRef,
-    selectedNoteIndexRef,
-    noteMapRef,
-    setSelectedNoteIndex,
-    setCopiedMeasures,
-  );
+  useKeyboardShortcuts(stateRef, selectedNoteIndexRef, noteMapRef, setSelectedNoteIndex, setCopiedMeasures);
 
   // ── selection + playback highlight ───────────────────────────────────────
   useEffect(() => {
@@ -310,10 +445,10 @@ export default function ScoreViewer({
     const rectBounds = rect.getBoundingClientRect();
     const scrollBounds = scrollEl.getBoundingClientRect();
 
-    const topInScroll    = rectBounds.top  - scrollBounds.top  + scrollEl.scrollTop;
+    const topInScroll = rectBounds.top - scrollBounds.top + scrollEl.scrollTop;
     const bottomInScroll = rectBounds.bottom - scrollBounds.top + scrollEl.scrollTop;
-    const alreadyVisible = topInScroll >= scrollEl.scrollTop &&
-                           bottomInScroll <= scrollEl.scrollTop + scrollEl.clientHeight;
+    const alreadyVisible =
+      topInScroll >= scrollEl.scrollTop && bottomInScroll <= scrollEl.scrollTop + scrollEl.clientHeight;
 
     if (!alreadyVisible) {
       const target = topInScroll - scrollEl.clientHeight / 2 + rectBounds.height / 2;
@@ -341,9 +476,7 @@ export default function ScoreViewer({
               <span className="text-xs text-gray-400">Loading score…</span>
             </div>
           ) : (
-            <span className="text-brand-secondary text-sm">
-              Upload a score and send an instruction to see it here.
-            </span>
+            <span className="text-brand-secondary text-sm">Upload a score and send an instruction to see it here.</span>
           )}
         </div>
       </div>
@@ -367,17 +500,17 @@ export default function ScoreViewer({
       {/* Info bar: metadata + controls */}
       <div className="flex flex-wrap items-center gap-2 px-4 py-1.5 border-b border-gray-200 bg-gray-50">
         <div className="flex-1 min-w-0">
-          <ScoreInfoBar
-            musicXml={musicXml}
-            onTempoChange={onTempoChange}
-          />
+          <ScoreInfoBar musicXml={musicXml} onTempoChange={onTempoChange} />
         </div>
         {/* Controls — grouped with consistent style */}
         <div className="flex items-center gap-1.5 shrink-0">
           {/* Jazz / Straight toggle */}
           {midiSrc && (
             <button
-              onClick={() => { capture("swing_toggled", { enabled: !swingEnabled }); setSwingEnabled(!swingEnabled); }}
+              onClick={() => {
+                capture("swing_toggled", { enabled: !swingEnabled });
+                setSwingEnabled(!swingEnabled);
+              }}
               title={swingEnabled ? "Switch to straight" : "Switch to jazz swing"}
               className={`text-xs px-3 py-1 rounded-lg transition ${
                 swingEnabled
@@ -395,7 +528,9 @@ export default function ScoreViewer({
               channelInstruments={channelInstruments}
               measureStartsMs={measureStartsMs}
               selectedMeasures={selectedMeasures}
-              playFromMeasure={selectedNoteIndex !== null ? noteMapRef.current[selectedNoteIndex]?.measureNumber : undefined}
+              playFromMeasure={
+                selectedNoteIndex !== null ? noteMapRef.current[selectedNoteIndex]?.measureNumber : undefined
+              }
               onMeasureChange={setPlayingMeasure}
             />
           ) : (
@@ -419,16 +554,42 @@ export default function ScoreViewer({
       {/* Contextual editing toolbar — desktop only */}
       {(selectedNoteIndex !== null || selectedMeasures.size > 0) && onMusicXmlChange && (
         <div className="hidden md:flex items-center gap-1 px-3 py-1 border-b border-gray-100 bg-gray-50 flex-wrap">
-          {selectedNoteIndex !== null && (<>
-            <span className="text-[10px] text-gray-400 mr-0.5 shrink-0">{noteMapRef.current[selectedNoteIndex]?.isRest ? "Rest:" : "Note:"}</span>
-            <PitchControls selectedNoteIndex={selectedNoteIndex} noteMapRef={noteMapRef} musicXml={musicXml} onMusicXmlChange={onMusicXmlChange} />
-            {!noteMapRef.current[selectedNoteIndex]?.isRest && !noteMapRef.current[selectedNoteIndex]?.isDrum && (
+          {selectedNoteIndex !== null && (
+            <>
+              <span className="text-[10px] text-gray-400 mr-0.5 shrink-0">
+                {noteMapRef.current[selectedNoteIndex]?.isRest ? "Rest:" : "Note:"}
+              </span>
+              <PitchControls
+                selectedNoteIndex={selectedNoteIndex}
+                noteMapRef={noteMapRef}
+                musicXml={musicXml}
+                onMusicXmlChange={onMusicXmlChange}
+              />
+              {!noteMapRef.current[selectedNoteIndex]?.isRest && !noteMapRef.current[selectedNoteIndex]?.isDrum && (
+                <div className="w-px h-3.5 bg-gray-200 mx-0.5" />
+              )}
+              <DurationControls
+                selectedNoteIndex={selectedNoteIndex}
+                noteMapRef={noteMapRef}
+                musicXml={musicXml}
+                onMusicXmlChange={onMusicXmlChange}
+              />
               <div className="w-px h-3.5 bg-gray-200 mx-0.5" />
-            )}
-            <DurationControls selectedNoteIndex={selectedNoteIndex} noteMapRef={noteMapRef} musicXml={musicXml} onMusicXmlChange={onMusicXmlChange} />
-            <div className="w-px h-3.5 bg-gray-200 mx-0.5" />
-            <ToolBtn danger onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) { onMusicXmlChange(deleteNote(musicXml, p), "Delete note"); setSelectedNoteIndex(null); } }} title="Delete note (Delete)">✕ Delete</ToolBtn>
-          </>)}
+              <ToolBtn
+                danger
+                onClick={() => {
+                  const p = noteMapRef.current[selectedNoteIndex];
+                  if (p && musicXml) {
+                    onMusicXmlChange(deleteNote(musicXml, p), "Delete note");
+                    setSelectedNoteIndex(null);
+                  }
+                }}
+                title="Delete note (Delete)"
+              >
+                ✕ Delete
+              </ToolBtn>
+            </>
+          )}
           {selectedMeasures.size > 0 && (
             <MeasureControls
               selectedMeasures={selectedMeasures}
@@ -467,8 +628,6 @@ export default function ScoreViewer({
         )}
         <div className="p-3 md:p-6" ref={containerRef} />
       </div>
-
     </div>
   );
 }
-

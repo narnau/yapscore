@@ -77,6 +77,7 @@ export {
   notesTotalBeats,
   pasteMeasures,
   buildNoteMap,
+  buildNoteMapById,
   changeNotePitch,
   deleteNote,
   changeNoteDuration,
