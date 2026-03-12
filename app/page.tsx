@@ -428,7 +428,7 @@ function Contact() {
           Whether you have feedback, need help, or want to partner with us — we&apos;d love to hear from you.
         </p>
         <a
-          href="mailto:hello@yapscore.com"
+          href="mailto:hello@yapscore.ai"
           className="mt-8 inline-flex items-center gap-2 px-8 py-4 bg-white hover:bg-gray-50 text-gray-900 rounded-xl text-base font-semibold transition border border-gray-200 shadow-sm"
         >
           <svg
@@ -444,7 +444,7 @@ function Contact() {
               d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
             />
           </svg>
-          hello@yapscore.com
+          hello@yapscore.ai
         </a>
       </div>
     </section>
