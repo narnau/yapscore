@@ -8,6 +8,12 @@ type State = "loading" | "ready" | "playing" | "stopped";
 // soundfont-player returns a node with a .stop(when?) method
 type SfNode = { stop: (when?: number) => void };
 
+// Local type extension for midi-player-js Player (avoids `as any` casts)
+type MidiPlayerExtended = MidiPlayer.Player & {
+  division?: number;
+  tempo?: number;
+};
+
 type Props = {
   src: string;
   channelInstruments?: Record<number, string>; // MIDI channel → soundfont name
@@ -17,7 +23,10 @@ type Props = {
   onMeasureChange: (measure: number | null) => void;
 };
 
-const RELEASE_S = 0.15; // fade-out time when stopping a note early (seconds)
+// Named constants for magic numbers
+const DEFAULT_MIDI_DIVISION = 480;
+const DEFAULT_PLAYBACK_BPM = 120;
+const NOTE_RELEASE_SECONDS = 0.15;
 
 // ── WebAudioFont drum samples (FluidR3 GM, bank 128) ─────────────────────────
 // Each GM drum note has its own JS file: base64 MP3 data inside `file:'...'`.
@@ -31,19 +40,19 @@ async function loadDrumSamples(ctx: AudioContext): Promise<Map<number, AudioBuff
       try {
         const url  = `${WAF_BASE}/128${note}_0_FluidR3_GM_sf2_file.js`;
         const res  = await fetch(url);
-        if (!res.ok) { console.warn(`[drums] HTTP ${res.status} for note ${note}`); return; }
+        if (!res.ok) { if (process.env.NODE_ENV === "development") console.warn(`[drums] HTTP ${res.status} for note ${note}`); return; }
         const text = await res.text();
         const match = text.match(/file:'([^']+)'/);
-        if (!match) { console.warn(`[drums] no file field for note ${note}`); return; }
+        if (!match) { if (process.env.NODE_ENV === "development") console.warn(`[drums] no file field for note ${note}`); return; }
         const binary = atob(match[1]);
         const ab = new ArrayBuffer(binary.length);
         const view = new Uint8Array(ab);
         for (let i = 0; i < binary.length; i++) view[i] = binary.charCodeAt(i);
         map.set(note, await ctx.decodeAudioData(ab));
-      } catch (e) { console.warn(`[drums] failed note ${note}:`, e); }
+      } catch (e) { if (process.env.NODE_ENV === "development") console.warn(`[drums] failed note ${note}:`, e); }
     })
   );
-  console.log(`[drums] loaded ${map.size}/${DRUM_NOTES.length} samples`);
+  if (process.env.NODE_ENV === "development") console.log(`[drums] loaded ${map.size}/${DRUM_NOTES.length} samples`);
   return map;
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -288,8 +297,8 @@ function playDrumSynth(ctx: AudioContext, noteNumber: number, velocity: number) 
 
 export default function MidiPlayerComponent({ src, channelInstruments = {}, measureStartsMs, selectedMeasures, playFromMeasure, onMeasureChange }: Props) {
   const [state, setState] = useState<State>("loading");
-  const playerRef        = useRef<MidiPlayer.Player | null>(null);
-  const instrumentsRef   = useRef<Map<number, any>>(new Map()); // channel → soundfont instance
+  const playerRef        = useRef<MidiPlayerExtended | null>(null);
+  const instrumentsRef   = useRef<Map<number, SfNode & { play: (note: string, time: number, opts?: { gain?: number }) => SfNode }>>(new Map());
   const audioCtxRef      = useRef<AudioContext | null>(null);
   const drumBuffersRef   = useRef<Map<number, AudioBuffer>>(new Map());
   const activeNotesRef   = useRef<Map<string, SfNode>>(new Map());
@@ -338,7 +347,7 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
 
   function stopAllNotes(immediate = false) {
     const ctx = audioCtxRef.current;
-    const when = ctx ? ctx.currentTime + (immediate ? 0 : RELEASE_S) : 0;
+    const when = ctx ? ctx.currentTime + (immediate ? 0 : NOTE_RELEASE_SECONDS) : 0;
     activeNotesRef.current.forEach((node) => {
       try { node.stop(when); } catch { /* already stopped */ }
     });
@@ -370,7 +379,7 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
       const nameToSf = new Map(loaded);
       // Build channel → sf map; fallback to first loaded instrument
       const fallback = loaded[0][1];
-      const channelMap = new Map<number, any>();
+      const channelMap = new Map<number, typeof fallback>();
       for (const [ch, name] of Object.entries(channelInstruments)) {
         channelMap.set(Number(ch), nameToSf.get(name) ?? fallback);
       }
@@ -393,7 +402,7 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
             const noteNum = event.noteNumber ?? 0;
             const vel     = (event.velocity ?? 64) / 127;
             const buf     = drumBuffersRef.current.get(noteNum);
-            console.log(`[drums] ch10 note=${noteNum} buf=${!!buf} mapSize=${drumBuffersRef.current.size}`);
+            if (process.env.NODE_ENV === "development") console.log(`[drums] ch10 note=${noteNum} buf=${!!buf} mapSize=${drumBuffersRef.current.size}`);
             if (buf) {
               const src  = ctx.createBufferSource();
               src.buffer = buf;
@@ -415,7 +424,7 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
           const key = `${event.channel}:${noteName}`;
           const prev = activeNotesRef.current.get(key);
           if (prev) {
-            try { prev.stop(ctx.currentTime + RELEASE_S); } catch { /* ok */ }
+            try { prev.stop(ctx.currentTime + NOTE_RELEASE_SECONDS); } catch { /* ok */ }
           }
           const node: SfNode = sf.play(noteName, ctx.currentTime, { gain: event.velocity / 127 });
           activeNotesRef.current.set(key, node);
@@ -429,7 +438,7 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
           const key = `${event.channel}:${noteName}`;
           const node = activeNotesRef.current.get(key);
           if (node) {
-            try { node.stop(ctx.currentTime + RELEASE_S); } catch { /* ok */ }
+            try { node.stop(ctx.currentTime + NOTE_RELEASE_SECONDS); } catch { /* ok */ }
             activeNotesRef.current.delete(key);
           }
         }
@@ -502,10 +511,10 @@ export default function MidiPlayerComponent({ src, channelInstruments = {}, meas
       startOffsetMsRef.current = startMs;
 
       // Skip the MIDI player to the right tick
-      const division = (player as any).division || 480;
+      const division = player.division ?? DEFAULT_MIDI_DIVISION;
       // For the tick skip, use the tempo from the MIDI to convert ms → ticks
       // (approximate: assume constant tempo)
-      const bpm = (player as any).tempo || 120;
+      const bpm = player.tempo ?? DEFAULT_PLAYBACK_BPM;
       const startTick = Math.round((startMs / 1000) * (bpm / 60) * division);
       player.skipToTick(startTick);
     } else {

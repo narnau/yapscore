@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createHash, randomBytes } from "crypto";
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-// API is Pro-only. Free users get a 403 before any LLM call.
-// Daily cap protects against runaway scripts from Pro users.
-// At ~$0.006/call (Gemini 2.5 Flash, ~3 agent steps avg), 20 calls/day = ~$3.60/mo worst case.
-// Revisit once real usage data is available — this is a beta limit.
-export const API_DAILY_LIMIT = 20;
+import { API_DAILY_LIMIT } from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

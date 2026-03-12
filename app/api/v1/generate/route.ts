@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { getApiKeyUser, checkApiAccess } from "@/lib/apiKeyAuth";
 import { runAgent } from "@/lib/agent";
 import { setLlmUserId } from "@/lib/llm";
 
 export const maxDuration = 300;
+
+const generateSchema = z.object({
+  prompt: z.string().min(1, "prompt is required"),
+});
 
 export async function POST(req: NextRequest) {
   const auth = await getApiKeyUser(req);
@@ -13,10 +18,13 @@ export async function POST(req: NextRequest) {
   if (!access.ok) return access.response;
 
   const body = await req.json().catch(() => ({}));
-  const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
-  if (!prompt) {
-    return NextResponse.json({ error: "prompt is required" }, { status: 400 });
+  const parsed = generateSchema.safeParse(body);
+  if (!parsed.success) {
+    const firstError = parsed.error.errors[0]?.message ?? "Invalid request";
+    return NextResponse.json({ error: firstError }, { status: 400 });
   }
+
+  const { prompt } = parsed.data;
 
   try {
     setLlmUserId(auth.userId);

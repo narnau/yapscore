@@ -1,7 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import PublicNavbar from "@/components/PublicNavbar";
 import { createClient } from "@/lib/supabase/server";
 import { detectCurrency } from "@/lib/currency";
+
+export const metadata: Metadata = {
+  title: "Documentation — YapScore",
+};
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

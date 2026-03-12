@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import PublicNavbar from "@/components/PublicNavbar";
 import { createClient } from "@/lib/supabase/server";
+
+export const metadata: Metadata = {
+  title: "API Documentation — YapScore",
+};
 
 // ─── Code block ──────────────────────────────────────────────────────────────
 

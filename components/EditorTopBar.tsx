@@ -174,10 +174,12 @@ export default function EditorTopBar({
                     className="fixed inset-0 z-10"
                     onClick={() => setHistoryOpen(false)}
                   />
-                  <div ref={historyListRef} className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
+                  <div ref={historyListRef} role="listbox" className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-xl min-w-[300px] max-h-64 overflow-y-auto">
                     {historyEntries.map((entry, i) => (
                       <button
                         key={i}
+                        role="option"
+                        aria-selected={i === historyIndex}
                         {...(i === historyIndex ? { "data-active": "" } : {})}
                         onClick={() => { onJumpTo(i); setHistoryOpen(false); }}
                         className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition flex items-center gap-2 ${

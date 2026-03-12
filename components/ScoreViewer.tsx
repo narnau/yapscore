@@ -3,12 +3,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import MidiPlayer from "./MidiPlayer";
 import { applySwingToMidi } from "@/lib/music/swing-midi";
-import { getSwing, setTempo, buildNoteMap, changeNotePitch, deleteNote, changeNoteDuration, duplicateMeasures, pasteMeasures, deleteMeasures } from "@/lib/music/musicxml";
+import { getSwing, setTempo, buildNoteMap, deleteNote } from "@/lib/music/musicxml";
 import type { NotePosition } from "@/lib/music/musicxml";
 import { capture } from "@/lib/posthog";
 import ScoreInfoBar from "./score/ScoreInfoBar";
 import MobileEditSheet from "./score/MobileEditSheet";
-import NoteSymbol from "./score/NoteSymbol";
+import PitchControls from "./score/PitchControls";
+import DurationControls from "./score/DurationControls";
+import MeasureControls from "./score/MeasureControls";
 import ToolBtn from "./score/ToolBtn";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
@@ -76,17 +78,9 @@ export default function ScoreViewer({
   // Measure clipboard
   const [copiedMeasures, setCopiedMeasures] = useState<Set<number>>(new Set());
 
-  // Refs for stable keyboard handler (avoid stale closures)
-  const musicXmlRef = useRef(musicXml);
-  musicXmlRef.current = musicXml;
-  const onMusicXmlChangeRef = useRef(onMusicXmlChange);
-  onMusicXmlChangeRef.current = onMusicXmlChange;
-  const selectedMeasuresRef = useRef(selectedMeasures);
-  selectedMeasuresRef.current = selectedMeasures;
-  const copiedMeasuresRef = useRef(copiedMeasures);
-  copiedMeasuresRef.current = copiedMeasures;
-  const onClearMeasureSelectionRef = useRef(onClearMeasureSelection);
-  onClearMeasureSelectionRef.current = onClearMeasureSelection;
+  // Single ref object for stable keyboard handler (avoid stale closures)
+  const stateRef = useRef({ musicXml, onMusicXmlChange, selectedMeasures, copiedMeasures, onClearMeasureSelection });
+  stateRef.current = { musicXml, onMusicXmlChange, selectedMeasures, copiedMeasures, onClearMeasureSelection };
 
   // Swing: "jazz" = 66% triplet swing (2:1), "straight" = no swing
   // When swingProp is provided (controlled from parent), use it; otherwise auto-detect from MusicXML.
@@ -195,6 +189,9 @@ export default function ScoreViewer({
 
           measureEl.style.pointerEvents = "bounding-box";
           measureEl.style.cursor = "pointer";
+          measureEl.setAttribute("role", "button");
+          measureEl.setAttribute("tabindex", "0");
+          measureEl.setAttribute("aria-label", `Measure ${measureNum}`);
 
           const bbox = measureEl.getBBox();
           const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -219,6 +216,8 @@ export default function ScoreViewer({
         containerRef.current.querySelectorAll<SVGGElement>("g.note, g.rest").forEach((el, i) => {
           el.dataset.ysIndex = String(i);
           el.style.cursor = "pointer";
+          el.setAttribute("role", "button");
+          el.setAttribute("tabindex", "0");
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             onClearMeasureSelection?.();
@@ -266,12 +265,8 @@ export default function ScoreViewer({
 
   // ── keyboard shortcuts (note + measure editing) ───────────────────────────
   useKeyboardShortcuts(
-    musicXmlRef,
-    onMusicXmlChangeRef,
+    stateRef,
     selectedNoteIndexRef,
-    selectedMeasuresRef,
-    copiedMeasuresRef,
-    onClearMeasureSelectionRef,
     noteMapRef,
     setSelectedNoteIndex,
     setCopiedMeasures,
@@ -326,6 +321,16 @@ export default function ScoreViewer({
     }
   }, [playingMeasure]);
 
+  // Memoize tempo change callback
+  const onTempoChange = useMemo(() => {
+    if (!onMusicXmlChange || !musicXml) return undefined;
+    return (bpm: number) => {
+      const updated = setTempo(musicXml, bpm);
+      capture("tempo_changed_inline", { bpm });
+      onMusicXmlChange(updated, `Tempo: \u2669 = ${bpm}`);
+    };
+  }, [musicXml, onMusicXmlChange]);
+
   if (!musicXml || loading) {
     return (
       <div className="flex flex-col h-full">
@@ -364,11 +369,7 @@ export default function ScoreViewer({
         <div className="flex-1 min-w-0">
           <ScoreInfoBar
             musicXml={musicXml}
-            onTempoChange={onMusicXmlChange && musicXml ? (bpm) => {
-              const updated = setTempo(musicXml, bpm);
-              capture("tempo_changed_inline", { bpm });
-              onMusicXmlChange(updated, `Tempo: ♩ = ${bpm}`);
-            } : undefined}
+            onTempoChange={onTempoChange}
           />
         </div>
         {/* Controls — grouped with consistent style */}
@@ -420,26 +421,24 @@ export default function ScoreViewer({
         <div className="hidden md:flex items-center gap-1 px-3 py-1 border-b border-gray-100 bg-gray-50 flex-wrap">
           {selectedNoteIndex !== null && (<>
             <span className="text-[10px] text-gray-400 mr-0.5 shrink-0">{noteMapRef.current[selectedNoteIndex]?.isRest ? "Rest:" : "Note:"}</span>
-            {!noteMapRef.current[selectedNoteIndex]?.isRest && !noteMapRef.current[selectedNoteIndex]?.isDrum && (<>
-              <ToolBtn onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) onMusicXmlChange(changeNotePitch(musicXml, p, -12), "Octave down"); }} title="Octave down (Ctrl+↓)">↓ 8va</ToolBtn>
-              <ToolBtn onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) onMusicXmlChange(changeNotePitch(musicXml, p, -1), "Move note down"); }} title="Semitone down (↓)">↓</ToolBtn>
-              <ToolBtn onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) onMusicXmlChange(changeNotePitch(musicXml, p, 1), "Move note up"); }} title="Semitone up (↑)">↑</ToolBtn>
-              <ToolBtn onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) onMusicXmlChange(changeNotePitch(musicXml, p, 12), "Octave up"); }} title="Octave up (Ctrl+↑)">↑ 8va</ToolBtn>
+            <PitchControls selectedNoteIndex={selectedNoteIndex} noteMapRef={noteMapRef} musicXml={musicXml} onMusicXmlChange={onMusicXmlChange} />
+            {!noteMapRef.current[selectedNoteIndex]?.isRest && !noteMapRef.current[selectedNoteIndex]?.isDrum && (
               <div className="w-px h-3.5 bg-gray-200 mx-0.5" />
-            </>)}
-            {([1,2,3,4,5,6,7] as const).map((dur) => (
-              <ToolBtn key={dur} onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) onMusicXmlChange(changeNoteDuration(musicXml, p, String(dur) as "1"|"2"|"3"|"4"|"5"|"6"|"7"), "Change duration"); }} title={["64th","32nd","16th","Eighth","Quarter","Half","Whole"][dur - 1]}><NoteSymbol dur={dur} /></ToolBtn>
-            ))}
+            )}
+            <DurationControls selectedNoteIndex={selectedNoteIndex} noteMapRef={noteMapRef} musicXml={musicXml} onMusicXmlChange={onMusicXmlChange} />
             <div className="w-px h-3.5 bg-gray-200 mx-0.5" />
             <ToolBtn danger onClick={() => { const p = noteMapRef.current[selectedNoteIndex]; if (p && musicXml) { onMusicXmlChange(deleteNote(musicXml, p), "Delete note"); setSelectedNoteIndex(null); } }} title="Delete note (Delete)">✕ Delete</ToolBtn>
           </>)}
-          {selectedMeasures.size > 0 && (<>
-            <span className="text-[10px] text-gray-400 mr-0.5 shrink-0">{selectedMeasures.size} measure{selectedMeasures.size > 1 ? "s" : ""}:</span>
-            <ToolBtn onClick={() => setCopiedMeasures(new Set(selectedMeasures))} title="Copy (Ctrl+C)">Copy</ToolBtn>
-            <ToolBtn disabled={copiedMeasures.size === 0} onClick={() => { if (musicXml && copiedMeasures.size > 0) onMusicXmlChange(pasteMeasures(musicXml, [...copiedMeasures], Math.min(...selectedMeasures)), "Paste measures"); }} title="Paste (Ctrl+V)">Paste</ToolBtn>
-            <ToolBtn onClick={() => { if (musicXml) onMusicXmlChange(duplicateMeasures(musicXml, [...selectedMeasures].sort((a,b)=>a-b)), "Duplicate measures"); }} title="Duplicate (Ctrl+D)">Duplicate</ToolBtn>
-            <ToolBtn danger onClick={() => { if (musicXml) { onMusicXmlChange(deleteMeasures(musicXml, [...selectedMeasures]), "Delete measures"); onClearMeasureSelection?.(); } }} title="Delete measures">✕ Delete</ToolBtn>
-          </>)}
+          {selectedMeasures.size > 0 && (
+            <MeasureControls
+              selectedMeasures={selectedMeasures}
+              copiedMeasures={copiedMeasures}
+              musicXml={musicXml}
+              onMusicXmlChange={onMusicXmlChange}
+              onClearMeasureSelection={onClearMeasureSelection}
+              setCopiedMeasures={setCopiedMeasures}
+            />
+          )}
         </div>
       )}
 

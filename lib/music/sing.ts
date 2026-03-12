@@ -1,9 +1,10 @@
 /**
- * Sing mode: microphone recording, pitch detection (Magenta SPICE model),
+ * Sing mode: microphone recording, pitch detection (CREPE model via TF.js),
  * metronome, and pitch-to-NoteSpec quantization.
  *
- * Everything runs client-side using TensorFlow.js + SPICE for ML-based
- * pitch detection.
+ * Pitch detection (CREPE model loading, tensor ops, Hz→note) is in
+ * lib/music/pitch-detection.ts. This file handles recording, metronome,
+ * quantization, and playback.
  */
 
 import type { NoteSpec } from "./musicxml";
@@ -11,9 +12,15 @@ import {
   SEMITONES_PER_OCTAVE,
   A4_MIDI_NUMBER,
   A4_FREQUENCY_HZ,
-  VOCAL_RANGE_MIN_HZ,
-  VOCAL_RANGE_MAX_HZ,
 } from "./constants";
+import {
+  detectPitches as detectPitchesImpl,
+  hzToMidi,
+  midiToName,
+} from "./pitch-detection";
+
+// Re-export detectPitches so existing consumers (SingModal) keep working
+export { detectPitchesImpl as detectPitches };
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -34,7 +41,6 @@ export type SingResult = {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const STEP_MAP: Record<string, { step: NoteSpec["step"]; alter: number }> = {
   "C":  { step: "C", alter: 0 },
   "C#": { step: "C", alter: 1 },
@@ -155,161 +161,6 @@ export async function startRecording(audioCtx: AudioContext): Promise<RecordingH
   };
 }
 
-// ─── CREPE Pitch Detection (TensorFlow.js) ──────────────────────────────────
-
-// CREPE constants (from marl/crepe gh-pages demo)
-const CREPE_SAMPLE_RATE = 16000;
-const CREPE_FRAME_SIZE = 1024;       // samples per frame at 16kHz
-const CREPE_HOP_SIZE = 160;          // 10ms hop between frames
-const CREPE_CONF_THRESHOLD = 0.5;
-const CREPE_MODEL_URL = "/models/crepe/model.json";
-
-// 360 bins mapping: cents from ~32.7Hz to ~1975Hz
-// centMapping[i] = 1997.3794 + i * (7180/359)
-const CREPE_CENT_MAPPING = Float32Array.from({ length: 360 }, (_, i) =>
-  1997.3794084376191 + i * (7180 / 359)
-);
-
-// Singleton CREPE model — loaded once, reused across recordings
-let crepePromise: Promise<any> | null = null;
-
-async function getCrepeModel() {
-  if (!crepePromise) {
-    crepePromise = (async () => {
-      console.log("[sing] Loading TensorFlow.js + CREPE model...");
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore — loaded at runtime, not a build dependency
-      const tf = await import("@tensorflow/tfjs");
-      const model = await tf.loadLayersModel(CREPE_MODEL_URL);
-      console.log("[sing] CREPE model loaded");
-      return { tf, model };
-    })().catch((err) => {
-      crepePromise = null;
-      throw err;
-    });
-  }
-  return crepePromise;
-}
-
-/** Convert CREPE activation vector (360 bins) to Hz using weighted mean of top bins */
-function crepeActivationToHz(activation: Float32Array): number {
-  // Weighted mean in cents space over top bins
-  let sumWeight = 0;
-  let sumCents = 0;
-  for (let i = 0; i < 360; i++) {
-    sumWeight += activation[i];
-    sumCents += activation[i] * CREPE_CENT_MAPPING[i];
-  }
-  const cents = sumCents / sumWeight;
-  // cents = 1200 * log2(hz / 10)  →  hz = 10 * 2^(cents/1200)
-  return 10 * Math.pow(2, cents / 1200);
-}
-
-/** Resample AudioBuffer to 16kHz mono using OfflineAudioContext */
-async function resampleTo16k(buffer: AudioBuffer): Promise<Float32Array> {
-  if (buffer.sampleRate === CREPE_SAMPLE_RATE) {
-    return buffer.getChannelData(0);
-  }
-  const targetLength = Math.round(buffer.duration * CREPE_SAMPLE_RATE);
-  const offlineCtx = new OfflineAudioContext(1, targetLength, CREPE_SAMPLE_RATE);
-  const source = offlineCtx.createBufferSource();
-  source.buffer = buffer;
-  source.connect(offlineCtx.destination);
-  source.start();
-  const resampled = await offlineCtx.startRendering();
-  return resampled.getChannelData(0);
-}
-
-/**
- * Analyze an AudioBuffer using CREPE for pitch detection.
- * Returns array of { time, hz } frames (10ms hop).
- */
-export async function detectPitches(
-  buffer: AudioBuffer,
-): Promise<Array<{ time: number; hz: number }>> {
-  const samples = buffer.getChannelData(0);
-  const sampleRate = buffer.sampleRate;
-  const duration = samples.length / sampleRate;
-
-  const rms = Math.sqrt(samples.reduce((s, v) => s + v * v, 0) / samples.length);
-  const peak = samples.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
-  console.log(`[sing] detectPitches (CREPE): ${samples.length} samples, sampleRate=${sampleRate}, duration=${duration.toFixed(2)}s, RMS=${rms.toFixed(4)}, peak=${peak.toFixed(4)}`);
-
-  // Resample to 16kHz
-  const audio16k = await resampleTo16k(buffer);
-  console.log(`[sing] Resampled to 16kHz: ${audio16k.length} samples`);
-
-  const { tf, model } = await getCrepeModel();
-
-  // Slice audio into overlapping frames, normalize each frame
-  const frames: Float32Array[] = [];
-  for (let start = 0; start + CREPE_FRAME_SIZE <= audio16k.length; start += CREPE_HOP_SIZE) {
-    const frame = audio16k.slice(start, start + CREPE_FRAME_SIZE);
-    // Normalize to zero mean, unit std
-    let mean = 0;
-    for (let i = 0; i < frame.length; i++) mean += frame[i];
-    mean /= frame.length;
-    let std = 0;
-    for (let i = 0; i < frame.length; i++) std += (frame[i] - mean) ** 2;
-    std = Math.sqrt(std / frame.length) || 1;
-    const normalized = new Float32Array(frame.length);
-    for (let i = 0; i < frame.length; i++) normalized[i] = (frame[i] - mean) / std;
-    frames.push(normalized);
-  }
-
-  console.log(`[sing] CREPE: ${frames.length} frames (hop=${CREPE_HOP_SIZE} samples = 10ms)`);
-
-  // Batch all frames into a single tensor [N, 1024]
-  const inputData = new Float32Array(frames.length * CREPE_FRAME_SIZE);
-  frames.forEach((f, i) => inputData.set(f, i * CREPE_FRAME_SIZE));
-  const inputTensor = tf.tensor2d(inputData, [frames.length, CREPE_FRAME_SIZE]);
-
-  // Run model → output shape [N, 360]
-  const activationTensor = model.predict(inputTensor) as any;
-  const activationData: Float32Array = await activationTensor.data();
-
-  inputTensor.dispose();
-  activationTensor.dispose();
-
-  // Convert each frame's activation to Hz + confidence
-  const results: Array<{ time: number; hz: number }> = [];
-  const hopDuration = CREPE_HOP_SIZE / CREPE_SAMPLE_RATE; // 0.01s
-
-  for (let i = 0; i < frames.length; i++) {
-    const time = i * hopDuration;
-    const activation = activationData.slice(i * 360, (i + 1) * 360);
-    const confidence = Math.max(...Array.from(activation));
-    const hz = confidence >= CREPE_CONF_THRESHOLD ? crepeActivationToHz(activation) : 0;
-
-    // Filter to vocal/instrument range (roughly C2–C7)
-    const inRange = hz >= VOCAL_RANGE_MIN_HZ && hz <= VOCAL_RANGE_MAX_HZ;
-    results.push({ time, hz: inRange ? hz : 0 });
-
-    if (hz > 0 && inRange) {
-      const midi = hzToMidi(hz);
-      const name = midiToName(midi);
-      console.log(`[sing]   t=${time.toFixed(3)}s  hz=${hz.toFixed(1)}  midi=${midi} (${name})  conf=${confidence.toFixed(3)}`);
-    }
-  }
-
-  const pitchedCount = results.filter(r => r.hz > 0).length;
-  console.log(`[sing] detectPitches result: ${results.length} frames, ${pitchedCount} pitched (${((pitchedCount / results.length) * 100).toFixed(1)}%)`);
-
-  return results;
-}
-
-// ─── Hz to MIDI ─────────────────────────────────────────────────────────────
-
-function hzToMidi(hz: number): number {
-  return Math.round(SEMITONES_PER_OCTAVE * Math.log2(hz / A4_FREQUENCY_HZ) + A4_MIDI_NUMBER);
-}
-
-function midiToName(midi: number): string {
-  const note = NOTE_NAMES[midi % SEMITONES_PER_OCTAVE];
-  const octave = Math.floor(midi / SEMITONES_PER_OCTAVE) - 1;
-  return `${note}${octave}`;
-}
-
 // ─── Quantization ───────────────────────────────────────────────────────────
 
 type Segment = { startTime: number; endTime: number; midi: number };
@@ -355,7 +206,7 @@ export function quantizePitches(
   const slotDuration = 60 / bpm / 2; // eighth note in seconds
   const totalSlots = measures * beats * 2;
 
-  console.log(`[sing] quantizePitches (onset-based): bpm=${bpm}, beats=${beats}, measures=${measures}, totalSlots=${totalSlots}, slotDuration=${slotDuration.toFixed(3)}s`);
+  if (process.env.NODE_ENV === "development") console.log(`[sing] quantizePitches (onset-based): bpm=${bpm}, beats=${beats}, measures=${measures}, totalSlots=${totalSlots}, slotDuration=${slotDuration.toFixed(3)}s`);
 
   // Step 1: Convert to MIDI stream (0 = silence)
   const midiStream = pitches.map(p => p.hz > 0 ? hzToMidi(p.hz) : 0);
@@ -380,11 +231,11 @@ export function quantizePitches(
         endTime: pitches[Math.min(i, pitches.length - 1)].time + 0.01,
         midi,
       });
-      console.log(`[sing] segment: ${midiToName(midi)} t=${pitches[startIdx].time.toFixed(3)}-${(pitches[Math.min(i - 1, pitches.length - 1)].time + 0.01).toFixed(3)}s dur=${duration.toFixed(3)}s`);
+      if (process.env.NODE_ENV === "development") console.log(`[sing] segment: ${midiToName(midi)} t=${pitches[startIdx].time.toFixed(3)}-${(pitches[Math.min(i - 1, pitches.length - 1)].time + 0.01).toFixed(3)}s dur=${duration.toFixed(3)}s`);
     }
   }
 
-  console.log(`[sing] ${segments.length} pitch segments found`);
+  if (process.env.NODE_ENV === "development") console.log(`[sing] ${segments.length} pitch segments found`);
 
   // Step 4: Global pitch correction (consistent sharp/flat across all segments)
   if (segments.length > 0) {
@@ -398,11 +249,11 @@ export function quantizePitches(
     }
     if (centOffsets.length > 0) {
       const avgOffset = centOffsets.reduce((s, v) => s + v, 0) / centOffsets.length;
-      console.log(`[sing] pitch correction: avgOffset=${(avgOffset * 100).toFixed(1)} cents from ${centOffsets.length} frames`);
+      if (process.env.NODE_ENV === "development") console.log(`[sing] pitch correction: avgOffset=${(avgOffset * 100).toFixed(1)} cents from ${centOffsets.length} frames`);
       if (Math.abs(avgOffset) > 0.3) {
         const correction = Math.round(avgOffset);
         if (correction !== 0) {
-          console.log(`[sing] applying ${correction > 0 ? "-" : "+"}${Math.abs(correction)} semitone(s)`);
+          if (process.env.NODE_ENV === "development") console.log(`[sing] applying ${correction > 0 ? "-" : "+"}${Math.abs(correction)} semitone(s)`);
           for (const seg of segments) seg.midi -= correction;
         }
       }
@@ -417,7 +268,7 @@ export function quantizePitches(
     const endSlot = Math.round(seg.endTime / slotDuration);
     const noteSlots = Math.max(1, endSlot - startSlot);
 
-    console.log(`[sing] snap: ${midiToName(seg.midi)} → slot ${startSlot} for ${noteSlots} slot(s)`);
+    if (process.env.NODE_ENV === "development") console.log(`[sing] snap: ${midiToName(seg.midi)} → slot ${startSlot} for ${noteSlots} slot(s)`);
 
     for (let s = startSlot; s < startSlot + noteSlots && s < totalSlots; s++) {
       if (s >= 0) slots[s] = seg.midi;
@@ -431,8 +282,10 @@ export function quantizePitches(
     name: midi !== null ? midiToName(midi) : null,
   }));
 
-  const summary = notes.filter(n => n.midi !== null).map(n => n.name).join(" ");
-  console.log(`[sing] result: ${summary || "(all rests)"}`);
+  if (process.env.NODE_ENV === "development") {
+    const summary = notes.filter(n => n.midi !== null).map(n => n.name).join(" ");
+    console.log(`[sing] result: ${summary || "(all rests)"}`);
+  }
 
   return { notes, totalSlots };
 }

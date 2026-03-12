@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { capture } from "@/lib/posthog";
 import { useVoiceRecording } from "./hooks/useVoiceRecording";
 
@@ -176,6 +176,15 @@ export default function ChatPanel({
     await sendMessage(instruction, selectedMeasures);
   }
 
+  // Memoize suggestion filtering
+  const visibleSuggestions = useMemo(() => {
+    const hasUserMsg = messages.some(m => m.role === "user");
+    if (hasUserMsg || loading || isAtLimit) return null;
+    const suggestions = [...messages].reverse().find(m => m.suggestions?.length)?.suggestions;
+    if (!suggestions?.length) return null;
+    return suggestions;
+  }, [messages, loading, isAtLimit]);
+
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-hide bg-gray-50" style={{ scrollbarWidth: "none" }}>
@@ -226,26 +235,20 @@ export default function ChatPanel({
       </div>
 
       {/* Suggestion chips — shown above input until first user message */}
-      {(() => {
-        const hasUserMsg = messages.some(m => m.role === "user");
-        if (hasUserMsg || loading || isAtLimit) return null;
-        const suggestions = [...messages].reverse().find(m => m.suggestions?.length)?.suggestions;
-        if (!suggestions?.length) return null;
-        return (
-          <div className="px-3 py-2 flex flex-wrap gap-1.5 border-t border-gray-100 bg-white">
-            {suggestions.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => sendMessage(s, selectedMeasures)}
-                className="text-xs px-2.5 py-1 rounded-full bg-white border border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5 transition shadow-sm"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        );
-      })()}
+      {visibleSuggestions && (
+        <div className="px-3 py-2 flex flex-wrap gap-1.5 border-t border-gray-100 bg-white">
+          {visibleSuggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => sendMessage(s, selectedMeasures)}
+              className="text-xs px-2.5 py-1 rounded-full bg-white border border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5 transition shadow-sm"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
       <form ref={formRef} onSubmit={handleSubmit} className="border-t border-gray-200 p-3 space-y-2 bg-white">
         {/* Selection badge */}
@@ -311,6 +314,7 @@ export default function ChatPanel({
                     disabled={loading || isAtLimit}
                     className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-700 hover:bg-gray-200"
                     title="Sing a melody"
+                    aria-label="Sing a melody"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                       <path d="M17.721 1.599a.75.75 0 0 1 .279.583v12.568a.75.75 0 0 1-.773.75 9.033 9.033 0 0 0-1.727.189c-.6.122-1.187.316-1.623.569-.437.253-.727.53-.727.796 0 .265.29.543.727.796.436.253 1.024.447 1.623.57a9.035 9.035 0 0 0 1.727.188.75.75 0 0 1 .773.75V20a.75.75 0 0 1-.75.75h-.003a10.54 10.54 0 0 1-2.065-.228c-.747-.152-1.535-.4-2.17-.753C12.376 19.416 12 18.87 12 18.25c0-.62.376-1.166 1.012-1.52.635-.352 1.423-.6 2.17-.752A10.539 10.539 0 0 1 17 15.75V4.832l-10 2.5v10.918a.75.75 0 0 1-.773.75 9.032 9.032 0 0 0-1.727.189c-.6.122-1.187.316-1.623.569C2.44 20.011 2.15 20.288 2.15 20.554c0 .265.29.543.727.796.436.253 1.024.447 1.623.57.593.12 1.186.178 1.727.188A.75.75 0 0 1 7 22.857V10a.75.75 0 0 1 .553-.724l12-3a.75.75 0 0 1 .947.723V1.6a.75.75 0 0 1-.779-.001Z" />
@@ -324,6 +328,7 @@ export default function ChatPanel({
                     disabled={loading || isAtLimit || transcribing}
                     className="p-1.5 rounded-lg transition disabled:opacity-40 text-gray-400 hover:text-gray-700 hover:bg-gray-200"
                     title="Voice input"
+                    aria-label="Voice input"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                       <path d="M7 4a3 3 0 0 1 6 0v4a3 3 0 1 1-6 0V4Z" />
@@ -336,6 +341,7 @@ export default function ChatPanel({
                   disabled={loading || !instruction.trim() || isAtLimit}
                   className="p-1.5 rounded-lg bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-40 text-white transition"
                   title="Send"
+                  aria-label="Send message"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                     <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95l14.095-5.637a.75.75 0 0 0 0-1.4L3.105 2.288Z" />

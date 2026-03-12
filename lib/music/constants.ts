@@ -9,6 +9,11 @@ export const DEFAULT_BEATS = 4;
 export const DEFAULT_BEAT_TYPE = 4;
 export const DEFAULT_TEMPO_BPM = 120;
 
+// ── Score Creation ──────────────────────────────────────────────────────────
+export const SCORE_DIVISIONS = 12;
+export const DEFAULT_MIDI_VOLUME = 78.7402;
+export const PERCUSSION_MIDI_CHANNEL = 10;
+
 // ── Limits ───────────────────────────────────────────────────────────────────
 export const DURATION_TOLERANCE = 0.02;
 

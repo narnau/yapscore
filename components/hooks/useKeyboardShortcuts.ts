@@ -2,13 +2,17 @@ import { useEffect } from "react";
 import type { NotePosition } from "@/lib/music/musicxml";
 import { changeNotePitch, deleteNote, changeNoteDuration, duplicateMeasures, pasteMeasures, deleteMeasures } from "@/lib/music/musicxml";
 
+type StateRef = {
+  musicXml: string | null;
+  onMusicXmlChange?: (xml: string, label: string) => void;
+  selectedMeasures: Set<number>;
+  copiedMeasures: Set<number>;
+  onClearMeasureSelection?: () => void;
+};
+
 export function useKeyboardShortcuts(
-  musicXmlRef: React.RefObject<string | null>,
-  onMusicXmlChangeRef: React.RefObject<((xml: string, label: string) => void) | undefined>,
+  stateRef: React.RefObject<StateRef>,
   selectedNoteIndexRef: React.RefObject<number | null>,
-  selectedMeasuresRef: React.RefObject<Set<number>>,
-  copiedMeasuresRef: React.RefObject<Set<number>>,
-  onClearMeasureSelectionRef: React.RefObject<(() => void) | undefined>,
   noteMapRef: React.RefObject<NotePosition[]>,
   setSelectedNoteIndex: (i: number | null) => void,
   setCopiedMeasures: (s: Set<number>) => void,
@@ -16,11 +20,8 @@ export function useKeyboardShortcuts(
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const ctrl = e.ctrlKey || e.metaKey;
-      const xml = musicXmlRef.current;
-      const onChange = onMusicXmlChangeRef.current;
+      const { musicXml: xml, onMusicXmlChange: onChange, selectedMeasures: measures, copiedMeasures: copied } = stateRef.current;
       const idx = selectedNoteIndexRef.current;
-      const measures = selectedMeasuresRef.current;
-      const copied = copiedMeasuresRef.current;
 
       // ── Note actions ──
       if (idx !== null && xml) {
