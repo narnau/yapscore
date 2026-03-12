@@ -9,8 +9,8 @@ const nextConfig: NextConfig = {
   // Include WASM + data binaries in serverless function bundles
   // (Next.js file tracing only follows JS imports, skips binary files)
   outputFileTracingIncludes: {
-    "/api/load":       ["./node_modules/webmscore/**"],
-    "/api/v1/render":  ["./node_modules/verovio/**"],
+    "/api/load": ["./node_modules/webmscore/**"],
+    "/api/v1/render": ["./node_modules/verovio/**"],
   },
 
   async headers() {
@@ -70,15 +70,15 @@ const nextConfig: NextConfig = {
       config.plugins.push(
         new webpack.NormalModuleReplacementPlugin(/^node:(.*)$/, (resource: any) => {
           resource.request = resource.request.replace(/^node:/, "");
-        })
+        }),
       );
       config.resolve.fallback = {
         ...config.resolve.fallback,
-        fs:     false,
+        fs: false,
         module: false,
         crypto: false,
-        path:   false,
-        url:    false,
+        path: false,
+        url: false,
       };
     }
 
@@ -90,9 +90,9 @@ export default withSentryConfig(withAxiom(nextConfig), {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
-  org: "score-26",
+  org: process.env.SENTRY_ORG ?? "score-26",
 
-  project: "app",
+  project: process.env.SENTRY_PROJECT ?? "app",
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,

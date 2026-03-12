@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { stripe, createOrGetCustomer } from "@/lib/stripe";
-import { currencyForCountry, stripePriceId } from "@/lib/currency";
+import { stripe, createOrGetCustomer } from "@/lib/stripe/client";
+import { currencyForCountry, stripePriceId } from "@/lib/stripe/currency";
 
 export async function POST(req: NextRequest) {
   const auth = await getAuthUser();
   if (!auth.ok) return auth.response;
 
-  const { data: { user } } = await auth.supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await auth.supabase.auth.getUser();
   if (!user?.email) {
     return NextResponse.json({ error: "No email found" }, { status: 400 });
   }
@@ -34,6 +36,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[stripe/checkout] error:", msg, "priceId:", priceId, "country:", country);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });
   }
 }

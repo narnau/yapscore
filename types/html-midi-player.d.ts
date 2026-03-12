@@ -6,7 +6,7 @@ declare module "soundfont-player" {
   function instrument(
     context: AudioContext,
     name: string,
-    options?: Record<string, unknown>
+    options?: Record<string, unknown>,
   ): Promise<InstrumentPlayer>;
   export default { instrument };
 }

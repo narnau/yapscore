@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import PublicNavbar from "@/components/PublicNavbar";
+import PublicNavbar from "@/components/layout/PublicNavbar";
 import { createClient } from "@/lib/supabase/server";
+
+export const metadata: Metadata = {
+  title: "API Documentation — YapScore",
+};
 
 // ─── Code block ──────────────────────────────────────────────────────────────
 
@@ -16,9 +21,7 @@ function Code({ children }: { children: string }) {
 
 function Inline({ children }: { children: string }) {
   return (
-    <code className="text-brand-primary bg-brand-primary/5 px-1.5 py-0.5 rounded text-sm font-mono">
-      {children}
-    </code>
+    <code className="text-brand-primary bg-brand-primary/5 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>
   );
 }
 
@@ -50,8 +53,7 @@ function Endpoint({
   response: string;
   note?: string;
 }) {
-  const methodColor =
-    method === "POST" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700";
+  const methodColor = method === "POST" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700";
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -62,9 +64,7 @@ function Endpoint({
       <div className="px-6 py-5 space-y-5">
         <p className="text-brand-secondary">{description}</p>
         {note && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            {note}
-          </p>
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{note}</p>
         )}
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Request</p>
@@ -82,34 +82,33 @@ function Endpoint({
 // ─── Sidebar nav ─────────────────────────────────────────────────────────────
 
 const NAV = [
-  { id: "overview",       label: "Overview" },
+  { id: "overview", label: "Overview" },
   { id: "authentication", label: "Authentication" },
-  { id: "generate",       label: "POST /v1/generate" },
-  { id: "modify",         label: "POST /v1/modify" },
-  { id: "render",         label: "POST /v1/render" },
-  { id: "errors",         label: "Errors" },
-  { id: "typescript",     label: "TypeScript example" },
-  { id: "enterprise",     label: "Custom & Enterprise" },
+  { id: "generate", label: "POST /v1/generate" },
+  { id: "modify", label: "POST /v1/modify" },
+  { id: "render", label: "POST /v1/render" },
+  { id: "errors", label: "Errors" },
+  { id: "typescript", label: "TypeScript example" },
+  { id: "enterprise", label: "Custom & Enterprise" },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function DevelopersPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900">
       <PublicNavbar loggedIn={!!user} />
 
       <div className="pt-16">
         <div className="max-w-6xl mx-auto px-6 flex gap-10 py-14">
-
           {/* Sidebar */}
           <aside className="hidden lg:block w-52 shrink-0">
             <div className="sticky top-24 space-y-1">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-3">
-                API Reference
-              </p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-3">API Reference</p>
               {NAV.map(({ id, label }) => (
                 <a
                   key={id}
@@ -132,7 +131,6 @@ export default async function DevelopersPage() {
 
           {/* Content */}
           <div className="flex-1 min-w-0 space-y-16">
-
             {/* Header */}
             <div>
               <div className="flex items-center gap-3">
@@ -143,9 +141,7 @@ export default async function DevelopersPage() {
                   Beta
                 </span>
               </div>
-              <h1 className="mt-2 text-4xl font-extrabold text-gray-900 tracking-tight">
-                YapScore API
-              </h1>
+              <h1 className="mt-2 text-4xl font-extrabold text-gray-900 tracking-tight">YapScore API</h1>
               <p className="mt-3 text-lg text-brand-secondary max-w-xl">
                 Generate and modify sheet music programmatically with a simple REST API.
               </p>
@@ -165,14 +161,14 @@ export default async function DevelopersPage() {
             {/* Overview */}
             <Section id="overview" title="Overview">
               <p>
-                The YapScore API is a REST interface that accepts JSON and returns JSON (or SVG for the render endpoint).
-                All endpoints live under <Inline>https://yapscore.ai/api/v1/</Inline>.
+                The YapScore API is a REST interface that accepts JSON and returns JSON (or SVG for the render
+                endpoint). All endpoints live under <Inline>https://yapscore.ai/api/v1/</Inline>.
               </p>
               <div className="grid sm:grid-cols-3 gap-4 mt-2">
                 {[
                   { endpoint: "POST /v1/generate", desc: "Create a score from a prompt" },
-                  { endpoint: "POST /v1/modify",   desc: "Edit a score with instructions" },
-                  { endpoint: "POST /v1/render",   desc: "Render MusicXML to SVG" },
+                  { endpoint: "POST /v1/modify", desc: "Edit a score with instructions" },
+                  { endpoint: "POST /v1/render", desc: "Render MusicXML to SVG" },
                 ].map(({ endpoint, desc }) => (
                   <div key={endpoint} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <code className="text-xs font-mono text-brand-primary">{endpoint}</code>
@@ -205,16 +201,17 @@ export default async function DevelopersPage() {
             {/* Authentication */}
             <Section id="authentication" title="Authentication">
               <p>
-                Pass your API key in the <Inline>Authorization</Inline> header as a Bearer token.
-                Keys start with <Inline>ys_</Inline>. You can create and revoke keys in your{" "}
+                Pass your API key in the <Inline>Authorization</Inline> header as a Bearer token. Keys start with{" "}
+                <Inline>ys_</Inline>. You can create and revoke keys in your{" "}
                 <Link href="/settings" className="text-brand-primary hover:underline">
                   Settings page
-                </Link>.
+                </Link>
+                .
               </p>
               <Code>{`Authorization: Bearer ys_<your-api-key>`}</Code>
               <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                Keep your API key secret. Do not expose it in client-side code or public repositories.
-                If a key is compromised, revoke it from Settings immediately.
+                Keep your API key secret. Do not expose it in client-side code or public repositories. If a key is
+                compromised, revoke it from Settings immediately.
               </p>
             </Section>
 
@@ -247,7 +244,9 @@ export default async function DevelopersPage() {
                     <tr>
                       <td className="py-2 font-mono text-xs text-brand-primary">prompt</td>
                       <td className="py-2 text-gray-500">string</td>
-                      <td className="py-2 text-brand-secondary">Required. Natural language description of the score to create.</td>
+                      <td className="py-2 text-brand-secondary">
+                        Required. Natural language description of the score to create.
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -342,7 +341,9 @@ curl -X POST https://yapscore.ai/api/v1/render \\
 
             {/* Errors */}
             <Section id="errors" title="Errors">
-              <p>All error responses return JSON with an <Inline>error</Inline> field.</p>
+              <p>
+                All error responses return JSON with an <Inline>error</Inline> field.
+              </p>
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
@@ -356,7 +357,11 @@ curl -X POST https://yapscore.ai/api/v1/render \\
                       { code: "400", meaning: "Bad request — missing or invalid parameters." },
                       { code: "401", meaning: "Unauthorized — API key missing, invalid, or revoked." },
                       { code: "403", meaning: "Forbidden — API access requires a Pro subscription." },
-                      { code: "429", meaning: 'Daily limit reached (20 calls/day). Resets at midnight UTC. Response includes { "error": "Daily API limit reached", "limit": 20, "resets": "midnight UTC" }.' },
+                      {
+                        code: "429",
+                        meaning:
+                          'Daily limit reached (20 calls/day). Resets at midnight UTC. Response includes { "error": "Daily API limit reached", "limit": 20, "resets": "midnight UTC" }.',
+                      },
                       { code: "500", meaning: "Internal server error — try again later." },
                     ].map(({ code, meaning }) => (
                       <tr key={code}>
@@ -372,8 +377,8 @@ curl -X POST https://yapscore.ai/api/v1/render \\
             {/* Enterprise */}
             <Section id="enterprise" title="Custom & Enterprise">
               <p>
-                Need higher limits, a dedicated integration, or a custom deployment?
-                We&apos;re happy to work something out.
+                Need higher limits, a dedicated integration, or a custom deployment? We&apos;re happy to work something
+                out.
               </p>
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
@@ -426,7 +431,6 @@ const render = await fetch(\`\${BASE}/render\`, {
 });
 const svg = await render.text(); // <svg ...>...</svg>`}</Code>
             </Section>
-
           </div>
         </div>
       </div>
@@ -437,9 +441,15 @@ const svg = await render.text(); // <svg ...>...</svg>`}</Code>
             &copy; {new Date().getFullYear()} YapScore. All rights reserved.
           </div>
           <div className="flex items-center gap-6 text-sm text-brand-secondary">
-            <Link href="/" className="hover:text-gray-900 transition">Home</Link>
-            <Link href="/docs" className="hover:text-gray-900 transition">Docs</Link>
-            <Link href="/login" className="hover:text-gray-900 transition">Sign In</Link>
+            <Link href="/" className="hover:text-gray-900 transition">
+              Home
+            </Link>
+            <Link href="/docs" className="hover:text-gray-900 transition">
+              Docs
+            </Link>
+            <Link href="/login" className="hover:text-gray-900 transition">
+              Sign In
+            </Link>
           </div>
         </div>
       </footer>

@@ -1,8 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getFile, saveFile, deleteFile } from "@/lib/files";
-import { fixPercussionDisplayOctave } from "@/lib/musicxml";
+import { getFile, saveFile, deleteFile } from "@/lib/editor/files";
+import { fixPercussionDisplayOctave } from "@/lib/music/musicxml";
+
+const patchSchema = z
+  .object({
+    name: z.string().max(200).optional(),
+    current_xml: z.string().nullable().optional(),
+    history: z
+      .array(
+        z.object({
+          musicXml: z.string(),
+          name: z.string().nullable(),
+          timestamp: z.string(),
+          messages: z.array(z.object({ role: z.enum(["user", "system"]), text: z.string() })).optional(),
+        }),
+      )
+      .optional(),
+    messages: z
+      .array(
+        z.object({
+          role: z.enum(["user", "system"]),
+          text: z.string(),
+          suggestions: z.array(z.string()).optional(),
+        }),
+      )
+      .optional(),
+    swing: z.boolean().nullable().optional(),
+  })
+  .strict();
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -37,15 +65,13 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
 
-    const patch: Parameters<typeof saveFile>[3] = {};
-    if ("name"        in body) patch.name        = body.name;
-    if ("current_xml" in body) patch.current_xml = body.current_xml;
-    if ("history"     in body) patch.history     = body.history;
-    if ("messages"    in body) patch.messages    = body.messages;
-    if ("swing"       in body) patch.swing       = body.swing;
+    const parsed = patchSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
 
     const admin = createAdminClient();
-    await saveFile(admin, auth.userId, id, patch);
+    await saveFile(admin, auth.userId, id, parsed.data);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[files/id] PATCH error:", err);

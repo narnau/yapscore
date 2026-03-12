@@ -34,7 +34,7 @@ mock.module("webmscore", () => {
 });
 
 // Must import AFTER mocking
-const { toMusicXml } = await import("@/lib/mscore");
+const { toMusicXml } = await import("@/lib/music/mscore");
 // Access the private _webmscore to verify it's reset after errors
 // We verify indirectly: if reset works, the load function is called again on retry
 // (a fresh module init would reset webmscoreLoadCallCount context)

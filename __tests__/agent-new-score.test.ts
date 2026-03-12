@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { createScore, setMeasureNotes } from "@/lib/musicxml";
+import { createScore, setMeasureNotes } from "@/lib/music/musicxml";
 
 // ── 1. liveXml propagation ────────────────────────────────────────────────────
 

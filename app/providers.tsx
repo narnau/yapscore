@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { PostHogProvider } from "posthog-js/react";
-import { initPostHog, identifyUser, resetUser, posthog } from "@/lib/posthog";
+import { initPostHog, identifyUser, resetUser, posthog } from "@/lib/telemetry/posthog";
 import { createBrowserClient } from "@supabase/ssr";
 
 function PostHogPageView() {
@@ -34,7 +34,9 @@ function SupabaseIdentify() {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         identifyUser(session.user.id, session.user.email);
       } else {

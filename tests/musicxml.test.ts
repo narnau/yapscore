@@ -25,18 +25,12 @@ import {
   addTextAnnotation,
   setMeasureNotes,
   setTimeSignature,
-} from "../lib/musicxml";
-import type { NoteSpec } from "../lib/musicxml";
+} from "../lib/music/musicxml";
+import type { NoteSpec } from "../lib/music/musicxml";
 
-const FIXTURE = fs.readFileSync(
-  path.join(__dirname, "fixtures/simple-score.xml"),
-  "utf-8"
-);
+const FIXTURE = fs.readFileSync(path.join(__dirname, "fixtures/simple-score.xml"), "utf-8");
 
-const TWO_PART_FIXTURE = fs.readFileSync(
-  path.join(__dirname, "fixtures/two-part-score.xml"),
-  "utf-8"
-);
+const TWO_PART_FIXTURE = fs.readFileSync(path.join(__dirname, "fixtures/two-part-score.xml"), "utf-8");
 
 // ─── extractParts ────────────────────────────────────────────────────────────
 
@@ -138,9 +132,7 @@ describe("spliceMeasuresBack", () => {
     // Send measure 3, return nothing → measure 3 should be deleted
     // Original had 4 measures, should now have 3
     const result = spliceMeasuresBack(FIXTURE, "", [3]);
-    const measureNums = [...result.matchAll(/number="(\d+)"/g)].map((m) =>
-      parseInt(m[1])
-    );
+    const measureNums = [...result.matchAll(/number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(measureNums).toEqual([1, 2, 3]);
     // The original measure 3 had a whole note C5, measure 4 had a rest
     // After deletion, new measure 3 should be the old measure 4 (rest)
@@ -151,18 +143,14 @@ describe("spliceMeasuresBack", () => {
     // Delete measure 2: send [2], return empty
     const result = spliceMeasuresBack(FIXTURE, "", [2]);
     // Original had 4 measures, now should have 3 numbered 1, 2, 3
-    const measureNums = [...result.matchAll(/number="(\d+)"/g)].map((m) =>
-      parseInt(m[1])
-    );
+    const measureNums = [...result.matchAll(/number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(measureNums).toEqual([1, 2, 3]);
   });
 
   test("keeps all measures when sentMeasureNumbers not provided and measure missing", () => {
     // Without sentMeasureNumbers, missing measures are NOT deleted (backward compat)
     const result = spliceMeasuresBack(FIXTURE, "");
-    const measureNums = [...result.matchAll(/number="(\d+)"/g)].map((m) =>
-      parseInt(m[1])
-    );
+    const measureNums = [...result.matchAll(/number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(measureNums).toEqual([1, 2, 3, 4]);
   });
 
@@ -173,9 +161,7 @@ describe("spliceMeasuresBack", () => {
     </measure>`;
     const result = spliceMeasuresBack(FIXTURE, modifiedMeasure2, [2, 3]);
     // Measure 3 deleted, remaining renumbered
-    const measureNums = [...result.matchAll(/number="(\d+)"/g)].map((m) =>
-      parseInt(m[1])
-    );
+    const measureNums = [...result.matchAll(/number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(measureNums).toEqual([1, 2, 3]);
     // Measure 2 should have the whole note
     expect(result).toContain("<type>whole</type>");
@@ -218,9 +204,7 @@ describe("delete vs clear measure", () => {
   test("DELETE: omitted measure is removed, total count decreases", () => {
     // Select measure 2, LLM returns nothing → delete it
     const result = spliceMeasuresBack(FIXTURE, "", [2]);
-    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(
-      (m) => parseInt(m[1])
-    );
+    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(nums).toEqual([1, 2, 3]); // was 4, now 3
     // Old measure 1 content (C D E F) should still be in measure 1
     expect(norm(result)).toContain("<step>C</step><octave>4</octave>");
@@ -232,16 +216,12 @@ describe("delete vs clear measure", () => {
       <note><rest/><duration>16</duration><type>whole</type></note>
     </measure>`;
     const result = spliceMeasuresBack(FIXTURE, clearedMeasure, [2]);
-    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(
-      (m) => parseInt(m[1])
-    );
+    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(nums).toEqual([1, 2, 3, 4]); // count unchanged
     // Measure 2 should now be a rest, not G A B C
     expect(norm(result)).not.toContain("<step>G</step><octave>4</octave>");
     // But original measure 2 position should have a rest
-    const m2Match = result.match(
-      /<measure\b[^>]*number="2"[^>]*>([\s\S]*?)<\/measure>/
-    );
+    const m2Match = result.match(/<measure\b[^>]*number="2"[^>]*>([\s\S]*?)<\/measure>/);
     expect(m2Match).not.toBeNull();
     expect(m2Match![1]).toMatch(/<rest[\s/>]/);
   });
@@ -249,9 +229,7 @@ describe("delete vs clear measure", () => {
   test("DELETE multiple consecutive measures", () => {
     // Delete measures 2 and 3
     const result = spliceMeasuresBack(FIXTURE, "", [2, 3]);
-    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(
-      (m) => parseInt(m[1])
-    );
+    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(nums).toEqual([1, 2]); // was 4, now 2
   });
 
@@ -259,9 +237,7 @@ describe("delete vs clear measure", () => {
     // Delete measure 1 — the attributes (key, time, clef) were in measure 1
     // After deletion, measure 2 becomes measure 1
     const result = spliceMeasuresBack(FIXTURE, "", [1]);
-    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(
-      (m) => parseInt(m[1])
-    );
+    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(nums).toEqual([1, 2, 3]);
     // New measure 1 should be old measure 2 content (G A B C)
     expect(norm(result)).toContain("<step>G</step><octave>4</octave>");
@@ -269,9 +245,7 @@ describe("delete vs clear measure", () => {
 
   test("DELETE last measure", () => {
     const result = spliceMeasuresBack(FIXTURE, "", [4]);
-    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(
-      (m) => parseInt(m[1])
-    );
+    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(nums).toEqual([1, 2, 3]);
   });
 });
@@ -281,9 +255,7 @@ describe("delete vs clear measure", () => {
 describe("deleteMeasures", () => {
   test("deletes a single measure and renumbers", () => {
     const result = deleteMeasures(FIXTURE, [2]);
-    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(
-      (m) => parseInt(m[1])
-    );
+    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(nums).toEqual([1, 2, 3]);
     // Old measure 2 had G A B C — should be gone
     expect(norm(result)).not.toContain("<step>G</step><octave>4</octave>");
@@ -293,17 +265,13 @@ describe("deleteMeasures", () => {
 
   test("deletes multiple measures", () => {
     const result = deleteMeasures(FIXTURE, [1, 3]);
-    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(
-      (m) => parseInt(m[1])
-    );
+    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(nums).toEqual([1, 2]);
   });
 
   test("deletes all but one measure", () => {
     const result = deleteMeasures(FIXTURE, [1, 2, 3]);
-    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(
-      (m) => parseInt(m[1])
-    );
+    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(nums).toEqual([1]);
     // Should be the old measure 4 (rest)
     expect(result).toMatch(/<rest[\s/>]/);
@@ -315,15 +283,11 @@ describe("deleteMeasures", () => {
 describe("clearMeasures", () => {
   test("clears a measure, replacing content with whole rest", () => {
     const result = clearMeasures(FIXTURE, [2]);
-    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(
-      (m) => parseInt(m[1])
-    );
+    const nums = [...result.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     // Measure count unchanged
     expect(nums).toEqual([1, 2, 3, 4]);
     // Measure 2 should have a rest, not G A B C
-    const m2 = result.match(
-      /<measure\b[^>]*number="2"[^>]*>([\s\S]*?)<\/measure>/
-    );
+    const m2 = result.match(/<measure\b[^>]*number="2"[^>]*>([\s\S]*?)<\/measure>/);
     expect(m2).not.toBeNull();
     expect(m2![1]).toMatch(/<rest[\s/>]/);
     expect(m2![1]).not.toContain("<step>G</step>");
@@ -331,9 +295,7 @@ describe("clearMeasures", () => {
 
   test("clears first measure but preserves attributes and direction", () => {
     const result = clearMeasures(FIXTURE, [1]);
-    const m1 = result.match(
-      /<measure\b[^>]*number="1"[^>]*>([\s\S]*?)<\/measure>/
-    );
+    const m1 = result.match(/<measure\b[^>]*number="1"[^>]*>([\s\S]*?)<\/measure>/);
     expect(m1).not.toBeNull();
     // Attributes (key, time, clef) should be preserved
     expect(m1![1]).toContain("<attributes>");
@@ -352,9 +314,7 @@ describe("clearMeasures", () => {
     const result = clearMeasures(FIXTURE, [1, 2, 3]);
     // All three should be rests
     for (const num of [1, 2, 3]) {
-      const m = result.match(
-        new RegExp(`<measure\\b[^>]*number="${num}"[^>]*>([\\s\\S]*?)</measure>`)
-      );
+      const m = result.match(new RegExp(`<measure\\b[^>]*number="${num}"[^>]*>([\\s\\S]*?)</measure>`));
       expect(m).not.toBeNull();
       expect(m![1]).toMatch(/<rest[\s/>]/);
     }
@@ -365,9 +325,7 @@ describe("clearMeasures", () => {
   test("computes correct duration for whole rest", () => {
     const result = clearMeasures(FIXTURE, [2]);
     // Fixture has divisions=4, 4/4 time → whole rest duration = 4 * 4 * (4/4) = 16
-    const m2 = result.match(
-      /<measure\b[^>]*number="2"[^>]*>([\s\S]*?)<\/measure>/
-    );
+    const m2 = result.match(/<measure\b[^>]*number="2"[^>]*>([\s\S]*?)<\/measure>/);
     expect(m2![1]).toContain("<duration>16</duration>");
   });
 });
@@ -833,7 +791,7 @@ describe("addTextAnnotation", () => {
     const m1 = getMeasureContent(result, 1);
     // The direction should appear before the first <note>
     const dirIdx = m1.indexOf("<rehearsal");
-    const noteIdx = m1.search(/<note[\s>]/)
+    const noteIdx = m1.search(/<note[\s>]/);
     expect(dirIdx).toBeLessThan(noteIdx);
   });
 });
@@ -917,8 +875,8 @@ describe("spliceMeasuresBack (multi-part)", () => {
     // Both parts should have 3 measures (was 4)
     const p1 = result.match(/<part id="P1">([\s\S]*?)<\/part>/);
     const p2 = result.match(/<part id="P2">([\s\S]*?)<\/part>/);
-    const p1nums = [...p1![1].matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(m => parseInt(m[1]));
-    const p2nums = [...p2![1].matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(m => parseInt(m[1]));
+    const p1nums = [...p1![1].matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
+    const p2nums = [...p2![1].matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(p1nums).toEqual([1, 2, 3]);
     expect(p2nums).toEqual([1, 2, 3]);
   });
@@ -940,8 +898,8 @@ describe("deterministic tools (multi-part)", () => {
     const result = deleteMeasures(TWO_PART_FIXTURE, [2]);
     const p1 = result.match(/<part id="P1">([\s\S]*?)<\/part>/);
     const p2 = result.match(/<part id="P2">([\s\S]*?)<\/part>/);
-    const p1nums = [...p1![1].matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(m => parseInt(m[1]));
-    const p2nums = [...p2![1].matchAll(/<measure\b[^>]*number="(\d+)"/g)].map(m => parseInt(m[1]));
+    const p1nums = [...p1![1].matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
+    const p2nums = [...p2![1].matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
     expect(p1nums).toEqual([1, 2, 3]);
     expect(p2nums).toEqual([1, 2, 3]);
     // Old measure 2 content (G notes) should be gone from both parts
@@ -1052,11 +1010,13 @@ describe("setMeasureNotes", () => {
   });
 
   test("writes eighth notes", () => {
-    const notes: NoteSpec[] = Array(8).fill(null).map((_, i) => ({
-      step: "C" as const,
-      octave: 4,
-      duration: "eighth" as const,
-    }));
+    const notes: NoteSpec[] = Array(8)
+      .fill(null)
+      .map((_, i) => ({
+        step: "C" as const,
+        octave: 4,
+        duration: "eighth" as const,
+      }));
     const result = setMeasureNotes(FIXTURE, 2, notes);
     const m2 = getMeasureContent(result, 2);
     expect(m2).toContain("<duration>2</duration>"); // eighth = 0.5 * 4 = 2
@@ -1066,9 +1026,7 @@ describe("setMeasureNotes", () => {
   });
 
   test("preserves attributes and direction in measure 1", () => {
-    const notes: NoteSpec[] = [
-      { step: "G", octave: 5, duration: "whole" },
-    ];
+    const notes: NoteSpec[] = [{ step: "G", octave: 5, duration: "whole" }];
     const result = setMeasureNotes(FIXTURE, 1, notes);
     const m1 = getMeasureContent(result, 1);
     // Attributes preserved
@@ -1086,9 +1044,7 @@ describe("setMeasureNotes", () => {
   });
 
   test("targets specific part in two-part score (P2 only, P1 untouched)", () => {
-    const notes: NoteSpec[] = [
-      { step: "F", octave: 2, duration: "whole" },
-    ];
+    const notes: NoteSpec[] = [{ step: "F", octave: 2, duration: "whole" }];
     const result = setMeasureNotes(TWO_PART_FIXTURE, 2, notes, "P2");
 
     // P2 measure 2 should have F2
@@ -1105,9 +1061,7 @@ describe("setMeasureNotes", () => {
   });
 
   test("throws for non-rest note without step", () => {
-    const notes: NoteSpec[] = [
-      { duration: "quarter" } as NoteSpec,
-    ];
+    const notes: NoteSpec[] = [{ duration: "quarter" } as NoteSpec];
     expect(() => setMeasureNotes(FIXTURE, 1, notes)).toThrow("Non-rest note must have a step");
   });
 
@@ -1206,14 +1160,10 @@ function norm(xml: string): string {
 }
 
 function getMeasureNums(xml: string): number[] {
-  return [...xml.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) =>
-    parseInt(m[1])
-  );
+  return [...xml.matchAll(/<measure\b[^>]*number="(\d+)"/g)].map((m) => parseInt(m[1]));
 }
 
 function getMeasureContent(xml: string, num: number): string {
-  const m = xml.match(
-    new RegExp(`<measure\\b[^>]*number="${num}"[^>]*>([\\s\\S]*?)</measure>`)
-  );
+  const m = xml.match(new RegExp(`<measure\\b[^>]*number="${num}"[^>]*>([\\s\\S]*?)</measure>`));
   return norm(m?.[1] ?? "");
 }

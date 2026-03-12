@@ -30,22 +30,32 @@ import {
   addTremolo,
   addGlissando,
   addBreathMark,
-} from "../lib/musicxml";
+} from "../lib/music/musicxml";
 
 function score4() {
   let xml = createScore({ instruments: [{ name: "Piano" }], measures: 4 });
-  xml = setMeasureNotes(xml, 1, [
-    { step: "C", octave: 4, duration: "quarter" },
-    { step: "D", octave: 4, duration: "quarter" },
-    { step: "E", octave: 4, duration: "quarter" },
-    { step: "F", octave: 4, duration: "quarter" },
-  ], "P1");
-  xml = setMeasureNotes(xml, 2, [
-    { step: "G", octave: 4, duration: "quarter" },
-    { step: "A", octave: 4, duration: "quarter" },
-    { step: "B", octave: 4, duration: "quarter" },
-    { step: "C", octave: 5, duration: "quarter" },
-  ], "P1");
+  xml = setMeasureNotes(
+    xml,
+    1,
+    [
+      { step: "C", octave: 4, duration: "quarter" },
+      { step: "D", octave: 4, duration: "quarter" },
+      { step: "E", octave: 4, duration: "quarter" },
+      { step: "F", octave: 4, duration: "quarter" },
+    ],
+    "P1",
+  );
+  xml = setMeasureNotes(
+    xml,
+    2,
+    [
+      { step: "G", octave: 4, duration: "quarter" },
+      { step: "A", octave: 4, duration: "quarter" },
+      { step: "B", octave: 4, duration: "quarter" },
+      { step: "C", octave: 5, duration: "quarter" },
+    ],
+    "P1",
+  );
   return xml;
 }
 
@@ -54,7 +64,7 @@ function score4() {
 describe("addSlur", () => {
   test("adds slur start to first note and stop to last note of span", () => {
     const result = addSlur(score4(), 1, 2);
-    expect(result).toContain('<slur');
+    expect(result).toContain("<slur");
     expect(result).toContain('type="start"');
     expect(result).toContain('type="stop"');
   });
@@ -76,7 +86,7 @@ describe("addSlur", () => {
     const result = addSlur(score4(), 1, 1);
     // Measure 2 notes should have no slur
     const m2start = result.indexOf('<measure number="2"');
-    const m2end = result.indexOf('</measure>', m2start);
+    const m2end = result.indexOf("</measure>", m2start);
     const m2 = result.slice(m2start, m2end);
     expect(m2).not.toContain("slurType");
   });
@@ -97,7 +107,7 @@ describe("addLyrics", () => {
     const result = addLyrics(score4(), 1, ["La"], "P1");
     // Only 1 lyric element in measure 1
     const m1start = result.indexOf('<measure number="1"');
-    const m1end = result.indexOf('</measure>', m1start);
+    const m1end = result.indexOf("</measure>", m1start);
     const m1 = result.slice(m1start, m1end);
     const count = (m1.match(/<lyric/g) || []).length;
     expect(count).toBe(1);
@@ -139,7 +149,7 @@ describe("addFermata", () => {
   test("fermata does not appear in other measures", () => {
     const result = addFermata(score4(), 1);
     const m2start = result.indexOf('<measure number="2"');
-    const m2end = result.indexOf('</measure>', m2start);
+    const m2end = result.indexOf("</measure>", m2start);
     expect(result.slice(m2start, m2end)).not.toContain("fermata");
   });
 
@@ -168,7 +178,7 @@ describe("addOttava", () => {
   test("stop direction appears at end measure", () => {
     const result = addOttava(score4(), 1, 2, "8va");
     const m2start = result.indexOf('<measure number="2"');
-    const m2end = result.indexOf('</measure>', m2start);
+    const m2end = result.indexOf("</measure>", m2start);
     expect(result.slice(m2start, m2end)).toContain("stop");
   });
 });
@@ -186,14 +196,14 @@ describe("addPedalMarking", () => {
   test("pedal start is in start measure", () => {
     const result = addPedalMarking(score4(), 1, 2);
     const m1start = result.indexOf('<measure number="1"');
-    const m1end = result.indexOf('</measure>', m1start);
+    const m1end = result.indexOf("</measure>", m1start);
     expect(result.slice(m1start, m1end)).toContain("start");
   });
 
   test("pedal stop is in end measure", () => {
     const result = addPedalMarking(score4(), 1, 2);
     const m2start = result.indexOf('<measure number="2"');
-    const m2end = result.indexOf('</measure>', m2start);
+    const m2end = result.indexOf("</measure>", m2start);
     expect(result.slice(m2start, m2end)).toContain("stop");
   });
 });
@@ -276,7 +286,7 @@ describe("addNavigationMark", () => {
   test("navigation mark does not bleed into other measures", () => {
     const result = addNavigationMark(score4(), 1, "segno");
     const m2start = result.indexOf('<measure number="2"');
-    const m2end = result.indexOf('</measure>', m2start);
+    const m2end = result.indexOf("</measure>", m2start);
     // Segno should not appear in measure 2 directions (only in m1)
     const m2 = result.slice(m2start, m2end);
     // The word 'segno' might appear as attribute name in serialised XML but
@@ -291,21 +301,31 @@ describe("addArpeggio", () => {
   test("adds arpeggiate notation to chord notes in a measure", () => {
     // Write a chord
     let xml = createScore({ instruments: [{ name: "Piano" }], measures: 4 });
-    xml = setMeasureNotes(xml, 1, [
-      { step: "C", octave: 4, duration: "whole" },
-      { step: "E", octave: 4, duration: "whole", chord: true },
-      { step: "G", octave: 4, duration: "whole", chord: true },
-    ], "P1");
+    xml = setMeasureNotes(
+      xml,
+      1,
+      [
+        { step: "C", octave: 4, duration: "whole" },
+        { step: "E", octave: 4, duration: "whole", chord: true },
+        { step: "G", octave: 4, duration: "whole", chord: true },
+      ],
+      "P1",
+    );
     const result = addArpeggio(xml, 1);
     expect(result).toContain("arpeggiate");
   });
 
   test("arpeggio direction up", () => {
     let xml = createScore({ instruments: [{ name: "Piano" }], measures: 4 });
-    xml = setMeasureNotes(xml, 1, [
-      { step: "C", octave: 4, duration: "whole" },
-      { step: "G", octave: 4, duration: "whole", chord: true },
-    ], "P1");
+    xml = setMeasureNotes(
+      xml,
+      1,
+      [
+        { step: "C", octave: 4, duration: "whole" },
+        { step: "G", octave: 4, duration: "whole", chord: true },
+      ],
+      "P1",
+    );
     const result = addArpeggio(xml, 1, "up");
     expect(result).toContain("arpeggiate");
     expect(result).toContain("up");
@@ -317,7 +337,7 @@ describe("addArpeggio", () => {
     xml = setMeasureNotes(xml, 2, [{ step: "G", octave: 4, duration: "whole" }], "P1");
     const result = addArpeggio(xml, 1);
     const m2start = result.indexOf('<measure number="2"');
-    const m2end = result.indexOf('</measure>', m2start);
+    const m2end = result.indexOf("</measure>", m2start);
     expect(result.slice(m2start, m2end)).not.toContain("arpeggiate");
   });
 });
@@ -338,7 +358,7 @@ describe("addTremolo", () => {
   test("tremolo only affects target measure", () => {
     const result = addTremolo(score4(), 1, 3);
     const m2start = result.indexOf('<measure number="2"');
-    const m2end = result.indexOf('</measure>', m2start);
+    const m2end = result.indexOf("</measure>", m2start);
     expect(result.slice(m2start, m2end)).not.toContain("tremolo");
   });
 });
@@ -375,14 +395,14 @@ describe("addBreathMark", () => {
   test("breath mark is in the target measure", () => {
     const result = addBreathMark(score4(), 1);
     const m1start = result.indexOf('<measure number="1"');
-    const m1end = result.indexOf('</measure>', m1start);
+    const m1end = result.indexOf("</measure>", m1start);
     expect(result.slice(m1start, m1end)).toContain("breath-mark");
   });
 
   test("breath mark does not appear in other measures", () => {
     const result = addBreathMark(score4(), 1);
     const m2start = result.indexOf('<measure number="2"');
-    const m2end = result.indexOf('</measure>', m2start);
+    const m2end = result.indexOf("</measure>", m2start);
     expect(result.slice(m2start, m2end)).not.toContain("breath-mark");
   });
 });

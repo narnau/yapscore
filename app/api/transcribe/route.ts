@@ -1,26 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
+import { createRateLimiter } from "@/lib/rate-limit";
+import { RATE_LIMITS } from "@/lib/constants";
 import OpenAI from "openai";
 
-// 10 transcriptions per user per minute
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(userId);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(userId, { count: 1, resetAt: now + 60_000 });
-    return true;
-  }
-  if (entry.count >= 10) return false;
-  entry.count++;
-  return true;
-}
+const rateLimiter = createRateLimiter(RATE_LIMITS.TRANSCRIBE);
 
 export async function POST(req: NextRequest) {
   const auth = await getAuthUser();
   if (!auth.ok) return auth.response;
 
-  if (!checkRateLimit(auth.userId)) {
+  if (!rateLimiter.check(auth.userId)) {
     return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 });
   }
 
@@ -37,10 +27,10 @@ export async function POST(req: NextRequest) {
   const mime = audio.type.split(";")[0]; // strip codecs suffix
   const formatMap: Record<string, string> = {
     "audio/webm": "webm",
-    "audio/ogg":  "ogg",
-    "audio/mp4":  "mp4",
-    "audio/m4a":  "mp4",
-    "audio/wav":  "wav",
+    "audio/ogg": "ogg",
+    "audio/mp4": "mp4",
+    "audio/m4a": "mp4",
+    "audio/wav": "wav",
     "audio/flac": "flac",
     "audio/mpeg": "mp3",
   };
@@ -73,7 +63,7 @@ export async function POST(req: NextRequest) {
         content: [
           {
             type: "input_audio",
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
             input_audio: { data: base64, format },
           } as any,
           {
@@ -87,7 +77,7 @@ export async function POST(req: NextRequest) {
   });
 
   const transcript = response.choices[0]?.message?.content?.trim() ?? "";
-  console.log(`[transcribe] → "${transcript.slice(0, 100)}${transcript.length > 100 ? "…" : ""}"`);
+  console.log(`[transcribe] → "${transcript.slice(0, 100)}${transcript.length > 100 ? "\u2026" : ""}"`);
 
   return NextResponse.json({ transcript });
 }

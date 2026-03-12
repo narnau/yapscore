@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiKeyUser, checkApiAccess } from "@/lib/apiKeyAuth";
+import { z } from "zod";
+import { getApiKeyUser, checkApiAccess } from "@/lib/auth/api-key";
+import { getVerovioToolkit } from "@/lib/music/verovio";
+
+const renderSchema = z.object({
+  musicxml: z.string().min(1, "musicxml is required"),
+  page: z.number().int().min(1).optional().default(1),
+});
 
 export async function POST(req: NextRequest) {
   const auth = await getApiKeyUser(req);
@@ -9,17 +16,16 @@ export async function POST(req: NextRequest) {
   if (!access.ok) return access.response;
 
   const body = await req.json().catch(() => ({}));
-  const musicxml = typeof body.musicxml === "string" ? body.musicxml : null;
-  const page     = typeof body.page     === "number" ? body.page     : 1;
+  const parsed = renderSchema.safeParse(body);
+  if (!parsed.success) {
+    const firstError = parsed.error.errors[0]?.message ?? "Invalid request";
+    return NextResponse.json({ error: firstError }, { status: 400 });
+  }
 
-  if (!musicxml) return NextResponse.json({ error: "musicxml is required" }, { status: 400 });
+  const { musicxml, page } = parsed.data;
 
   try {
-    const { default: createVerovioModule } = await import("verovio/wasm");
-    const { VerovioToolkit } = await import("verovio/esm");
-
-    const VerovioModule = await createVerovioModule();
-    const tk = new VerovioToolkit(VerovioModule);
+    const tk = await getVerovioToolkit();
 
     tk.setOptions({
       inputFrom: "musicxml",
@@ -30,9 +36,9 @@ export async function POST(req: NextRequest) {
     });
 
     tk.loadData(musicxml);
-    const totalPages  = tk.getPageCount();
+    const totalPages = tk.getPageCount();
     const clampedPage = Math.max(1, Math.min(page, totalPages));
-    const svg         = tk.renderToSVG(clampedPage);
+    const svg = tk.renderToSVG(clampedPage);
 
     return new NextResponse(svg, {
       status: 200,

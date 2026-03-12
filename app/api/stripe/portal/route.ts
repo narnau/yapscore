@@ -1,29 +1,28 @@
 import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { stripe } from "@/lib/stripe";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { stripe } from "@/lib/stripe/client";
+import { getProfile } from "@/lib/services/profile";
 
 export async function POST() {
-  const auth = await getAuthUser();
-  if (!auth.ok) return auth.response;
+  try {
+    const auth = await getAuthUser();
+    if (!auth.ok) return auth.response;
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("stripe_customer_id")
-    .eq("id", auth.userId)
-    .single();
+    const { stripeCustomerId } = await getProfile(auth.userId);
 
-  if (!profile?.stripe_customer_id) {
-    return NextResponse.json({ error: "No subscription found" }, { status: 400 });
+    if (!stripeCustomerId) {
+      return NextResponse.json({ error: "No subscription found" }, { status: 400 });
+    }
+
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").trim();
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: stripeCustomerId,
+      return_url: `${appUrl}/editor`,
+    });
+
+    return NextResponse.json({ url: session.url });
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").trim();
-
-  const session = await stripe.billingPortal.sessions.create({
-    customer: profile.stripe_customer_id,
-    return_url: `${appUrl}/editor`,
-  });
-
-  return NextResponse.json({ url: session.url });
 }

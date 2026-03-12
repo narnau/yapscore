@@ -1,1 +1,1 @@
-export { SPICE } from './model';
+export { SPICE } from "./model";

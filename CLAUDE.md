@@ -3,6 +3,7 @@
 LLM-powered MuseScore editor. Upload .mscz → edit with natural language → download modified .mscz.
 
 ## Tech Stack
+
 - **Next.js 15** (App Router) + React 19 + TypeScript 5
 - **Bun** as package manager and runtime
 - **Tailwind CSS 3** for styling
@@ -12,6 +13,7 @@ LLM-powered MuseScore editor. Upload .mscz → edit with natural language → do
 - **OpenRouter** — LLM API (default: Gemini 2.5 Flash)
 
 ## Commands
+
 - `bun install` — install dependencies
 - `bun run dev` — start dev server
 - `bun run build` — production build
@@ -21,6 +23,7 @@ LLM-powered MuseScore editor. Upload .mscz → edit with natural language → do
 - `supabase migration up` — apply new migrations without resetting data
 
 ## Debugging
+
 The user starts the dev server with log capture so Claude can read server output directly:
 
 ```bash
@@ -33,6 +36,7 @@ bun dev 2>&1 | tee /tmp/yapscore.log
 - Agent logs are prefixed with `[agent]`, LLM logs with `[llm]`
 
 ## Project Structure
+
 ```
 app/
   page.tsx              — Landing page (public)
@@ -51,22 +55,23 @@ components/
   ChatPanel.tsx         — Chat UI + file upload + paywall
   ScoreViewer.tsx       — Verovio rendering + measure selection
   MidiPlayer.tsx        — MIDI playback
+  score/                — Extracted sub-components (ScoreInfoBar, MobileEditSheet, NoteSymbol, ToolBtn)
+  hooks/                — Custom hooks (useKeyboardShortcuts, useVoiceRecording)
 lib/
   supabase/             — Client utilities (client, server, middleware, admin)
+  agent/                — AI agent (index.ts orchestrator, tools.ts, system-prompt.ts, types.ts)
+  music/                — MusicXML processing (musicxml.ts, accidentals.ts, beams.ts, swing-midi.ts, sing.ts, constants.ts)
   auth.ts               — getAuthUser() helper for API routes
   stripe.ts             — Stripe instance + customer helper
   files.ts              — Supabase-backed file storage (scores + history + chat)
-  agent.ts              — AI agent with tools (modify/generate)
   llm.ts                — OpenRouter API calls
   mscore.ts             — .mscz → MusicXML via webmscore
-  musicxml.ts           — MusicXML parsing/reconstruction
-  accidentals.ts        — Post-process accidentals
-  beams.ts              — Post-process beam elements
 supabase/
   migrations/           — Database migrations (auto-deployed on push to main)
 ```
 
 ## Architecture
+
 - Auth: Supabase Auth with Google OAuth. Middleware redirects `/editor/*` to `/login` if unauthenticated.
 - All API routes use `getAuthUser()` guard (returns 401 if not authenticated).
 - Files: `files` table stores current_xml, history (jsonb, capped at 30), messages (jsonb) per user file.
@@ -76,6 +81,7 @@ supabase/
 - RLS enabled on all tables. Service-role client used only in webhooks and server-side admin operations.
 
 ## Conventions
+
 - All new database changes go in `supabase/migrations/` (create with `supabase migration new <name>`)
 - Use `@/` import alias for all project imports
 - API routes return `NextResponse.json()` — errors include `{ error: string }` with appropriate status codes

@@ -14,7 +14,7 @@ export async function register() {
       const { PostHog } = await import("posthog-node");
       const { PostHogSpanProcessor } = await import("@posthog/ai/otel");
 
-      const key  = process.env.NEXT_PUBLIC_POSTHOG_KEY  ?? "";
+      const key = process.env.NEXT_PUBLIC_POSTHOG_KEY ?? "";
       const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://eu.i.posthog.com";
       const resource = resourceFromAttributes({ "service.name": "yapscore" });
 

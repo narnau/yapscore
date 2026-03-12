@@ -1,106 +1,65 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import * as Sentry from "@sentry/nextjs";
+import { z } from "zod";
 import { runAgent } from "@/lib/agent";
 import { getAuthUser } from "@/lib/auth";
+import { setLlmUserId } from "@/lib/agent/llm";
+import { logger } from "@/lib/telemetry/logger";
+import { createRateLimiter } from "@/lib/rate-limit";
+import { RATE_LIMITS } from "@/lib/constants";
+import { checkUsageLimit } from "@/lib/services/usage";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { setLlmUserId } from "@/lib/llm";
-import { logger } from "@/lib/logger";
 
 export const maxDuration = 300;
 
-const FREE_LIMIT = 5;
-const PRO_DAILY_LIMIT = 200; // soft cap — stops scripts, never hit by normal human use
+const rateLimiter = createRateLimiter(RATE_LIMITS.AGENT);
 
-// In-process burst rate limiter: max 5 requests per user per 10 seconds.
-// Prevents rapid-fire requests from burning LLM API credits.
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_WINDOW_MS = 10_000;
-const RATE_MAX = 5;
-
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(userId);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_MAX) return false;
-  entry.count++;
-  return true;
-}
+const agentSchema = z.object({
+  message: z.string().min(1, "Missing message").max(2_000, "Message too long (max 2000 chars)"),
+  currentMusicXml: z.string().max(500_000, "Score too large").optional().nullable(),
+  selectedMeasures: z.array(z.number()).optional().nullable(),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string(),
+      }),
+    )
+    .optional()
+    .nullable(),
+  scoreName: z.string().optional().nullable(),
+});
 
 export async function POST(req: NextRequest) {
   const auth = await getAuthUser();
   if (!auth.ok) return auth.response;
 
   // Burst rate limit check
-  if (!checkRateLimit(auth.userId)) {
-    return NextResponse.json(
-      { error: "Too many requests. Please wait a moment." },
-      { status: 429 }
-    );
+  if (!rateLimiter.check(auth.userId)) {
+    return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 });
   }
 
   // Check usage limits
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("plan, interactions_used")
-    .eq("id", auth.userId)
-    .single();
-
-  const plan = profile?.plan ?? "free";
-  const used = profile?.interactions_used ?? 0;
-
-  if (plan === "free" && used >= FREE_LIMIT) {
-    return NextResponse.json(
-      { error: "limit_reached", usage: { used, limit: FREE_LIMIT } },
-      { status: 402 }
-    );
-  }
-
-  if (plan === "pro") {
-    const { data: allowed } = await admin.rpc("check_and_increment_api_calls", {
-      p_user_id:     auth.userId,
-      p_daily_limit: PRO_DAILY_LIMIT,
-    });
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Daily limit reached. Resets at midnight UTC.", limit: PRO_DAILY_LIMIT },
-        { status: 429 }
-      );
-    }
+  const usage = await checkUsageLimit(auth.userId);
+  if (!usage.allowed) {
+    return NextResponse.json(usage.errorResponse.body, { status: usage.errorResponse.status });
   }
 
   const formData = await req.formData();
-  const message = formData.get("message") as string | null;
-  const currentMusicXml = formData.get("musicXml") as string | null;
-  const selectedRaw = formData.get("selectedMeasures") as string | null;
-  const historyRaw = formData.get("history") as string | null;
 
-  if (!message) {
-    return NextResponse.json({ error: "Missing message" }, { status: 400 });
-  }
-
-  // Reject oversized payloads — protects against expensive LLM calls even within daily cap
-  if (message.length > 2_000) {
-    return NextResponse.json({ error: "Message too long (max 2000 chars)" }, { status: 413 });
-  }
-  if (currentMusicXml && currentMusicXml.length > 500_000) {
-    return NextResponse.json({ error: "Score too large" }, { status: 413 });
-  }
-
-  // Safe JSON parsing — malformed input must not crash the route
+  // Safe JSON parsing for structured fields
   let selectedMeasures: number[] | null = null;
+  const selectedRaw = formData.get("selectedMeasures") as string | null;
   if (selectedRaw) {
     try {
       selectedMeasures = JSON.parse(selectedRaw) as number[];
     } catch {
-      return NextResponse.json({ error: "Invalid selectedMeasures JSON" }, { status: 400 });
+      // fall through — will be validated by Zod below
     }
   }
 
   let history: { role: "user" | "assistant"; content: string }[] = [];
+  const historyRaw = formData.get("history") as string | null;
   if (historyRaw) {
     try {
       history = JSON.parse(historyRaw);
@@ -109,35 +68,40 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const parsed = agentSchema.safeParse({
+    message: formData.get("message"),
+    currentMusicXml: formData.get("musicXml") as string | null,
+    selectedMeasures,
+    history,
+    scoreName: formData.get("scoreName") as string | null,
+  });
+
+  if (!parsed.success) {
+    const firstError = parsed.error.errors[0]?.message ?? "Invalid request";
+    return NextResponse.json({ error: firstError }, { status: 400 });
+  }
+
+  const { message, currentMusicXml } = parsed.data;
+
   try {
     setLlmUserId(auth.userId);
-    const msgPreview = message.length > 120 ? message.slice(0, 120) + "…" : message;
-    logger.info("agent.request", {
-      userId: auth.userId, plan, used,
-      message: msgPreview,
-      hasScore: !!currentMusicXml,
-      selectedMeasures: selectedMeasures?.length ?? 0,
-    });
-    const result = await runAgent(message, currentMusicXml, selectedMeasures, history, auth.userId);
+    const result = await runAgent(message, currentMusicXml ?? null, selectedMeasures, history, auth.userId);
 
-    await admin.rpc("increment_interactions", { user_id: auth.userId });
-
-    logger.info("agent.response", { userId: auth.userId, type: result.type });
+    await createAdminClient().rpc("increment_interactions", { user_id: auth.userId });
 
     after(() => logger.flush());
 
-    if (result.type === "chat")   return NextResponse.json({ type: "chat",   message: result.message });
-    if (result.type === "load")   return NextResponse.json({ type: "load",   musicXml: result.musicXml, name: result.name });
-    if (result.type === "modify") return NextResponse.json({ type: "modify", musicXml: result.musicXml, message: result.message });
+    if (result.type === "chat") return NextResponse.json({ type: "chat", message: result.message });
+    if (result.type === "load")
+      return NextResponse.json({ type: "load", musicXml: result.musicXml, name: result.name });
+    if (result.type === "modify")
+      return NextResponse.json({ type: "modify", musicXml: result.musicXml, message: result.message });
 
     return NextResponse.json({ error: "Unknown result type" }, { status: 500 });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[agent] fatal error:", msg);
     Sentry.captureException(err, { extra: { userId: auth.userId } });
-    logger.error("agent.error", { userId: auth.userId, error: msg });
+    logger.error("agent.error", { userId: auth.userId, error: err instanceof Error ? err.message : String(err) });
     after(() => logger.flush());
-    // Never surface raw errors to the user — return as a chat message
     return NextResponse.json({
       type: "chat",
       message: "Sorry, something went wrong. Please try again.",
