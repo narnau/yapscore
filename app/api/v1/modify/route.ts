@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiKeyUser, checkApiAccess } from "@/lib/apiKeyAuth";
+import { getApiKeyUser, checkApiAccess } from "@/lib/auth/api-key";
 import { runAgent } from "@/lib/agent";
-import { setLlmUserId } from "@/lib/llm";
+import { setLlmUserId } from "@/lib/agent/llm";
 
 export const maxDuration = 300;
 

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { PostHogProvider } from "posthog-js/react";
-import { initPostHog, identifyUser, resetUser, posthog } from "@/lib/posthog";
+import { initPostHog, identifyUser, resetUser, posthog } from "@/lib/telemetry/posthog";
 import { createBrowserClient } from "@supabase/ssr";
 
 function PostHogPageView() {

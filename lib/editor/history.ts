@@ -1,4 +1,4 @@
-import type { HistoryEntry } from "@/lib/files";
+import type { HistoryEntry } from "./files";
 
 export type HistoryState = { entries: HistoryEntry[]; index: number };
 export type HistoryAction =

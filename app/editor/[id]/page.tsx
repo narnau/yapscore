@@ -3,16 +3,16 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import ChatPanel, { type Message } from "@/components/ChatPanel";
-import ScoreViewer from "@/components/ScoreViewer";
-import EditorTopBar from "@/components/EditorTopBar";
-import MobileTabBar, { type MobileTab } from "@/components/MobileTabBar";
-import SingModal from "@/components/SingModal";
-import DocsModal from "@/components/DocsModal";
-import NewScoreModal from "@/components/NewScoreModal";
-import type { HistoryEntry } from "@/lib/files";
-import { historyReducer, messagesAtIndex } from "@/lib/editor-history";
-import { capture } from "@/lib/posthog";
+import ChatPanel, { type Message } from "@/components/chat/ChatPanel";
+import ScoreViewer from "@/components/score/ScoreViewer";
+import EditorTopBar from "@/components/layout/EditorTopBar";
+import MobileTabBar, { type MobileTab } from "@/components/layout/MobileTabBar";
+import SingModal from "@/components/score/SingModal";
+import DocsModal from "@/components/shared/DocsModal";
+import NewScoreModal from "@/components/dashboard/NewScoreModal";
+import type { HistoryEntry } from "@/lib/editor/files";
+import { historyReducer, messagesAtIndex } from "@/lib/editor/history";
+import { capture } from "@/lib/telemetry/posthog";
 
 // ── auto-save ─────────────────────────────────────────────────────────────────
 

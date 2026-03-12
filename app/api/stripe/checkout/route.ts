@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { stripe, createOrGetCustomer } from "@/lib/stripe";
-import { currencyForCountry, stripePriceId } from "@/lib/currency";
+import { stripe, createOrGetCustomer } from "@/lib/stripe/client";
+import { currencyForCountry, stripePriceId } from "@/lib/stripe/currency";
 
 export async function POST(req: NextRequest) {
   const auth = await getAuthUser();

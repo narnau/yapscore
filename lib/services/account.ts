@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { stripe } from "@/lib/stripe";
+import { stripe } from "@/lib/stripe/client";
 
 /**
  * Delete a user account and all associated data.

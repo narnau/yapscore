@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import PublicNavbar from "@/components/PublicNavbar";
+import PublicNavbar from "@/components/layout/PublicNavbar";
 import { createClient } from "@/lib/supabase/server";
-import { detectCurrency } from "@/lib/currency";
+import { detectCurrency } from "@/lib/stripe/currency";
 
 export const metadata: Metadata = {
   title: "Documentation — YapScore",

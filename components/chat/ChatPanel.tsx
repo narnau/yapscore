@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { capture } from "@/lib/posthog";
-import { useVoiceRecording } from "./hooks/useVoiceRecording";
+import { capture } from "@/lib/telemetry/posthog";
+import { useVoiceRecording } from "../hooks/useVoiceRecording";
 
 const MAX_SEND_RETRIES = 3;
 

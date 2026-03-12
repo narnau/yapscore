@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { listFiles } from "@/lib/files";
-import DashboardClient from "@/components/DashboardClient";
+import { listFiles } from "@/lib/editor/files";
+import DashboardClient from "@/components/dashboard/DashboardClient";
 
 export const metadata: Metadata = {
   title: "My Scores — YapScore",

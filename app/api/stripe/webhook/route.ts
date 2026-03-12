@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { stripe } from "@/lib/stripe";
-import { handleCheckoutCompleted, handleSubscriptionDeleted } from "@/lib/services/stripe-handlers";
+import { stripe } from "@/lib/stripe/client";
+import { handleCheckoutCompleted, handleSubscriptionDeleted } from "@/lib/stripe/handlers";
 
 export async function POST(req: NextRequest) {
   const body = await req.text();

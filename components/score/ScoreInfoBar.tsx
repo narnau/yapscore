@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { capture } from "@/lib/posthog";
+import { capture } from "@/lib/telemetry/posthog";
 import { setTempo } from "@/lib/music/musicxml";
 
 const FIFTHS_KEYS = ["Cb","Gb","Db","Ab","Eb","Bb","F","C","G","D","A","E","B","F#","C#"];

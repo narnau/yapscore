@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import Logo from "@/components/Logo";
-import NewScoreModal from "@/components/NewScoreModal";
-import { capture } from "@/lib/posthog";
+import Logo from "@/components/shared/Logo";
+import NewScoreModal from "./NewScoreModal";
+import { capture } from "@/lib/telemetry/posthog";
 
 type FileEntry = {
   id: string;

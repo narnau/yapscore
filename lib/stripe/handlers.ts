@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { captureServer } from "@/lib/posthog-server";
+import { captureServer } from "@/lib/telemetry/posthog-server";
 
 /**
  * Handle Stripe checkout.session.completed — upgrade user to Pro.

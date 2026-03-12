@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/telemetry/logger";
 import { extractParts, extractSelectedMeasures, extractChordMap } from "@/lib/music/musicxml";
 import { createTools } from "./tools";
 import { buildSystemPrompt } from "./system-prompt";

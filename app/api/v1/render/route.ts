@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiKeyUser, checkApiAccess } from "@/lib/apiKeyAuth";
-import { getVerovioToolkit } from "@/lib/verovio";
+import { getApiKeyUser, checkApiAccess } from "@/lib/auth/api-key";
+import { getVerovioToolkit } from "@/lib/music/verovio";
 
 const renderSchema = z.object({
   musicxml: z.string().min(1, "musicxml is required"),

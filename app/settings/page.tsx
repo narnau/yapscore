@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import SettingsClient from "@/components/SettingsClient";
+import SettingsClient from "@/components/settings/SettingsClient";
 
 export const metadata: Metadata = {
   title: "Settings — YapScore",

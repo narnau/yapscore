@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generateApiKey } from "@/lib/apiKeyAuth";
+import { generateApiKey } from "@/lib/auth/api-key";
 
 const createKeySchema = z.object({
   name: z.string().min(1, "name is required").transform(s => s.trim()),

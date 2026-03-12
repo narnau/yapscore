@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import Logo from "@/components/Logo";
+import Logo from "@/components/shared/Logo";
 import { createClient } from "@/lib/supabase/client";
 
 type OAuthProvider = "google" | "azure" | "github";

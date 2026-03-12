@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Message } from "@/components/ChatPanel";
+import type { Message } from "@/components/chat/ChatPanel";
 
 export type HistoryEntry = {
   musicXml: string;

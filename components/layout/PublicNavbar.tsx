@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import Logo from "@/components/Logo";
+import Logo from "@/components/shared/Logo";
 
 const NAV_LINKS = [
   { href: "/docs",       label: "Docs" },

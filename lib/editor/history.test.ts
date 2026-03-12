@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
-import { historyReducer, messagesAtIndex, type HistoryState } from "./editor-history";
+import { historyReducer, messagesAtIndex, type HistoryState } from "./history";
 import type { HistoryEntry } from "./files";
-import type { Message } from "@/components/ChatPanel";
+import type { Message } from "@/components/chat/ChatPanel";
 
 function makeEntry(name: string, messages: Message[] = []): HistoryEntry {
   return { musicXml: `<xml>${name}</xml>`, name, timestamp: new Date().toISOString(), messages };

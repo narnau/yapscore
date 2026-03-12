@@ -1,8 +1,8 @@
 import Link from "next/link";
-import ScoreAnimation from "@/components/ScoreAnimation";
-import PublicNavbar from "@/components/PublicNavbar";
+import ScoreAnimation from "@/components/shared/ScoreAnimation";
+import PublicNavbar from "@/components/layout/PublicNavbar";
 import { createClient } from "@/lib/supabase/server";
-import { detectCurrency, type Currency } from "@/lib/currency";
+import { detectCurrency, type Currency } from "@/lib/stripe/currency";
 
 function Hero() {
   return (

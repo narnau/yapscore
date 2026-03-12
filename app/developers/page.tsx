@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import PublicNavbar from "@/components/PublicNavbar";
+import PublicNavbar from "@/components/layout/PublicNavbar";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {

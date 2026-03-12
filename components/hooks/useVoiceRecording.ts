@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { capture } from "@/lib/posthog";
+import { capture } from "@/lib/telemetry/posthog";
 
 export function useVoiceRecording(
   setInstruction: (text: string) => void,

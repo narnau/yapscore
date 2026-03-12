@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getFile, saveFile, deleteFile } from "@/lib/files";
+import { getFile, saveFile, deleteFile } from "@/lib/editor/files";
 import { fixPercussionDisplayOctave } from "@/lib/music/musicxml";
 
 const patchSchema = z.object({

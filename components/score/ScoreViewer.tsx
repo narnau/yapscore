@@ -5,14 +5,14 @@ import MidiPlayer from "./MidiPlayer";
 import { applySwingToMidi } from "@/lib/music/swing-midi";
 import { getSwing, setTempo, buildNoteMap, deleteNote } from "@/lib/music/musicxml";
 import type { NotePosition } from "@/lib/music/musicxml";
-import { capture } from "@/lib/posthog";
-import ScoreInfoBar from "./score/ScoreInfoBar";
-import MobileEditSheet from "./score/MobileEditSheet";
-import PitchControls from "./score/PitchControls";
-import DurationControls from "./score/DurationControls";
-import MeasureControls from "./score/MeasureControls";
-import ToolBtn from "./score/ToolBtn";
-import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { capture } from "@/lib/telemetry/posthog";
+import ScoreInfoBar from "./ScoreInfoBar";
+import MobileEditSheet from "./MobileEditSheet";
+import PitchControls from "./PitchControls";
+import DurationControls from "./DurationControls";
+import MeasureControls from "./MeasureControls";
+import ToolBtn from "./ToolBtn";
+import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 
 type Props = {
   musicXml: string | null;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Logo from "./Logo";
+import Logo from "../shared/Logo";
 
 type Usage = { plan: "free" | "pro"; used: number; limit: number | null };
 

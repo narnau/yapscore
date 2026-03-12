@@ -54,7 +54,7 @@ import type {
 } from "@/lib/music/musicxml";
 import { addAccidentals, fixChordSymbols } from "@/lib/music/accidentals";
 import { addBeams } from "@/lib/music/beams";
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/telemetry/logger";
 import type { AgentContext } from "./types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

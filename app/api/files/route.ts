@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { listFiles, createFile } from "@/lib/files";
+import { listFiles, createFile } from "@/lib/editor/files";
 
 const createSchema = z.object({
   name: z.string().max(200).optional().default("Untitled"),
