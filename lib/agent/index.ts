@@ -145,17 +145,7 @@ export async function runAgent(
       console.log(`│ [agent] ⚠ attempt ${attempt} failed: ${msg}`);
       lastError = err;
       // Retry on tool-name errors or tool argument validation errors (LLM can self-correct)
-      const isRetryable =
-        msg.includes("unavailable tool") ||
-        msg.includes("No such tool") ||
-        msg.includes("Invalid arguments for tool") ||
-        msg.includes("Type validation failed") ||
-        msg.includes("Invalid JSON") ||
-        msg.includes("Empty response from model") ||
-        msg.includes("Provider returned error") ||
-        msg.includes("provider_error") ||
-        msg.includes("upstream error");
-      if (!isRetryable) break;
+      if (attempt >= MAX_AGENT_ATTEMPTS) break;
     }
   }
 
