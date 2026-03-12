@@ -899,6 +899,9 @@ export function changeNoteDuration(
   // Update main note and all chord notes together
   noteEntry.noteType = noteType;
   noteEntry.duration = newDuration;
+  // Remove "measure rest" flag — it means "this rest fills the whole measure"
+  // and would cause Verovio to render it as a whole rest regardless of actual duration.
+  if (noteEntry.rest?.measure) delete noteEntry.rest.measure;
   for (let ci = mainIdx + 1; ci <= lastChordIdx; ci++) {
     const cn = measure.entries[ci] as NoteEntry;
     cn.noteType = noteType;
