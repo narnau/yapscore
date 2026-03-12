@@ -151,7 +151,10 @@ export async function runAgent(
         msg.includes("Invalid arguments for tool") ||
         msg.includes("Type validation failed") ||
         msg.includes("Invalid JSON") ||
-        msg.includes("Empty response from model");
+        msg.includes("Empty response from model") ||
+        msg.includes("Provider returned error") ||
+        msg.includes("provider_error") ||
+        msg.includes("upstream error");
       if (!isRetryable) break;
     }
   }
