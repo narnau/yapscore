@@ -5,9 +5,6 @@ import { useState } from "react";
 const MELODIES = [
   { file: "ode-to-joy.xml", label: "Ode to Joy", composer: "Beethoven" },
   { file: "twinkle-twinkle.xml", label: "Twinkle Twinkle", composer: "Traditional" },
-  { file: "amazing-grace.xml", label: "Amazing Grace", composer: "Traditional" },
-  { file: "happy-birthday.xml", label: "Happy Birthday", composer: "Traditional" },
-  { file: "scarborough-fair.xml", label: "Scarborough Fair", composer: "Traditional" },
 ];
 
 const PROMPT_IDEAS = [
